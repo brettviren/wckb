@@ -25,13 +25,24 @@ dataset's ID, the URLs it can be cloned from and local trees that hold it.
 
 ```
 kb source add ~/data/tpc-calib                        # a dataset you have; its git remotes are recorded
+kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # your clone and where it is shared
 kb source add https://github.com/org/tpc-calib.git    # cloned (see below) to learn its ID
 kb source list                                        # sources here, and whether each is cloned on this machine
 kb source show src-…                                  # URLs, paths, the clone here, items that use it
 ```
 
-Adding the same dataset again (another URL, another path) extends the
-existing item.
+`kb source add` works for any kind of source: it guesses the type from
+what you give it (a DataLad dataset directory; a URL whose repository has a
+git-annex branch), or takes `--type datalad`. `--just-guess` only says what
+it would use, or why it can't tell, and adds nothing:
+
+```
+kb source add --just-guess https://github.com/org/tpc-calib.git
+```
+
+Given a clone and a URL together, kb clones nothing, and checks that the URL
+shares the clone's history (`--no-check` skips that). Adding the same
+dataset again (another URL, another path) extends the existing item.
 
 ## Add files from a dataset
 

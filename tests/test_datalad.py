@@ -121,7 +121,7 @@ def test_ask_for_a_location_or_stop_with_instructions(kb, origin, tmp_path, monk
 def test_two_source_items_for_one_dataset_share_a_clone(kb, origin, tmp_path):
     mine = datasets.describe(kb, str(origin), title="my copy")
     other = make_store(tmp_path / "other", "group", "other")
-    theirs = datasets.describe(other, str(origin), title="their description")
+    theirs = datasets.describe(other, [str(origin)], title="their description")
     assert mine.id != theirs.id
     rec = _doc(other, origin / "talks" / "noise" / "slides.txt")
     from kb.transfer import plan
@@ -190,3 +190,54 @@ def test_doctor_knows_datalad(kb, origin, tmp_path, monkeypatch):
     assert [(f.mode, f.where) for f in found] == [("ask", src)]
     assert doctor.treat(kb, found, lambda f: True)[0]["result"] == "fixed"
     assert doctor.diagnose(Store.open(kb.root), ["clones"]) == []
+
+
+def test_guessing_the_type(origin, tmp_path):
+    from kb import sources
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    subprocess.run(["git", "-C", str(plain), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(plain), "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q",
+                    "--allow-empty", "-m", "x"], check=True)
+    assert sources.guess([str(origin)]).type == "datalad"
+    assert sources.guess([origin.as_uri()]).type == "datalad"                  # a git-annex branch over there
+    assert sources.guess([str(origin), origin.as_uri()]).type == "datalad"
+    g = sources.guess([str(plain)])
+    assert g.type is None and "a git repository, not a DataLad dataset" in g.explain()
+    assert "without git-annex" in sources.guess([plain.as_uri()]).explain()
+    assert "inside the DataLad dataset" in sources.guess([str(origin / "talks")]).explain()
+    assert "not a URL" in sources.guess(["no/such/thing"]).explain()
+
+
+def test_a_clone_and_its_url_together(kb, origin, tmp_path):
+    from kb import sources
+    import datalad.api as dl
+    mine = tmp_path / "mine"
+    dl.clone(source=str(origin), path=str(mine), result_renderer="disabled")
+    rec = sources.add(kb, [str(mine), origin.as_uri()])
+    assert rec.data["source_type"] == "datalad" and origin.as_uri() in rec.data["urls"]
+    assert rec.data["paths"] == [{"host": kb.cfg.host, "path": str(mine.resolve())}]
+    assert not (source_dir(kb.cfg.raw, "datalad")).exists()                   # nothing was cloned
+    other = tmp_path / "other"
+    dl.create(str(other), result_renderer="disabled")
+    with pytest.raises(KBError, match="does not share history"):
+        sources.add(kb, [str(mine), other.as_uri()])
+    with pytest.raises(KBError, match="different datasets"):
+        sources.add(kb, [str(mine), str(other)])
+    with pytest.raises(KBError, match="not a DataLad dataset"):
+        sources.add(kb, [str(tmp_path)], "datalad")
+
+
+def test_cli_source_add(kb, origin, tmp_path):
+    from click.testing import CliRunner
+    from kb.cli import main
+    run = lambda *a: CliRunner().invoke(main, ["-C", str(kb.root), *a])  # noqa: E731
+    r = run("source", "add", "--just-guess", str(origin))
+    assert r.exit_code == 0 and r.output.splitlines()[0] == "datalad"
+    r = run("source", "add", "--just-guess", str(tmp_path))
+    assert r.exit_code == 1 and "cannot guess" in r.output and "not a DataLad dataset" in r.output
+    assert run("source", "add", "--just-guess", "--type", "nonsense", str(origin)).exit_code != 0
+    assert Store.open(kb.root).items == {}                                     # guessing adds nothing
+    r = run("source", "add", str(origin), "--title", "Origin")
+    assert r.exit_code == 0 and r.output.startswith("src-")
+    assert "Origin" in run("source", "list").output

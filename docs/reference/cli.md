@@ -919,8 +919,8 @@ Options:
 Commands:
   list   Source items in this store (DataLad datasets ...), and whether each is on this machine.
   show   One source: its identity, where it can be had from, its clone here, and the items using it.
-  add    Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a
-         source item.
+  add    Describe a source (local paths and/or URLs naming it) as a source item, so items can refer
+         to it.
   clone  Make sure this machine has a clone of source REF (content is still fetched only when
          needed).
   link   Tell kb that PATH is a clone of source REF (checked by dataset ID); every store of yours
@@ -956,19 +956,24 @@ Options:
 ## kb source add
 
 ```
-Usage: kb source add [OPTIONS] TARGET
+Usage: kb source add [OPTIONS] TARGETS...
 
-  Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a source
-  item.
+  Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-  A dataset this store already describes gains the new URL or path instead.
+  The type is guessed from TARGETS unless --type says. Adding a source this store already describes
+  gives it the new URLs and paths instead.
 
-    kb source add ~/data/tpc-calib                     # a dataset you have (its remotes are recorded)
+    kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
+    kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
     kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+    kb source add --just-guess https://example.org/x   # what kind of source is this?
 
 Options:
+  --type TEXT     The kind of source (kb source types); default: guessed from TARGETS.
+  --just-guess    Only say which type would be used (or why none fits); add nothing.
   --title TEXT
   --summary TEXT
+  --no-check      Don't check that the TARGETS name one and the same source.
   -h, --help      Show this message and exit.
 ```
 

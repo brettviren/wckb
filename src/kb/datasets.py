@@ -123,23 +123,88 @@ def source_item(kb: Store, ref: str) -> Item:
     return rec
 
 
-def describe(kb: Store, target: str, title: str | None = None, summary: str | None = None) -> Item:
-    """The source item for the dataset at TARGET: a local dataset directory, or a URL (cloned to learn
-    its identity).  An existing item for the same dataset gains the new URLs and paths."""
+def _ls_remote(url: str) -> tuple[bool, list[tuple[str, str]], str]:
+    """(reachable, [(sha, ref)], error) for a git URL, without cloning; never prompts."""
+    import os as _os
+    try:
+        r = subprocess.run(["git", "ls-remote", url], capture_output=True, text=True, timeout=60,
+                           env=_os.environ | {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "true"})
+    except subprocess.TimeoutExpired:
+        return False, [], "no answer within 60 s"
+    if r.returncode != 0:
+        lines = r.stderr.strip().splitlines()
+        return False, [], (lines[-1] if lines else f"git ls-remote failed ({r.returncode})")
+    return True, [tuple(line.split("\t", 1)) for line in r.stdout.splitlines() if "\t" in line], ""
+
+
+def recognize(target: str) -> tuple[bool, str]:
+    """Is TARGET a DataLad dataset (a local directory) or something to clone one from (a URL)? And why."""
     p = Path(target).expanduser()
     if p.exists():
-        root = p.resolve()
-        uuid = dataset_id(root)
-        if uuid is None:
-            inner = dataset_root(root)
-            raise KBError(f"{root} is not a DataLad dataset" + (f" (it is inside {inner})" if inner else ""))
-        urls, paths = remote_urls(root), [{"host": kb.cfg.host, "path": str(root)}]
+        uuid = dataset_id(p)
+        if uuid:
+            return True, f"DataLad dataset {uuid}"
+        inner = dataset_root(p)
+        if inner is not None:
+            return False, f"inside the DataLad dataset at {inner}; give that directory"
+        if (p / ".git").exists():
+            return False, "a git repository, not a DataLad dataset"
+        return False, "not a DataLad dataset"
+    if target.startswith(("ria+", "datalad-annex::")):
+        return True, "a DataLad store URL"
+    if not _is_remote(target):
+        return False, "no such path, and not a URL"
+    ok, refs, err = _ls_remote(target)
+    if not ok:
+        return False, f"not a reachable git repository ({err})"
+    if any(ref == "refs/heads/git-annex" for _, ref in refs):
+        return True, "a git repository with a git-annex branch (a DataLad dataset, or git-annex without DataLad)"
+    return False, "a git repository without git-annex, not a DataLad dataset"
+
+
+def _same_history(root: Path, url: str) -> bool:
+    """Does URL share history with the clone at ROOT (a ref of it is known here)?"""
+    ok, refs, _ = _ls_remote(url)
+    return ok and any(_git(root, "cat-file", "-e", sha + "^{commit}", check=False).returncode == 0
+                      for sha, _ in refs)
+
+
+def describe(kb: Store, targets: list[str] | str, title: str | None = None, summary: str | None = None,
+             check: bool = True) -> Item:
+    """The source item for one dataset given by TARGETS: local clones and/or URLs it can be cloned from.
+
+    With a local clone, nothing is cloned; given URLs are checked to share its history (unless not
+    CHECK).  With URLs only, the first is cloned to learn the dataset's identity.  An existing item
+    for the same dataset gains the new URLs and paths."""
+    targets = [targets] if isinstance(targets, str) else list(targets)
+    local = [Path(t).expanduser().resolve() for t in targets if Path(t).expanduser().exists()]
+    given = [t for t in targets if not Path(t).expanduser().exists()]
+    for t in given:
+        if not _is_remote(t):
+            raise KBError(f"{t}: no such directory, and not a URL")
+    if local:
+        ids = {}
+        for root in local:
+            uuid = dataset_id(root)
+            if uuid is None:
+                inner = dataset_root(root)
+                raise KBError(f"{root} is not a DataLad dataset" + (f" (it is inside {inner})" if inner else ""))
+            ids[root] = uuid
+        if len(set(ids.values())) > 1:
+            raise KBError("these are different datasets: " + ", ".join(f"{r} ({u})" for r, u in ids.items()))
+        uuid, root = ids[local[0]], local[0]
+        known = [u for r in local for u in remote_urls(r)]
+        if check:
+            for u in given:
+                if u not in known and not any(_same_history(r, u) for r in local):
+                    raise KBError(f"{u} does not share history with {root} (or is unreachable): not this dataset? "
+                                  "(--no-check skips this)")
+        urls = list(dict.fromkeys(given + known))
+        paths = [{"host": kb.cfg.host, "path": str(r)} for r in local]
     else:
-        if not _is_remote(target):
-            raise KBError(f"{target}: no such directory, and not a URL")
-        root = _clone_from(kb, [target], None, title or _slug(Path(target.rstrip("/")).name.removesuffix(".git")))
+        root = _clone_from(kb, given, None, title or _slug(Path(given[0].rstrip("/")).name.removesuffix(".git")))
         uuid = dataset_id(root)
-        urls, paths = [target] + [u for u in remote_urls(root) if u != target], []
+        urls, paths = list(dict.fromkeys(given + remote_urls(root))), []
     remember(uuid, root)
     have = sources_for(kb, uuid)
     if have:
@@ -167,7 +232,7 @@ def ensure_source(kb: Store, root: Path) -> Item:
     """The source item for the dataset at *root*, made if this store has none."""
     uuid = dataset_id(root)
     have = sources_for(kb, uuid) if uuid else []
-    return have[0] if have else describe(kb, str(root))
+    return have[0] if have else describe(kb, [str(root)])
 
 
 # -- local clones -------------------------------------------------------------------------

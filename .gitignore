@@ -1,4 +1,2 @@
-.venv/
-__pycache__/
-*.egg-info/
-.pytest_cache/
+# a kb store: not versioned here (share it with kb bundles)
+*

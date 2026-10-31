@@ -15,7 +15,10 @@
    local file trees that hold it on particular hosts (`paths`). A dataset is
    given in any way DataLad accepts: a remote URL, a local tree, or both.
    The identity (`source_type`, `source_id`) is frozen; `urls` and `paths`
-   grow, and are united when the item travels.
+   grow, and are united when the item travels. `kb source add` is not
+   DataLad-specific: each source type recognizes its targets (paths, URLs)
+   and the type is guessed unless given; several targets may name one
+   source (a local clone and its remote URL, checked to share history).
 
 2. **Knowledge sets carry their sources.** Whatever a set's depth, the
    expansion includes the source items its items need for their content:

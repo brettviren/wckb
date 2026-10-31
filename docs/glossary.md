@@ -231,7 +231,9 @@ to be right; please fix the other place.
   it can be had from and `paths` holding it on given hosts. Knowledge sets
   always carry the source items their items need. Two source items with the
   same identity describe the same source and share its local copy.
-  *Code:* kind `source`, `kb.datasets`, `kb source list|show|add`.
+  `kb source add` guesses a target's source type (or takes `--type`).
+  *Code:* kind `source`, `kb.sources` (types, `guess`, `add`),
+  `kb.datasets`, `kb source list|show|add`.
 
 **local copy / clone**
 : Where a source is on this machine: a DataLad clone, downloaded URL

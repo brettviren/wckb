@@ -1475,23 +1475,37 @@ def source_list_cmd(c, json_out):
 
 
 @command(source_grp, "add", no_args_is_help=True)
-@click.argument("target")
+@click.argument("targets", nargs=-1, required=True)
+@click.option("--type", "source_type", help="The kind of source (kb source types); default: guessed from TARGETS.")
+@click.option("--just-guess", is_flag=True, help="Only say which type would be used (or why none fits); add nothing.")
 @click.option("--title")
 @click.option("--summary")
+@click.option("--no-check", is_flag=True, help="Don't check that the TARGETS name one and the same source.")
 @pass_ctx
-def source_add_cmd(c, target, title, summary):
-    """Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a source item.
+def source_add_cmd(c, targets, source_type, just_guess, title, summary, no_check):
+    """Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-    A dataset this store already describes gains the new URL or path instead.
+    The type is guessed from TARGETS unless --type says. Adding a source this
+    store already describes gives it the new URLs and paths instead.
 
     \b
-      kb source add ~/data/tpc-calib                     # a dataset you have (its remotes are recorded)
+      kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
+      kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
       kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+      kb source add --just-guess https://example.org/x   # what kind of source is this?
     """
-    from . import datasets
-    rec = datasets.describe(c.kb, target, title, summary)
+    from . import sources
+    if just_guess:
+        g = sources.guess(list(targets), only=source_type)
+        if g.type:
+            click.echo(g.type)
+            ui.info(g.explain())
+            return
+        click.echo(f"cannot guess: {g.explain()}")
+        sys.exit(1)
+    rec = sources.add(c.kb, list(targets), source_type, title, summary, check=not no_check)
     click.echo(rec.id)
-    ui.info(f"{rec.data['title']}: DataLad dataset {rec.data['source_id']}")
+    ui.info(f"{rec.data['title']}: {rec.data['source_type']} source {rec.data['source_id']}")
 
 
 @command(source_grp, "show", no_args_is_help=True)
