@@ -39,7 +39,7 @@ from . import content
 from .errors import KBError
 from .items import Store, Item, canonical, now
 
-DEFAULT_PRIORITY = {"kb": 0, "fs": 10, "datalad": 20, "docdb": 40, "url": 50, "indico": 60}
+DEFAULT_PRIORITY = {"kb": 0, "fs": 10, "datalad": 20, "git": 20, "docdb": 40, "url": 50, "indico": 60}
 
 
 # -- manifests and digests ------------------------------------------------------------
@@ -298,7 +298,8 @@ class UrlSource(AssetSource):
 
 
 class DataladSource(AssetSource):
-    """A DataLad dataset described by a source item.  locator: {source: src-..., path: within the dataset}.
+    """A DataLad dataset (or, as type ``git``, a plain git repository) described by a source item.
+    locator: {source: src-..., path: within the repository}.
 
     Versions: ``native`` (or ``map``) = the dataset's git tags; ``pattern`` = paths in the
     current tree; ``none`` = the current tree.  Files are listed from git without fetching
@@ -329,7 +330,7 @@ class DataladSource(AssetSource):
         src = kb.items.get(loc["source"])
         if src is None:
             raise KBError(f"source {loc['source']} is not in this store (kb pull {loc['source']})")
-        root = datasets.locate(kb, src, clone=remote and datasets.available() is None)
+        root = datasets.locate(kb, src, clone=remote and (self.type == "git" or datasets.available() is None))
         if root is None:
             return []
         sub = loc.get("path", "").strip("/")
@@ -374,9 +375,14 @@ class DataladSource(AssetSource):
         src = kb.items.get(loc["source"])
         root = datasets.locate(kb, src) if src else None
         v = binding.get("versioning", "none")
-        return (f"DataLad dataset {src.data.get('title') if src else loc['source']}:{loc.get('path', '')}"
+        return (f"{datasets.LABEL[self.type]} {src.data.get('title') if src else loc['source']}:{loc.get('path', '')}"
                 + (f" (clone at {root})" if root else " (not cloned here)")
                 + ("" if v == "none" else f", versions by {'tags' if v in ('native', 'map') else binding.get('pattern')}"))
+
+
+class GitSource(DataladSource):
+    type = "git"
+    describe_text = "a git repository: versions are tags; files come from git"
 
 
 class PlannedSource(AssetSource):
@@ -396,7 +402,7 @@ def register_source(s: AssetSource) -> None:
     SOURCES[s.type] = s
 
 
-for _s in (KbSource(), FsSource(), UrlSource(), DataladSource(),
+for _s in (KbSource(), FsSource(), UrlSource(), DataladSource(), GitSource(),
            PlannedSource("indico", "Indico materials: attachments of an event or contribution",
                          "{server, event, contribution?, attachment?}"),
            PlannedSource("docdb", "a DocDB document: each version has its own file set",

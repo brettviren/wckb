@@ -232,8 +232,10 @@ to be right; please fix the other place.
   always carry the source items their items need. Two source items with the
   same identity describe the same source and share its local copy.
   Source types: `datalad` (identity: the dataset ID, or `git:<first commit>`
-  for a dataset without one) and `filesystem` (a named directory tree;
-  identity: its name; never guessed, only with `--type filesystem`).
+  for a dataset without one, accepted with a warning), `git` (a git
+  repository without DataLad or git-annex; identity: `git:<first commit>`)
+  and `filesystem` (a named directory tree; identity: its name; never
+  guessed, only with `--type filesystem`).
   `kb source add` guesses a target's source type (or takes `--type`).
   *Code:* kind `source`, `kb.sources` (types, `guess`, `add`),
   `kb.datasets`, `kb source list|show|add`.

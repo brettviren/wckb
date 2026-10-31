@@ -960,9 +960,9 @@ Usage: kb source add [OPTIONS] TARGETS...
 
   Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-  The type is guessed from TARGETS unless --type says (a plain directory is accepted only with
-  --type filesystem). Adding a source this store already describes gives it the new URLs and paths
-  instead.
+  The type is guessed from TARGETS unless --type says: datalad (a DataLad dataset), git (a git
+  repository without DataLad), filesystem (a plain directory: only with --type filesystem). Adding a
+  source this store already describes gives it the new URLs and paths instead.
 
     kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
     kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared

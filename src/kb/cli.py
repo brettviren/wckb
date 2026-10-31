@@ -1486,9 +1486,10 @@ def source_list_cmd(c, json_out):
 def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no_check):
     """Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-    The type is guessed from TARGETS unless --type says (a plain directory is
-    accepted only with --type filesystem). Adding a source this store already
-    describes gives it the new URLs and paths instead.
+    The type is guessed from TARGETS unless --type says: datalad (a DataLad
+    dataset), git (a git repository without DataLad), filesystem (a plain
+    directory: only with --type filesystem). Adding a source this store
+    already describes gives it the new URLs and paths instead.
 
     \b
       kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
@@ -1503,6 +1504,8 @@ def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no
         if g.type:
             click.echo(g.type)
             ui.info(g.explain())
+            for w in g.warnings:
+                ui.info(f"warning: {w}")
             return
         click.echo(f"cannot guess: {g.explain()}")
         sys.exit(1)

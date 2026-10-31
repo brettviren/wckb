@@ -202,9 +202,9 @@ def test_guessing_the_type(origin, tmp_path):
     assert sources.guess([str(origin)]).type == "datalad"
     assert sources.guess([origin.as_uri()]).type == "datalad"                  # a git-annex branch over there
     assert sources.guess([str(origin), origin.as_uri()]).type == "datalad"
-    g = sources.guess([str(plain)])
-    assert g.type is None and "a git repository, not a DataLad dataset" in g.explain()
-    assert "without git-annex" in sources.guess([plain.as_uri()]).explain()
+    assert sources.guess([str(plain)]).type == "git"                          # a git source, not DataLad
+    assert sources.guess([plain.as_uri()]).type == "git"
+    assert sources.guess([str(origin)], only="git").type is None
     assert "inside the DataLad dataset" in sources.guess([str(origin / "talks")]).explain()
     assert "not a URL" in sources.guess(["no/such/thing"]).explain()
 
@@ -222,7 +222,7 @@ def test_a_clone_and_its_url_together(kb, origin, tmp_path):
     dl.create(str(other), result_renderer="disabled")
     with pytest.raises(KBError, match="does not share history"):
         sources.add(kb, [str(mine), other.as_uri()])
-    with pytest.raises(KBError, match="different datasets"):
+    with pytest.raises(KBError, match="different DataLad datasets"):
         sources.add(kb, [str(mine), str(other)])
     with pytest.raises(KBError, match="not a DataLad dataset"):
         sources.add(kb, [str(tmp_path)], "datalad")
@@ -259,18 +259,21 @@ def annex_repo(tmp_path) -> Path:
     return root
 
 
-def test_a_dataset_without_an_id_is_known_by_its_first_commit(kb, annex_repo, tmp_path):
+def test_a_dataset_without_an_id_is_known_by_its_first_commit(kb, annex_repo, tmp_path, capsys):
     from kb import sources
     import datalad.api as dl
     assert datasets.dataset_id(annex_repo) is None
     m = sources.TYPES["datalad"].recognize(str(annex_repo))
     assert m.ok and "first commit" in m.reason and "git-annex is initialized" in m.reason
+    assert "no .datalad/config" in m.warning
+    assert sources.guess([str(annex_repo)]).warnings                         # accepted, with a warning
     ident = datasets.identity(annex_repo)
     assert ident.startswith("git:")
     clone = tmp_path / "clone"
     dl.clone(source=str(annex_repo), path=str(clone), result_renderer="disabled")
     assert datasets.identity(clone) == ident                         # every clone shares it
     rec = sources.add(kb, [str(clone), annex_repo.as_uri()])
-    assert rec.data["source_id"] == ident
+    assert rec.data["source_id"] == ident and rec.data["source_type"] == "datalad"
+    assert "no .datalad/config" in capsys.readouterr().err
     doc = _doc(Store.open(kb.root), annex_repo / "books" / "a.pdf")
     assert doc.rendition("original")["locations"][0]["source"] == rec.id

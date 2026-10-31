@@ -23,7 +23,10 @@
    DataLad or git-annex control (git-annex initialized, annex settings in
    `.gitattributes`, `[DATALAD]` commits, subdatasets with DataLad IDs).
    One created without a dataset ID is identified by its first commit
-   (`git:<sha>`), which every clone shares.
+   (`git:<sha>`), which every clone shares, and is accepted with a warning.
+   A git repository with none of those signs is a `git` source: the same
+   machinery (identity by first commit, clones found or made, an asset
+   source with versions from tags), cloned with plain git.
 
 2. **Knowledge sets carry their sources.** Whatever a set's depth, the
    expansion includes the source items its items need for their content:

@@ -38,8 +38,13 @@ dataset when it has `.datalad/config`, or other signs of DataLad or
 git-annex control (git-annex initialized, annex settings in
 `.gitattributes`, `[DATALAD]` commits, subdatasets in `.gitmodules`). A
 dataset created without a dataset ID is identified by its first commit,
-which every clone shares. A plain directory is a `filesystem` source, but
-only with `--type filesystem` ([assets](assets.md)). `--just-guess` only says what
+which every clone shares; kb accepts it with a warning (often `datalad
+create` stopped early, for example because a git ignore rule matched
+`.gitattributes`). A git repository with no sign of DataLad or git-annex is
+a `git` source (identified by its first commit, cloned with plain git, no
+DataLad needed; assets can bind to it with `--source git`, versions from
+tags). A plain directory is a `filesystem` source, but only with
+`--type filesystem` ([assets](assets.md)). `--just-guess` only says what
 it would use, or why it can't tell, and adds nothing:
 
 ```

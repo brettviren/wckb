@@ -53,6 +53,9 @@ its git tags are versions:
 kb asset bind as-… dataset --source datalad --set source=src-… --set path=talks/noise --versioning native
 ```
 
+A plain **git repository** works the same way (`kb source add` guesses
+`git`; bind with `--source git`).
+
 **Versioning modes:**
 
 | mode | meaning |

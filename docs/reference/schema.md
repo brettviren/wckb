@@ -203,8 +203,8 @@ One concrete data source that renditions and asset bindings refer to, such as a 
 
 | field | required | type | description |
 |---|---|---|---|
-| `source_type` | yes | `datalad` \| `filesystem` | The kind of source (kb source types lists them). |
-| `source_id` | yes | string | The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a filesystem, its root name (as in filesystems.NAME and fs bindings). |
+| `source_type` | yes | `datalad` \| `git` \| `filesystem` | The kind of source (kb source types lists them). |
+| `source_id` | yes | string | The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a git repository, git:<first commit>; for a filesystem, its root name (as in filesystems.NAME and fs bindings). |
 | `urls` |  | list of string | Where it can be cloned or fetched from (for DataLad: anything datalad clone accepts: https, ssh, ria+...). |
 | `paths` |  | list of object | Local file trees holding it, by host (a shared filesystem path is usable by everyone on that host). |
 

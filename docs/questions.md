@@ -466,7 +466,10 @@ Status:
 - DataLad datasets and named filesystem trees (`--type filesystem`) are
   source items. Indico and DocDB servers next, the same way?
 - Should a file in a filesystem source get its own location type
-  (`{source, path}`), rather than `local` (one host) or an asset?
+  (`{source, path}`), rather than `local` (one host) or an asset? And a
+  file committed in a git source (`{source, path, commit}`), as DataLad
+  files have `datalad` locations?
+- git sources are done: identity by first commit, clones, asset source.
 - Should a filesystem source be guessable in some cases (a directory with a
   marker file), or always need `--type filesystem`?
 

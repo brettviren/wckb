@@ -357,14 +357,16 @@ def _gitattributes(kb):
     return []
 
 
-@remedy("clones", "DataLad datasets used here but not cloned on this machine", quick=False)
+@remedy("clones", "DataLad datasets and git repositories used here but not cloned on this machine", quick=False)
 def _clones(kb):
-    from .datasets import available, locate
-    if available() is not None:
-        return []
+    from .datasets import REPO_TYPES, available, locate
     out = []
     used = {r[0] for r in kb.conn.execute("SELECT DISTINCT dst FROM refs WHERE rel = 'source'")}
-    for rec in _datalad_sources(kb):
+    for rec in kb.items.values():
+        if rec.kind != "source" or rec.data.get("source_type") not in REPO_TYPES:
+            continue
+        if rec.data["source_type"] == "datalad" and available() is not None:
+            continue
         if rec.id in used and locate(kb, rec) is None:
             out.append(Finding("clones", f"{rec.id} ({rec.data.get('title')}) is not cloned here",
                                f"clone it (kb source clone {rec.id}); content is fetched only when needed", "ask",
