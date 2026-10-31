@@ -5,6 +5,7 @@ Read these in order if you are new; later on, go straight to the task you need.
 | guide | for |
 |---|---|
 | [getting-started](getting-started.md) | install `kb`, create stores, configure your machine |
+| [health](health.md) | `kb status` and `kb doctor`: what needs attention, and fixing common problems |
 | [working-with-claude](working-with-claude.md) | what Claude does by routine, the hooks, capturing, consulting |
 | [observations](observations.md) | record facts, hearsay, configurations; attribution, validity, status |
 | [documents](documents.md) | add papers, slides, Indico and arXiv material; extract text |
@@ -13,7 +14,7 @@ Read these in order if you are new; later on, go straight to the task you need.
 | [corrections](corrections.md) | supersede, retract, upstream changes, and propagating corrections |
 | [topics](topics.md) | write and maintain synthesis pages |
 | [views](views.md) | build HTML/PDF views with make, snakemake, quarto or pandoc; publish; build the world |
-| [search](search.md) | ls, search, context, render, log, semantic search, Datasette |
+| [search](search.md) | ls, search, context, show, log, semantic search, Datasette |
 | [stores-and-promotion](stores-and-promotion.md) | scopes and edges; reading across stores; knowledge sets; push, pull, obtain; twins; snapshots |
 | [review](review.md) | reviewing incoming knowledge: bundles, the inbox, rendering, human and LLM review |
 | [storage](storage.md) | where content lives, content stores, network filesystems, snapshots and backups |

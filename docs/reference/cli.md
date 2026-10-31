@@ -23,6 +23,7 @@ Options:
 
 Everyday:
   init       Make PATH a kb store (one SQLite file, kb.sqlite).
+  status     The store at a glance: items, inbox, edges, content stores, and what needs attention.
   add        Add files or URLs as a new primary item (default kind: document).
   new        Make a new item of KIND.
   show       One item: facts, links, where the material is, an excerpt (sets: as a tree).
@@ -34,6 +35,7 @@ Everyday:
 Keeping a store sound:
   check      Consistency scan: schema, kinds, stored content, tampering, access, references.
   lint       Advice needing judgment: stale things, overlaps, old unverified claims ...
+  doctor     Find common problems and fix them: automatically where safe, after asking otherwise.
   config     The store's settings (held in the store).
 
 Moving knowledge between stores:
@@ -90,6 +92,18 @@ Options:
                                   home store).
   --no-enact                      Select policy but do not enact it yet.
   -h, --help                      Show this message and exit.
+```
+
+## kb status
+
+```
+Usage: kb status [OPTIONS]
+
+  The store at a glance: items, inbox, edges, content stores, and what needs attention.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
 ```
 
 ## kb add
@@ -297,6 +311,30 @@ Usage: kb lint [OPTIONS]
 Options:
   --json
   -h, --help  Show this message and exit.
+```
+
+## kb doctor
+
+```
+Usage: kb doctor [OPTIONS] [CODES]...
+
+  Find common problems and fix them: automatically where safe, after asking otherwise.
+
+  Each finding is 'auto' (safe; --fix applies it), 'ask' (--fix asks first) or 'manual' (advice).
+  Name CODES to run only those diagnoses.
+
+    kb doctor                 # what is wrong, and how it would be fixed
+    kb doctor --fix           # fix it
+    kb doctor stale --fix -y  # only stale things, without questions
+
+Options:
+  --fix            Apply fixes: 'auto' ones, and 'ask' ones you confirm.
+  -y, --yes        With --fix: apply 'ask' fixes without asking.
+  --quick          Only the cheap diagnoses (those kb status runs).
+  --approved TEXT  The human's approval (agents, when the fix's autonomy is 'ask').
+  --list           List the problems kb doctor knows.
+  --json
+  -h, --help       Show this message and exit.
 ```
 
 ## kb config

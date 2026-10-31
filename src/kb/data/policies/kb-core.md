@@ -21,6 +21,9 @@ database directly.
   - `person`;
   - `policy`: guidance like this;
   - `kset`: a selection of items, the unit of transfer.
+- `kb status` shows the store at a glance and what needs attention;
+  `kb doctor` diagnoses problems, and `kb doctor --fix` repairs them (within
+  the `curate` autonomy).
 - Find things with `kb context`, `kb ls` and `kb search`; read one item with
   `kb show ID` (`--format llm` for its full content). Its history is `kb log ID`.
 - Content is held in *renditions*: small text in the store, large files in a

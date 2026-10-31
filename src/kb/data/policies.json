@@ -2,7 +2,7 @@
   {
     "name": "kb-core",
     "type": "instructions",
-    "version": 3,
+    "version": 4,
     "file": "policies/kb-core.md",
     "order": 10,
     "title": "KB core rules",

@@ -25,9 +25,10 @@ uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
 
 `kb --help` lists two kinds of command:
 
-- **Everyday verbs**, at the top: `kb init`, `kb add`, `kb new`, `kb show`,
-  `kb ls`, `kb search`, `kb context`, `kb log`, `kb check`, `kb lint`,
-  `kb config`, `kb push`, `kb pull`, `kb sync`.
+- **Everyday verbs**, at the top: `kb init`, `kb status`, `kb add`,
+  `kb new`, `kb show`, `kb ls`, `kb search`, `kb context`, `kb log`,
+  `kb check`, `kb lint`, `kb doctor`, `kb config`, `kb push`, `kb pull`,
+  `kb sync`.
 - **One family per thing**, named by a word from the
   [glossary](../glossary.md): `kb item` (change, correct, withdraw, edit),
   `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge` (links to
@@ -35,7 +36,9 @@ uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
   `kb policy`, `kb store`, and `kb exchange`, `kb forge`, `kb secret` for
   git hosting.
 
-A family run without a subcommand lists its commands (`kb item`). Every
+A family run without a subcommand lists its commands (`kb item`). When in
+doubt, `kb status` says what needs attention and `kb doctor --fix` repairs
+the common problems ([health](health.md)). Every
 command has `--help`. The full reference is
 [reference/cli.md](../reference/cli.md).
 

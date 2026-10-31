@@ -370,6 +370,18 @@ Status:
 - See D1. It needs a running embedding service and must answer within the
   hook's timeout.
 
+**F3. What should `kb doctor` learn next?** *(open; grows with user testing)*
+- Problems seen in testing go here first, then become remedies in
+  `doctor.py` ([howto/health](howto/health.md)).
+- Already noticed: `kb item set ID status=verified` is accepted without
+  evidence; only `kb check` (and so `kb doctor`) objects afterwards.
+  Should `set` refuse it, as `new` does? Should doctor offer to set such
+  items back to `unverified`?
+- Should the SessionStart hook report the quick doctor findings, so an LLM
+  can offer `kb doctor --fix` at the start of a session?
+- Should a broken diagnosis (an exception in a remedy) be reported more
+  loudly than as a finding?
+
 ## G. Git, forges and secrets
 
 **G2. API tokens vs git credentials.** *(open)*

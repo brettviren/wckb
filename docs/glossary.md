@@ -462,6 +462,17 @@ to be right; please fix the other place.
 : Advice needing judgment: stale things, overlaps, old unverified claims,
   local-only content. *Code:* `kb lint`.
 
+**status**
+: A store at a glance: items, inbox, edges, content stores, and the
+  findings of the quick diagnoses. *Code:* `kb status`, `kb.status`.
+
+**doctor / remedy / finding**
+: `kb doctor` diagnoses common problems and fixes them. A *remedy* knows
+  one problem: it diagnoses (returning *findings*) and may fix. A finding's
+  mode is `auto` (safe; `--fix` applies it), `ask` (applied after
+  confirmation) or `manual` (advice). *Quick* remedies also run in
+  `kb status`. *Code:* `kb.doctor`, `REMEDIES`, `@remedy`, `Finding`.
+
 **query tables**
 : Derived tables kept in step on every write: `subjects`, `runs`, `refs`,
   `identifiers`, `renditions`, `fts`, `vectors`. *Code:* `kb.query`,
@@ -499,8 +510,8 @@ to be right; please fix the other place.
 
 **verbs and things**
 : `kb` has two kinds of commands. *Verbs* used every day stand at the top
-  (`init`, `add`, `new`, `show`, `ls`, `search`, `context`, `log`, `check`,
-  `lint`, `config`, `push`, `pull`, `sync`). Everything else lives in one
+  (`init`, `status`, `add`, `new`, `show`, `ls`, `search`, `context`, `log`,
+  `check`, `lint`, `doctor`, `config`, `push`, `pull`, `sync`). Everything else lives in one
   command family per *thing*, named by a noun from this glossary: `kb item`,
   `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge`,
   `kb bundle`, `kb inbox`, `kb view`, `kb data`, `kb policy`, `kb store`,

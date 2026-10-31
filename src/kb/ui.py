@@ -51,3 +51,41 @@ def info(msg: str) -> None:
 
 def stderr(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+MODE_COLOR = {"auto": "green", "ask": "yellow", "manual": "cyan"}
+
+
+def findings(rows: list[dict], indent: str = "") -> None:
+    """Doctor findings: mode, code, what is wrong, and the fix."""
+    for f in rows:
+        mode = click.style(f"{f['mode']:<7}", fg=MODE_COLOR.get(f["mode"]))
+        click.echo(f"{indent}{mode}{f['code']:<15} {f['summary']}")
+        click.echo(f"{indent}{'':<22} fix: {f['fix']}")
+
+
+def status(v: dict) -> None:
+    s, it = v["store"], v["items"]
+    click.echo(click.style(f"{s['name']}", bold=True) + f"  {s['scope']} store, access {s['access']}, id {s['id']}")
+    click.echo(f"  at {s['root']}, as {s['user']} on {s['host']}")
+    kinds = ", ".join(f"{n} {k}" for k, n in it["by_kind"].items()) or "none yet"
+    click.echo(f"items     {it['current']} current ({kinds})" + (f"; {it['replaced']} superseded or retracted"
+                                                                  if it["replaced"] else ""))
+    if v["last_change"]:
+        c = v["last_change"]
+        click.echo(f"changed   {c['at'][:16].replace('T', ' ')} {c['action']} {c['item'] or ''} by {c['actor']}")
+    pend = v["inbox"]["pending"]
+    click.echo(f"inbox     {pend} pending" + (" (kb inbox list)" if pend else ""))
+    for e in v["edges"]:
+        state = "writable" if e["writable"] else ("readable" if e["available"] else "not available here")
+        click.echo(f"edge      {e['name']} ({e['relation']}, pushes land by {e['land']}): {state}")
+    if not v["edges"]:
+        click.echo("edges     none (kb edge add NAME --relation up --path DIR)")
+    for name, ok in v["content_stores"].items():
+        click.echo(f"cas       {name}: {'mounted' if ok else 'not available here'}")
+    if v["attention"]:
+        click.echo(click.style(f"\nNeeds attention ({len(v['attention'])}):", bold=True))
+        findings(v["attention"], "  ")
+        click.echo("\nkb doctor --fix applies the 'auto' fixes and asks about the others; kb doctor runs a full diagnosis.")
+    else:
+        click.echo("\nNothing needs attention (kb doctor runs a full diagnosis).")

@@ -36,7 +36,8 @@ in scope.
   `edit` (set, renditions, content, checkout/checkin), `locations` (location
   sources: db, cas, url, local, asset, annex), `assets` (assets, bindings, asset
   sources), `content` (placing content, hashing, fetch, verify), `checks`
-  (consistency scan), `lint` (advice), `graph` (staleness, stamping), `build` (views),
+  (consistency scan), `lint` (advice), `doctor` (remedies: diagnose and fix
+  common problems), `status` (the store at a glance), `graph` (staleness, stamping), `build` (views),
   `query`/`search`/`embed`/`context`, `transforms`, `fair` (data describe and
   export), `migrate`,
   `scaffold`, `federation` (neighbors) and `federated` (cross-store
@@ -55,6 +56,9 @@ in scope.
 
 ## Conventions
 
+- When user testing turns up a problem kb could detect or repair, add a
+  remedy to `doctor.py` (diagnosis, and a fix if one is safe) with a test,
+  and list it in `docs/howto/health.md`.
 - `uv sync`, `uv run pytest`, `uv run kb`.
 - Tests use real temporary stores (and git repositories where git is
   involved; see `tests/conftest.py`). Don't mock internals. Fakes are fine at external

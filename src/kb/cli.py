@@ -54,8 +54,8 @@ def command(group, *args, **kwargs):
 
 
 SECTIONS = [
-    ("Everyday", ["init", "add", "new", "show", "ls", "search", "context", "log"]),
-    ("Keeping a store sound", ["check", "lint", "config"]),
+    ("Everyday", ["init", "status", "add", "new", "show", "ls", "search", "context", "log"]),
+    ("Keeping a store sound", ["check", "lint", "doctor", "config"]),
     ("Moving knowledge between stores", ["push", "pull", "sync"]),
     ("Commands by thing (kb THING --help)", ["item", "rendition", "asset", "source", "kset", "edge", "bundle",
                                              "inbox", "view", "data", "policy", "store"]),
@@ -660,6 +660,82 @@ def _hook_check(c):
         print(text, file=sys.stderr)
     if code:
         sys.exit(code)
+
+
+@command(main, "status")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def status_cmd(c, json_out):
+    """The store at a glance: items, inbox, edges, content stores, and what needs attention."""
+    from .status import status
+    v = status(c.kb)
+    if json_out:
+        return ui.emit_json(v)
+    ui.status(v)
+
+
+@command(main, "doctor")
+@click.argument("codes", nargs=-1)
+@click.option("--fix", is_flag=True, help="Apply fixes: 'auto' ones, and 'ask' ones you confirm.")
+@click.option("-y", "--yes", is_flag=True, help="With --fix: apply 'ask' fixes without asking.")
+@click.option("--quick", is_flag=True, help="Only the cheap diagnoses (those kb status runs).")
+@click.option("--approved", help="The human's approval (agents, when the fix's autonomy is 'ask').")
+@click.option("--list", "list_remedies", is_flag=True, help="List the problems kb doctor knows.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def doctor_cmd(c, codes, fix, yes, quick, approved, list_remedies, json_out):
+    """Find common problems and fix them: automatically where safe, after asking otherwise.
+
+    Each finding is 'auto' (safe; --fix applies it), 'ask' (--fix asks first)
+    or 'manual' (advice). Name CODES to run only those diagnoses.
+
+    \b
+      kb doctor                 # what is wrong, and how it would be fixed
+      kb doctor --fix           # fix it
+      kb doctor stale --fix -y  # only stale things, without questions
+    """
+    from . import doctor
+    if list_remedies:
+        rows = [{"code": r.code, "title": r.title, "quick": r.quick, "fixes": r.apply is not None}
+                for r in doctor.REMEDIES.values()]
+        if json_out:
+            return ui.emit_json(rows)
+        for r in rows:
+            click.echo(f"{r['code']:<15} {'quick' if r['quick'] else 'full ':<6} "
+                       f"{'fixes' if r['fixes'] else 'advice':<7} {r['title']}")
+        return
+    kb = c.kb
+    found = doctor.diagnose(kb, list(codes) or None, quick)
+    if not fix:
+        if json_out:
+            ui.emit_json([f.as_dict() for f in found])
+        elif found:
+            ui.findings([f.as_dict() for f in found])
+            n = {m: sum(f.mode == m for f in found) for m in doctor.MODES}
+            ui.info(f"{len(found)} finding(s): {n['auto']} fixed by kb doctor --fix, {n['ask']} after asking, "
+                    f"{n['manual']} need you")
+        else:
+            ui.info("no problems found")
+        sys.exit(1 if found else 0)
+
+    def confirm(f):
+        if yes:
+            return True
+        if not sys.stdin.isatty():
+            return False
+        return click.confirm(f"{f.summary}\n  fix: {f.fix}\n  apply?", default=False)
+
+    results = doctor.treat(kb, found, confirm, approved)
+    if json_out:
+        ui.emit_json(results)
+    else:
+        for r in results:
+            mark = {"fixed": "green", "failed": "red", "skipped": "yellow"}.get(r["result"])
+            click.echo(click.style(f"{r['result']:<8}", fg=mark) + f"{r['code']:<15} {r['summary']}")
+            click.echo(f"{'':<23} {r['detail']}")
+        if not results:
+            ui.info("no problems found")
+    sys.exit(1 if any(r["result"] != "fixed" for r in results) else 0)
 
 
 @command(main, "lint")
