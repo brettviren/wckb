@@ -50,6 +50,12 @@ Status:
   reachable, an `indico` source could offer `native` versions; if not, it
   is `none`, and `keep = auto` is what preserves history.
 - Also: is a "material" a folder (a file set) or one attachment (a file)?
+- Seen (2026-10-31, indico.bnl.gov and indico.fnal.gov): the export API
+  gives each file attachment's `size`, `checksum` (MD5, which matched the
+  downloaded bytes) and `modified_dt`, and a re-upload keeps the
+  attachment's ID and download URL. No history is exposed. So history must
+  be kept by whoever watches: git-annex-remote-indico (DS2) records each
+  re-ingest as a new key at the same path, i.e. a commit.
 
 **V2. DocDB access.** *(open)*
 - DocDB documents have versions, each with its own file set
@@ -453,9 +459,21 @@ Status:
     needs the content to hash it);
   - dropping content (`datalad drop`) that no item here needs.
 
-**DS2. Indico.** *(open)*
+**DS2. Indico.** *(leaning: through DataLad)*
 - A native `indico` source (Indico's API with a token), or URLs through
   DataLad? Either way the token comes from `kb.secrets`.
+- Built (2026-10-31): `git-annex-remote-indico` (~/dev/git-annex-remote-indico),
+  a separate package. It is a read-only git-annex special remote for one
+  Indico site, plus `git indico ingest URL`, which walks a category or event
+  into a dataset:
+  - `event.json`, `category.json` and `index.html` are kept in git;
+  - attached files are annexed as MD5E keys made from Indico's checksums.
+  With it, Indico material reaches kb as a `datalad` source with no
+  `indico` source type in kb. Its token comes from git config
+  (`indico.<url>.tokencommand`, pass style), not `kb.secrets`.
+- Open: does kb still want a native `indico` asset source, or should
+  `PlannedSource("indico")` be dropped in favour of the dataset route?
+  Should `kb source add` recognize an Indico URL and suggest the ingest?
 
 **DS3. Credentials for sources.** *(leaning)*
 - Reuse `kb.secrets` specs per source, as forges do (for example
