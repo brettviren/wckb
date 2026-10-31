@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/observation.json",
+  "title": "Observation",
+  "description": "An assertion of fact made by someone: 'run 1234 was noisy', 'production used X=7 in 2025'. Its text is a content rendition (note.md). A source record: correct it by superseding, never by editing.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    },
+    {
+      "properties": {
+        "renditions": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "content"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "observation"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^obs-"
+    },
+    "asserted_by": {
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/assertion"
+      },
+      "minItems": 1
+    },
+    "renditions": {
+      "minItems": 1
+    }
+  },
+  "required": [
+    "asserted_by",
+    "renditions",
+    "status"
+  ],
+  "unevaluatedProperties": false
+}

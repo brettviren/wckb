@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/config.json",
+  "title": "Configuration",
+  "description": "Configuration parameters of some system over a validity interval: 'production simulation 2025 used drift velocity 1.6 mm/us'. Small parameter sets go inline in 'parameters'; whole files as renditions.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "config"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^cfg-"
+    },
+    "system": {
+      "description": "What was configured, as a path: production/sim, daq/trigger ...",
+      "$ref": "common.json#/$defs/subject"
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "asserted_by": {
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/assertion"
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "system",
+    "valid"
+  ],
+  "unevaluatedProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "parameters"
+      ]
+    },
+    {
+      "required": [
+        "renditions"
+      ]
+    }
+  ]
+}

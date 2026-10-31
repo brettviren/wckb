@@ -1,0 +1,52 @@
+[project]
+name = "wckb"
+version = "0.1.0"
+description = "kb: a shared, git-backed knowledge base for people and their LLMs"
+readme = "README.md"
+authors = [
+    { name = "Brett Viren", email = "brett.viren@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    # Validates records against the JSON Schemas shipped in kb/schemas.
+    "jsonschema>=4.23",
+    # Writes the kb-managed TOML files (neighbors.toml, policy.toml).
+    "tomli-w>=1.0",
+]
+
+[project.scripts]
+kb = "kb.cli:main"
+
+[project.optional-dependencies]
+# Transforms that need a Python library; command-line transforms need nothing.
+pdf = ["pymupdf>=1.24"]
+pptx = ["python-pptx>=1.0"]
+root = ["uproot>=5"]
+
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+kb = [
+    "schemas/v1/*.json",
+    "data/*.json",
+    "data/policies/*",
+    "data/skills/*/SKILL.md",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "wckb[pptx,root]",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "embed: needs a running embedding model (deselect with -m 'not embed')",
+]

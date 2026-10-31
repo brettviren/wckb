@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/record.json",
+  "title": "Fields common to every kb record",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "description": "Major schema version; kb migrate upgrades.",
+      "const": 1
+    },
+    "id": {
+      "description": "Assigned by kb: kind prefix and random suffix.",
+      "$ref": "common.json#/$defs/id"
+    },
+    "kind": {
+      "description": "Record kind; selects the kind schema.",
+      "type": "string"
+    },
+    "title": {
+      "description": "Short title.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "summary": {
+      "description": "One to three sentences an LLM can read instead of the content. Shown in listings and search.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "created": {
+      "description": "When, by whom and via what tool the record was made (not the date of its content).",
+      "$ref": "common.json#/$defs/created"
+    },
+    "access": {
+      "description": "Who may see it: public, collaboration, group, private.",
+      "$ref": "common.json#/$defs/access"
+    },
+    "subject": {
+      "description": "Slash-separated topic paths, e.g. detector/tpc/noise; reuse existing ones (kb ls --subjects).",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/subject"
+      },
+      "uniqueItems": true
+    },
+    "tags": {
+      "description": "Free labels.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "valid": {
+      "description": "Validity interval of the content, as run ranges and/or a time window.",
+      "$ref": "common.json#/$defs/valid"
+    },
+    "status": {
+      "description": "Confidence in the content: draft, unverified, verified (needs evidence), disputed.",
+      "$ref": "common.json#/$defs/status"
+    },
+    "identifiers": {
+      "description": "External identifiers: doi, arxiv, inspire, indico, cds, url ...",
+      "$ref": "common.json#/$defs/identifiers"
+    },
+    "creators": {
+      "description": "Authors of the thing recorded (person refs or names).",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/agent"
+      }
+    },
+    "date": {
+      "description": "Date of the thing itself, e.g. of a talk or paper.",
+      "$ref": "common.json#/$defs/date"
+    },
+    "supersedes": {
+      "description": "Records this one replaces (corrections, new versions).",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/ref"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "retracts": {
+      "description": "Records this one withdraws without replacement.",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/ref"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "derived_from": {
+      "description": "Inputs of a topic, view or derived record; stamped with digests.",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/derivation"
+      }
+    },
+    "evidence": {
+      "description": "Refs or URLs supporting the content; required for verified.",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/ref_or_url"
+      }
+    },
+    "related": {
+      "description": "Other related records.",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/ref"
+      }
+    },
+    "license": {
+      "description": "SPDX identifier or a local term such as collaboration-internal.",
+      "type": "string"
+    },
+    "renditions": {
+      "description": "Where the content is: files in git, blob stores, URLs.",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/rendition"
+      }
+    },
+    "origin": {
+      "description": "Set on copies pushed from another store.",
+      "$ref": "common.json#/$defs/origin"
+    },
+    "x": {
+      "description": "Free-form extensions. The only place unknown fields are allowed.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "title",
+    "summary",
+    "created",
+    "access"
+  ]
+}

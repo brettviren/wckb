@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/snapshot.json",
+  "title": "Snapshot",
+  "description": "An extract from an authoritative system (conditions DB, run DB, elog, slow control), recording the query and when it was made. The system remains the source of truth.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "snapshot"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^snp-"
+    },
+    "system": {
+      "$ref": "common.json#/$defs/subject"
+    },
+    "query": {
+      "description": "The query, API call or URL that produced the extract.",
+      "type": "string"
+    },
+    "retrieved": {
+      "$ref": "common.json#/$defs/datetime"
+    },
+    "renditions": {
+      "minItems": 1
+    }
+  },
+  "required": [
+    "query",
+    "renditions",
+    "retrieved",
+    "system"
+  ],
+  "unevaluatedProperties": false
+}

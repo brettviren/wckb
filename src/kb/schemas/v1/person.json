@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/person.json",
+  "title": "Person",
+  "description": "Someone who asserts, creates or reviews records.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "person"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^per-"
+    },
+    "name": {
+      "type": "string"
+    },
+    "affiliation": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "handles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "unevaluatedProperties": false
+}

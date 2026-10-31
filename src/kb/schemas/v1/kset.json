@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/kset.json",
+  "title": "Knowledge set",
+  "description": "A selection of records, itself a record: the unit of knowledge transfer between stores, and usable as a reading list. Shallow means the members (and members of nested sets); deep also follows every reference from them, recursively. A source: frozen once committed.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "kset"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ks-"
+    },
+    "members": {
+      "description": "The records selected (refs; they need not be in this store).",
+      "type": "array",
+      "items": {
+        "$ref": "common.json#/$defs/ref"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "depth": {
+      "description": "shallow: the members only; deep: the members and everything they reference, recursively.",
+      "enum": [
+        "shallow",
+        "deep"
+      ]
+    },
+    "nested": {
+      "description": "When a member (or a reference reached deeply) is itself a knowledge set: follow its own depth, or inherit this set's.",
+      "enum": [
+        "follow",
+        "inherit"
+      ]
+    },
+    "follow": {
+      "description": "Reference fields a deep descent follows (default: all of them).",
+      "type": "array",
+      "items": {
+        "enum": [
+          "members",
+          "supersedes",
+          "retracts",
+          "derived_from",
+          "evidence",
+          "related"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "purpose": {
+      "description": "What the set is for: transfer, reading-list, release ...",
+      "type": "string"
+    }
+  },
+  "required": [
+    "members",
+    "depth"
+  ],
+  "unevaluatedProperties": false
+}

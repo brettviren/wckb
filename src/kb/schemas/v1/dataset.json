@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/dataset.json",
+  "title": "Dataset",
+  "description": "Machine-readable data: tables, histograms, ROOT/HDF5 files, per-run condition series. Prefer CSV/TSV with a datapackage.json metadata rendition, JSON/JSONL or Parquet.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "dataset"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^dat-"
+    },
+    "format": {
+      "description": "Short format name: csv, parquet, root, hdf5, jsonl ...",
+      "type": "string"
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "produced_by": {
+      "type": "object",
+      "properties": {
+        "software": {
+          "$ref": "common.json#/$defs/ref"
+        },
+        "config": {
+          "$ref": "common.json#/$defs/ref"
+        },
+        "command": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "renditions": {
+      "minItems": 1
+    }
+  },
+  "required": [
+    "renditions"
+  ],
+  "unevaluatedProperties": false
+}

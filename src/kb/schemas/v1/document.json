@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/document.json",
+  "title": "Document",
+  "description": "A paper, preprint, technote, presentation, thesis, minutes or similar. The original usually lives elsewhere (Indico, arXiv, CDS) and is referenced by URL and identifiers; extracted text is a derived rendition.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "document"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^doc-"
+    },
+    "doctype": {
+      "enum": [
+        "paper",
+        "preprint",
+        "technote",
+        "presentation",
+        "poster",
+        "thesis",
+        "minutes",
+        "report",
+        "manual",
+        "proposal",
+        "book",
+        "other"
+      ]
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "date": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "indico": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "common.json#/$defs/url"
+        }
+      },
+      "additionalProperties": false
+    },
+    "venue": {
+      "description": "Journal, conference or series.",
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "creators",
+    "date",
+    "doctype"
+  ],
+  "unevaluatedProperties": false,
+  "anyOf": [
+    {
+      "required": [
+        "renditions"
+      ],
+      "properties": {
+        "renditions": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "required": [
+        "identifiers"
+      ]
+    }
+  ]
+}

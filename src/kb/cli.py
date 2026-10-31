@@ -1,0 +1,1805 @@
+"""The ``kb`` command line.  Parses arguments, calls logic modules, renders.
+
+No data processing lives here: see records, authoring, checks, index, build...
+"""
+
+import functools
+import json
+import sys
+from pathlib import Path
+
+import click
+
+from . import __version__, ui
+from .errors import KBError
+from .ids import KINDS
+
+
+class Ctx:
+    def __init__(self, root: Path | None):
+        self.root = root
+        self._kb = None
+
+    @property
+    def kb(self):
+        if self._kb is None:
+            from .records import KB
+            try:
+                self._kb = KB.open(self.root)
+            except KBError as exc:
+                if "network filesystem" not in str(exc):
+                    raise
+                self._kb = KB.open(self.root, readonly=True)   # reading is fine; writes will say why not
+        return self._kb
+
+
+pass_ctx = click.make_pass_decorator(Ctx)
+
+
+def handle_errors(fn):
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        try:
+            return fn(*a, **kw)
+        except KBError as exc:
+            raise click.ClickException(str(exc)) from None
+    return wrapper
+
+
+def command(group, *args, **kwargs):
+    """A subcommand whose KBErrors become clean one-line failures."""
+    def deco(fn):
+        return group.command(*args, **kwargs)(handle_errors(fn))
+    return deco
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("-C", "--kb", "root", type=click.Path(file_okay=False, path_type=Path),
+              envvar="KB_ROOT", help="Store directory (default: nearest with kb.sqlite, or ./kb/kb.sqlite).")
+@click.version_option(__version__, prog_name="kb")
+@click.pass_context
+def main(ctx, root):
+    """kb: a shared, git-backed knowledge base for people and their LLMs.
+
+    Start with: kb context SUBJECT, kb ls, kb search WORDS.  Every command
+    has --help.  Docs: docs/howto/ in the kb source.
+    """
+    ctx.obj = Ctx(root)
+
+
+# -- options shared by commands that make records -----------------------------
+
+def record_options(fn):
+    opts = [
+        click.option("--title", help="Short title."),
+        click.option("--summary", help="1-3 sentences for the next reader (an LLM); not the title again."),
+        click.option("--subject", multiple=True, help="Subject path, e.g. detector/tpc/noise (repeatable)."),
+        click.option("--tag", "tags", multiple=True, help="Free label (repeatable)."),
+        click.option("--runs", multiple=True, help="Valid for runs: N or FIRST-LAST (repeatable)."),
+        click.option("--start", help="Valid from (date)."),
+        click.option("--end", help="Valid until (date)."),
+        click.option("--status", type=click.Choice(["draft", "unverified", "verified", "disputed"])),
+        click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"])),
+        click.option("--by", help="Who asserted it (person ID or name)."),
+        click.option("--how", help="How it was asserted: 'verbal at collab meeting', 'elog 5521' ..."),
+        click.option("--when", help="When it was asserted (date)."),
+        click.option("--creators", multiple=True, help="Author (repeatable)."),
+        click.option("--date", help="Date of the thing itself (e.g. of a talk)."),
+        click.option("--identifier", "identifiers", multiple=True, help="scheme=value: doi=, arxiv=, indico=, inspire= ..."),
+        click.option("--evidence", multiple=True, help="Supporting ref or URL (repeatable)."),
+        click.option("--related", multiple=True, help="Related ref (repeatable)."),
+        click.option("--derived-from", "derived_from", multiple=True, help="Input ref, for topics and views (repeatable)."),
+        click.option("--license"),
+        click.option("--set", "sets", multiple=True, help="Any field: key=value (JSON values parsed; dotted keys nest)."),
+        click.option("--via", help="Tool or session making the record (e.g. claude-code)."),
+    ]
+    for o in reversed(opts):
+        fn = o(fn)
+    return fn
+
+
+def _fields(kw) -> dict:
+    from .authoring import fields_from_options
+    idents = {}
+    for item in kw.pop("identifiers", ()):
+        if "=" not in item:
+            raise KBError(f"--identifier wants scheme=value, got {item!r}")
+        k, v = item.split("=", 1)
+        idents[k] = v
+    return fields_from_options(identifiers=idents, **kw)
+
+
+def _text(text, text_file):
+    if text is not None and text_file is not None:
+        raise KBError("give --text or --text-file, not both")
+    if text_file is not None:
+        return sys.stdin.read() if str(text_file) == "-" else Path(text_file).read_text()
+    return text
+
+
+def _done(kb, rec, json_out=False):
+    if json_out:
+        ui.emit_json(rec.data)
+    else:
+        click.echo(rec.id)
+        ui.info(f"stored {rec.kind} {rec.id} in {kb.cfg.name}")
+
+
+# -- making records -------------------------------------------------------------
+
+@command(main, "init")
+@click.argument("path", type=click.Path(file_okay=False, path_type=Path), default=".")
+@click.option("--scope", default="other", type=click.Choice(["project", "home", "group", "org", "other"]),
+              show_default=True, help="What this store holds knowledge for; sets defaults for access, policy, autonomy.")
+@click.option("--name", help="Store name (default: directory name, or the project's for ./kb).")
+@click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
+              help="Who may see this store (default: private for project/home, group for group).")
+@click.option("--target", help="Where policy is enacted: a directory (CLAUDE.md, .claude/) or 'user' (~/.claude).")
+@click.option("--up", type=click.Path(file_okay=False, exists=True, path_type=Path),
+              help="An existing store to link as this one's 'up' neighbor (e.g. your home store).")
+@click.option("--no-enact", is_flag=True, help="Select policy but do not enact it yet.")
+def init_cmd(path, scope, name, access, target, up, no_enact):
+    """Make PATH a kb store (one SQLite file, kb.sqlite).
+
+    \b
+      kb init ~/kb --scope home                       # your personal store
+      kb init ./kb --scope project --up ~/kb          # a project store beside the working files
+      kb init /data/kb/tpc --scope group              # a group store (one writer; shared by bundles)
+    """
+    from .scaffold import init
+    try:
+        for f in init(path, name, access, scope, target, False, not no_enact, up):
+            click.echo(f"created {f}")
+    except KBError as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+@command(main, "new", no_args_is_help=True)
+@click.argument("kind", type=click.Choice(KINDS))
+@record_options
+@click.option("--text", help="Content (note.md, or page.md for topics).")
+@click.option("--text-file", type=click.Path(dir_okay=False, allow_dash=True), help="Content from a file (- for stdin).")
+@click.option("--slug", help="Readable ID suffix (person records only).")
+@click.option("--from-json", "from_json", type=click.File(), help="Partial record as JSON (- for stdin); kb fills the rest.")
+@click.option("--json", "json_out", is_flag=True, help="Print the record as JSON.")
+@pass_ctx
+def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
+    """Make a new record of KIND.
+
+    \b
+      kb new observation --title "Noisy run 1234" --summary "..." \\
+         --subject detector/tpc/noise --runs 1234 --by per-ann --how "verbal, collab mtg" \\
+         --text "Coherent noise elevated on all planes during run 1234."
+      kb new config --title ... --set system=production/sim --set 'parameters={"drift_mm_us":1.6}' --start 2025-01-01
+      kb new person --slug ann --set name="Ann Example"
+    """
+    from . import authoring
+    kb = c.kb
+    fields = _fields(kw)
+    if from_json is not None:
+        payload = json.load(from_json)
+        payload.setdefault("kind", kind)
+        if payload["kind"] != kind:
+            raise KBError(f"JSON says kind {payload['kind']}, command says {kind}")
+        payload = authoring.deep_merge(payload, fields)
+        rec = authoring.from_json(kb, payload, _text(text, text_file), via=via)
+    else:
+        rec = authoring.new(kb, kind, fields, _text(text, text_file), slug=slug, via=via)
+    _done(kb, rec, json_out)
+
+
+@command(main, "add", no_args_is_help=True)
+@click.argument("sources", nargs=-1, required=True)
+@click.option("--kind", default="document", type=click.Choice(["document", "dataset", "config", "snapshot", "software", "observation"]),
+              show_default=True)
+@record_options
+@click.option("--store", "mode", default="auto", show_default=True,
+              type=click.Choice(["auto", "db", "cas", "local", "none"]),
+              help="Where content goes: auto = in the store if small, else the content store (cas), else local-only.")
+@click.option("--store-name", help="Content store name (default: 'default').")
+@click.option("--url", help="Canonical URL of a single local file (e.g. Indico behind SSO).")
+@click.option("--no-fetch", is_flag=True, help="Record URLs without downloading (no hash).")
+@click.option("--supersedes", "supersedes", help="This is a new version of that record.")
+@click.option("--extract", is_flag=True, help="Run kb extract afterwards.")
+@click.option("--force", is_flag=True, help="Add even if an identifier is already in the KB.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def add_cmd(c, sources, kind, mode, store_name, url, no_fetch, supersedes, extract, force, json_out, via, **kw):
+    """Add files or URLs as a new source record (default kind: document).
+
+    \b
+      kb add slides.pdf --url https://indico.example/... --set doctype=presentation \\
+         --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
+      kb add https://arxiv.org/pdf/2601.01234 --identifier arxiv=2601.01234 --set doctype=preprint ...
+      kb add noise.csv make_noise.py --kind dataset --set format=csv --title ... --runs 1200-1300
+    """
+    from . import authoring, transforms
+    kb = c.kb
+    fields = _fields(kw)
+    if supersedes:
+        fields["supersedes"] = [kb.get(supersedes).id]
+    rec = authoring.add(kb, kind, list(sources), fields, mode=mode, store_name=store_name, url=url,
+                        fetch=not no_fetch, force=force, via=via)
+    if extract:
+        try:
+            r = transforms.extract(kb, rec)
+            ui.info(f"extracted {rec.id}#{r['name']} with {r['transform']['name']}")
+        except KBError as exc:
+            ui.info(f"extract skipped: {exc}")
+    _done(kb, rec, json_out)
+
+
+@command(main, "supersede", no_args_is_help=True)
+@click.argument("ref")
+@record_options
+@click.option("--text", help="The corrected content.")
+@click.option("--text-file", type=click.Path(dir_okay=False, allow_dash=True))
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def supersede_cmd(c, ref, text, text_file, json_out, via, **kw):
+    """Correct a record: a new one that supersedes REF (fields inherited unless given)."""
+    from .authoring import supersede
+    kb = c.kb
+    _done(kb, supersede(kb, ref, _fields(kw), _text(text, text_file), via=via), json_out)
+
+
+@command(main, "retract", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--reason", required=True, help="Why it is withdrawn.")
+@click.option("--by", help="Who withdraws it.")
+@click.option("--evidence", multiple=True)
+@click.option("--via")
+@pass_ctx
+def retract_cmd(c, ref, reason, by, evidence, via):
+    """Withdraw REF without replacement (writes a retraction observation)."""
+    from .authoring import retract
+    kb = c.kb
+    fields = {}
+    if by:
+        fields["asserted_by"] = [{"who": by}]
+    if evidence:
+        fields["evidence"] = list(evidence)
+    _done(kb, retract(kb, ref, reason, fields, via=via))
+
+
+@command(main, "set", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("assignments", nargs=-1)
+@click.option("--add", "adds", multiple=True, help="Append to a list field: key=value.")
+@click.option("--remove", "removes", multiple=True, help="Remove from a list field: key=value.")
+@click.option("--replace-ref", multiple=True, help="OLD=NEW in derived_from, evidence and related.")
+@pass_ctx
+def set_cmd(c, ref, assignments, adds, removes, replace_ref):
+    """Change fields of a record, within policy (key=value; key=null deletes).
+
+    On source records only status, subject, tags, summary, evidence, related,
+    identifiers and license may change; the rest needs kb supersede.
+    """
+    from .edit import set_fields
+    rec = set_fields(c.kb, ref, assignments, adds, removes, replace_ref)
+    click.echo(rec.id)
+
+
+@main.group("rendition")
+def rendition_grp():
+    """Renditions of a record."""
+
+
+@command(rendition_grp, "add", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("file", type=click.Path(dir_okay=False, exists=True, path_type=Path))
+@click.option("--name", help="Rendition name (default: file stem).")
+@click.option("--role", default="derived", type=click.Choice(["derived", "metadata", "content", "original"]), show_default=True)
+@click.option("--fidelity", type=click.Choice(["lossless", "extracted", "llm"]))
+@click.option("--from", "source", help="Rendition it was derived from.")
+@click.option("--tool", help="What made it, e.g. claude-opus-5-5.")
+@click.option("--media-type")
+@click.option("--notes")
+@pass_ctx
+def rendition_add_cmd(c, ref, file, name, role, fidelity, source, tool, media_type, notes):
+    """Register FILE as a rendition of REF (held in the store if small, else in the content store)."""
+    from .edit import add_rendition
+    r = add_rendition(c.kb, ref, file, name, role, fidelity, source, tool, media_type, notes)
+    click.echo(f"{c.kb.get(ref).id}#{r['name']}")
+
+
+@command(rendition_grp, "locate", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--store", "store_name", help="Copy into this content store (the default one if neither option is given).")
+@click.option("--url", help="Add this URL as a mirror (fetched and hash-checked).")
+@click.option("--file", type=click.Path(dir_okay=False, exists=True, path_type=Path),
+              help="Local copy to store, when the content is not reachable otherwise.")
+@pass_ctx
+def rendition_locate_cmd(c, ref, store_name, url, file):
+    """Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must match its hash."""
+    from .edit import add_location
+    loc = add_location(c.kb, ref, store_name, url, file)
+    click.echo(json.dumps(loc))
+
+
+@command(main, "extract", no_args_is_help=True)
+@click.argument("ref", required=False)
+@click.option("--from", "source", help="Source rendition (default: the first original).")
+@click.option("--transform", help="Transform name (see kb transforms).")
+@click.option("--name", default="text", show_default=True, help="Name of the derived rendition.")
+@click.option("--force", is_flag=True, help="Redo even if up to date.")
+@click.option("--stale", "all_stale", is_flag=True, help="Redo every stale derived rendition.")
+@pass_ctx
+def extract_cmd(c, ref, source, transform, name, force, all_stale):
+    """Derive a text (or summary) rendition from REF's original."""
+    from . import graph, transforms
+    kb = c.kb
+    if all_stale:
+        for s in graph.stale_renditions(kb):
+            rec = kb.get(s.id)
+            r = rec.rendition(s.rendition)
+            transforms.extract(kb, rec, r["derived_from"], r["transform"]["name"], s.rendition, force=True)
+            click.echo(f"{s.id}#{s.rendition}")
+        return
+    if not ref:
+        raise KBError("give a record or --stale")
+    r = transforms.extract(kb, kb.get(ref), source, transform, name, force)
+    click.echo(f"{kb.get(ref).id}#{r['name']}")
+    ui.info(f"{r['transform']['name']} {r['transform'].get('version', '')}: {r['size']} bytes, fidelity {r['fidelity']}")
+
+
+@command(main, "transforms")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def transforms_cmd(c, json_out):
+    """List transforms and whether they are available here."""
+    from .transforms import registry
+    rows = [{"name": t.name, "available": t.available(), "fidelity": t.fidelity, "output": t.output_type,
+             "media_types": list(t.media_types), "description": t.description} for t in registry(c.kb)]
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        mark = "yes" if r["available"] else "no "
+        click.echo(f"{r['name']:<14} {mark}  {r['description']}")
+        click.echo(f"{'':<19} {', '.join(r['media_types'])}")
+
+
+# -- reading ------------------------------------------------------------------
+
+@command(main, "show", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--json", "json_out", is_flag=True, help="The record JSON.")
+@pass_ctx
+def show_cmd(c, ref, json_out):
+    """Show one record."""
+    from .context import _Out, _record_context
+    kb = c.kb
+    rec = kb.get(ref)
+    if json_out:
+        return ui.emit_json(rec.data)
+    click.echo(_record_context(kb, rec, _Out(10**9)), nl=False)
+
+
+@command(main, "ls")
+@click.option("--kind", type=click.Choice(KINDS))
+@click.option("--subject", help="Subject path or prefix.")
+@click.option("--runs", help="Overlapping run range: N or FIRST-LAST.")
+@click.option("--status", type=click.Choice(["draft", "unverified", "verified", "disputed"]))
+@click.option("--since", help="Created on or after (date).")
+@click.option("--all", "include_old", is_flag=True, help="Include superseded and retracted records.")
+@click.option("--limit", type=int)
+@click.option("-l", "--long", is_flag=True, help="Show summaries.")
+@click.option("--subjects", is_flag=True, help="List subject paths in use, with counts.")
+@click.option("--reach", default=0, help="Also list neighbor stores up to this many hops away.")
+@click.option("--in", "only", multiple=True, help="Also list this neighbor store (repeatable).")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subjects, reach, only, json_out):
+    """List records (current ones unless --all), newest first."""
+    from . import index
+    from .context import parse_run_window
+    kb = c.kb
+    if subjects:
+        counts = index.subjects(kb)
+        if json_out:
+            return ui.emit_json(counts)
+        for subj, n in counts.items():
+            click.echo(f"{n:>5}  {subj}")
+        return
+    if reach or only:
+        from .federated import ls
+        rows = ls(kb, reach, list(only), kind=kind, subject=subject, runs=parse_run_window(runs), status=status,
+                  include_old=include_old, since=since, limit=limit)
+        if json_out:
+            return ui.emit_json(rows)
+        return ui.records(rows, long, with_store=True)
+    rows = index.ls(kb, kind, subject, parse_run_window(runs), status, include_old, since, limit)
+    if json_out:
+        return ui.emit_json(rows)
+    ui.records(rows, long)
+
+
+@command(main, "search", no_args_is_help=True)
+@click.argument("words", nargs=-1, required=True)
+@click.option("-s", "--semantic", "mode", flag_value="semantic", help="Match meaning (needs kb embed).")
+@click.option("--hybrid", "mode", flag_value="hybrid", help="Fuse word and meaning matches.")
+@click.option("--all", "include_old", is_flag=True, help="Include superseded records.")
+@click.option("--limit", default=20, show_default=True)
+@click.option("--reach", default=0, help="Also search neighbor stores up to this many hops away.")
+@click.option("--in", "only", multiple=True, help="Also search this neighbor store (repeatable).")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
+    """Search titles, summaries, subjects and text (words; a trailing * matches a prefix)."""
+    from .federated import search
+    rows = search(c.kb, " ".join(words), mode or "text", limit, include_old, reach, list(only))
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        click.echo(ui.record_line(r, store=r["store"] if (reach or only) else None))
+        if r.get("snip"):
+            click.echo(f"{'':<{29 if (reach or only) else 16}} {' '.join(r['snip'].split())}")
+
+
+@command(main, "context", no_args_is_help=True)
+@click.argument("target", nargs=-1, required=True)
+@click.option("--runs", help="Only records valid for these runs: N or FIRST-LAST.")
+@click.option("--budget", default=12000, show_default=True, help="Maximum characters of output.")
+@click.option("--reach", default=0, help="Also include neighbor stores up to this many hops away.")
+@click.option("--in", "only", multiple=True, help="Also include this neighbor store (repeatable).")
+@pass_ctx
+def context_cmd(c, target, runs, budget, reach, only):
+    """What the KB knows about a subject, a record, or some words; compact markdown for LLMs."""
+    from .context import parse_run_window
+    from .federated import context
+    click.echo(context(c.kb, " ".join(target), parse_run_window(runs), budget, reach, list(only)), nl=False)
+
+
+@command(main, "path", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--no-fetch", is_flag=True, help="Don't download URL content.")
+@pass_ctx
+def path_cmd(c, ref, no_fetch):
+    """A local file with a rendition's content (ID#NAME), fetched or materialized as needed."""
+    from .edit import rendition_path
+    click.echo(str(rendition_path(c.kb, ref, fetch=not no_fetch)))
+
+
+@command(main, "verify")
+@click.argument("refs", nargs=-1)
+@click.option("--record", is_flag=True, help="Store hashes for URL renditions that have none.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def verify_cmd(c, refs, record, json_out):
+    """Re-fetch URL originals and compare with their recorded sha256."""
+    from .store import verify
+    kb = c.kb
+    recs = [kb.get(r) for r in refs] if refs else list(kb.records.values())
+    report = verify(kb, recs, record)
+    if json_out:
+        return ui.emit_json(report)
+    for item in report:
+        click.echo(f"{item['result']:<12} {item['ref']}  {item['url']}")
+        if item.get("detail"):
+            click.echo(f"{'':<13}{item['detail']}")
+    if any(i["result"] == "changed" for i in report):
+        sys.exit(1)
+
+
+@command(main, "deps", no_args_is_help=True)
+@click.argument("ref")
+@click.option("-r", "--reverse", is_flag=True, help="What uses REF, rather than what REF uses.")
+@click.option("-t", "--transitive", is_flag=True)
+@pass_ctx
+def deps_cmd(c, ref, reverse, transitive):
+    """Inputs of a record, or (-r) the records built on it."""
+    from . import graph
+    kb = c.kb
+    ident = kb.get(ref).id
+    ids = graph.rdeps(kb, ident, transitive) if reverse else graph.deps(kb, ident, transitive)
+    for i in ids:
+        r = kb.records.get(i)
+        click.echo(ui.record_line({"id": i, "kind": r.kind if r else "?", "status": r.data.get("status") if r else None,
+                                   "title": r.data.get("title") if r else "(missing)",
+                                   "current": kb.is_current(i)}))
+
+
+@command(main, "dag")
+@click.option("--format", "fmt", default="dot", type=click.Choice(["dot", "json"]), show_default=True)
+@pass_ctx
+def dag_cmd(c, fmt):
+    """The derivation and supersession graph (dot | json)."""
+    from .graph import dag
+    click.echo(dag(c.kb, fmt))
+
+
+@main.command("schema")
+@click.argument("kind", required=False)
+@click.option("--markdown", is_flag=True, help="The whole reference as markdown.")
+@handle_errors
+def schema_cmd(kind, markdown):
+    """Without KIND, list kinds; with KIND, print its JSON Schema."""
+    from . import schema
+    if markdown:
+        from .schemadoc import render
+        return click.echo(render(), nl=False)
+    if not kind:
+        click.echo(f"schema revision {schema.REVISION}")
+        for k in KINDS:
+            click.echo(f"  {k:<12} {schema.show(k).get('description', '')[:100]}")
+        click.echo("shared definitions: kb schema common;  common fields: kb schema record")
+        return
+    ui.emit_json(schema.show(kind))
+
+
+# -- integrity ----------------------------------------------------------------
+
+@command(main, "check")
+@click.argument("ids", nargs=-1)
+@click.option("--deep", is_flag=True, help="Also re-hash every stored blob.")
+@click.option("--hook", is_flag=True, hidden=True)
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def check_cmd(c, ids, deep, hook, json_out):
+    """Consistency scan: schema, kinds, stored content, tampering, access, references. Exit 1 on errors.
+
+    Append-only itself is enforced by the database on every write.
+    """
+    from . import checks
+    if hook:
+        return _hook_check(c)
+    kb = c.kb
+    probs = checks.check(kb, [kb.get(i).id for i in ids] or None, deep=deep)
+    if json_out:
+        ui.emit_json([p.as_dict() for p in probs])
+    else:
+        ui.problems(probs)
+        ui.summary_counts(probs)
+    if any(p.level == "error" for p in probs):
+        sys.exit(1)
+
+
+def _hook_check(c):
+    from .hooks import run
+    code, text = run("check", sys.stdin.read(), c.root)
+    if text:
+        print(text, file=sys.stderr)
+    if code:
+        sys.exit(code)
+
+
+@command(main, "lint")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def lint_cmd(c, json_out):
+    """Advice needing judgment: stale things, overlaps, old unverified claims ... (never fails)."""
+    from .lint import lint
+    probs = lint(c.kb)
+    if json_out:
+        return ui.emit_json([p.as_dict() for p in probs])
+    ui.problems(probs)
+    ui.summary_counts(probs)
+
+
+@command(main, "stale")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def stale_cmd(c, json_out):
+    """Derived renditions, topics and views whose inputs changed."""
+    from .graph import stale
+    items = stale(c.kb)
+    if json_out:
+        return ui.emit_json([s.as_dict() for s in items])
+    for s in items:
+        where = s.id + (f"#{s.rendition}" if s.rendition else "")
+        click.echo(f"{s.what:<9} {where}")
+        for r in s.reasons:
+            click.echo(f"{'':<10}- {r}")
+
+
+@command(main, "stamp", no_args_is_help=True)
+@click.argument("refs", nargs=-1, required=True)
+@pass_ctx
+def stamp_cmd(c, refs):
+    """Pin a topic's inputs by digest after revising it."""
+    from .graph import stamp
+    for r in refs:
+        click.echo(stamp(c.kb, r).id)
+
+
+@command(main, "reindex")
+@pass_ctx
+def reindex_cmd(c):
+    """Rebuild the store's query tables (search, subjects, runs, references) from the items."""
+    from .index import build
+    n = build(c.kb)
+    ui.info(f"reindexed {n} items")
+
+
+@command(main, "embed")
+@pass_ctx
+def embed_cmd(c):
+    """Embed new or changed text for semantic search (needs [embed] configured)."""
+    from .embed import embed
+    r = embed(c.kb)
+    ui.info(f"{r['identity']}: embedded {r['embedded']}, removed {r['removed']}, {r['total']} chunks in all")
+
+
+# -- views ----------------------------------------------------------------------
+
+@command(main, "build")
+@click.argument("refs", nargs=-1)
+@click.option("--stale", "only_stale", is_flag=True, help="Build every stale view, inputs first.")
+@click.option("--world", is_flag=True, help="Re-extract stale renditions, reindex, build stale views.")
+@click.option("--publish", "publish_too", is_flag=True, help="Publish what was built.")
+@pass_ctx
+def build_cmd(c, refs, only_stale, world, publish_too):
+    """Build views: run their tool out of tree and write manifest.json."""
+    from . import build, graph
+    kb = c.kb
+    if world or only_stale:
+        if world:
+            report = build.world(kb, ui.info, publish_too)
+        else:
+            stale = [r.id for r in kb.records.values() if r.kind == "view" and build.view_staleness(kb, r)]
+            report = {"built": [], "failed": [], "published": []}
+            for vid in graph.topo_order(kb, stale):
+                try:
+                    build.build(kb, vid, ui.info)
+                    report["built"].append(vid)
+                    if publish_too:
+                        report["published"].append(build.publish(kb, vid)["path"])
+                except KBError as exc:
+                    report["failed"].append({"id": vid, "error": str(exc)})
+        ui.emit_json(report)
+        if report["failed"]:
+            sys.exit(1)
+        return
+    if not refs:
+        raise KBError("give views to build, or --stale / --world")
+    for r in refs:
+        man = build.build(kb, r, ui.info)
+        click.echo(f"{man['view']}: {len(man['outputs'])} output(s) in "
+                   f"{(kb.cfg.build_dir / man['view'] / 'out').relative_to(kb.root)}")
+        if publish_too:
+            click.echo(build.publish(kb, r)["path"])
+
+
+@command(main, "publish", no_args_is_help=True)
+@click.argument("refs", nargs=-1, required=True)
+@pass_ctx
+def publish_cmd(c, refs):
+    """Copy a freshly built view to the publish store as an immutable version."""
+    from .build import publish
+    for r in refs:
+        e = publish(c.kb, r)
+        click.echo(e.get("url") or e["path"])
+
+
+# -- FAIR, migration, tooling --------------------------------------------------
+
+@main.group("export")
+def export_grp():
+    """Export records in community formats."""
+
+
+@command(export_grp, "rocrate", no_args_is_help=True)
+@click.argument("refs", nargs=-1, required=True)
+@click.option("-o", "--output", type=click.Path(file_okay=False, path_type=Path), required=True)
+@click.option("--no-copy", is_flag=True, help="Reference content by URL instead of copying files.")
+@pass_ctx
+def rocrate_cmd(c, refs, output, no_copy):
+    """Write an RO-Crate 1.1 package of REFS."""
+    from .fair import rocrate
+    click.echo(rocrate(c.kb, list(refs), output, copy=not no_copy))
+
+
+@command(main, "datapackage", no_args_is_help=True)
+@click.argument("ref")
+@pass_ctx
+def datapackage_cmd(c, ref):
+    """Infer a Frictionless datapackage.json for a dataset's CSV/TSV files."""
+    from .fair import datapackage
+    ui.emit_json(datapackage(c.kb, ref))
+
+
+@command(main, "migrate")
+@click.option("--dry-run", is_flag=True)
+@pass_ctx
+def migrate_cmd(c, dry_run):
+    """Upgrade every record to this kb's schema version (one reviewable change)."""
+    from .migrate import migrate
+    ids = migrate(c.kb, dry_run=dry_run)
+    ui.info(f"{'would migrate' if dry_run else 'migrated'} {len(ids)} record(s)")
+    for i in ids:
+        click.echo(i)
+
+
+@main.group("hook")
+def hook_grp():
+    """Claude Code hook entry points (they read the event JSON on stdin)."""
+
+
+@hook_grp.command("check")
+@pass_ctx
+def hook_check_cmd(c):
+    """PostToolUse: check the record just edited; problems go back to Claude (exit 2)."""
+    _hook_check(c)
+
+
+@hook_grp.command("recall")
+@pass_ctx
+def hook_recall_cmd(c):
+    """UserPromptSubmit: print the few records that look relevant to the prompt."""
+    from .hooks import run
+    _, text = run("recall", sys.stdin.read(), c.root)
+    if text:
+        click.echo(text)
+
+
+@hook_grp.command("session")
+@pass_ctx
+def hook_session_cmd(c):
+    """SessionStart: one short status note about the store."""
+    from .hooks import run
+    _, text = run("session", sys.stdin.read(), c.root)
+    if text:
+        click.echo(text)
+
+
+# -- neighbors and promotion ---------------------------------------------------
+
+@main.group("neighbor")
+def neighbor_grp():
+    """Neighbor stores: up (broader), peer, down (narrower)."""
+
+
+@command(neighbor_grp, "list")
+@click.option("--depth", default=2, show_default=True, help="Follow neighbors of neighbors this far.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def neighbor_list_cmd(c, depth, json_out):
+    """This store's neighborhood."""
+    from .federation import describe
+    kb = c.kb
+    rows = describe(kb, depth)
+    if json_out:
+        return ui.emit_json(rows)
+    click.echo(f"here: {kb.cfg.name} ({kb.cfg.scope}, access {kb.cfg.access}, id {kb.cfg.id})")
+    for r in rows:
+        avail = "" if r.get("available", True) else "  [not available here: kb neighbor fetch, or add --path]"
+        extra = f"{r.get('scope', '?')}, access {r.get('access', '?')}, {r.get('records', '?')} records"
+        click.echo(f"{'  ' * r['distance']}{r['label']:<24} {r['relation']:<5} {extra}{avail}")
+
+
+@command(neighbor_grp, "add", no_args_is_help=True)
+@click.argument("name")
+@click.option("--relation", default="up", type=click.Choice(["up", "peer", "down", "twin"]), show_default=True,
+              help="up: broader; down: narrower; peer: sibling; twin: another clone of this same store (git sync).")
+@click.option("--path", help="The store's directory on this machine (needed to write to it).")
+@click.option("--url", help="A published read-only snapshot of it (kb neighbor fetch downloads it).")
+@click.option("--exchange", type=click.Path(file_okay=False, exists=True),
+              help="Land 'pr': a git clone of the neighbor's bundle exchange repository.")
+@click.option("--shared", is_flag=True, help="Declare it for everyone (neighbors.toml); default is this clone only.")
+@click.option("--land", "--mode", "mode", default="apply", type=click.Choice(["apply", "inbox", "pr"]),
+              show_default=True, help="How pushes land there: applied, into its inbox for review, or as a pull request.")
+@click.option("--push", "push_form", type=click.Choice(["select", "all", "none"]),
+              help="What goes here -> there (default by relation: up select, down all, peer select).")
+@click.option("--pull", "pull_form", type=click.Choice(["select", "all", "none"]),
+              help="What comes there -> here (default: up all, down select, peer select).")
+@click.option("--accept", type=click.Choice(["direct", "review"]), help="Pulled items: applied, or into the inbox for review.")
+@click.option("--prefer", type=click.Choice(["ours", "theirs", "newer"]),
+              help="Who wins on mutable fields when the same item arrives changed along another path.")
+@click.option("--relabel", type=click.Choice(["public", "collaboration", "group", "private"]),
+              help="Access level that more restricted records may be relabelled to when pushed here.")
+@click.option("--description", default="")
+@pass_ctx
+def neighbor_add_cmd(c, name, relation, path, url, exchange, shared, mode, push_form, pull_form, accept,
+                     prefer, relabel, description):
+    """Link a neighbor store, and say how knowledge moves along the edge."""
+    from .federation import add
+    ui.emit_json(add(c.kb, name, relation, path, url, shared, mode, relabel, description, push=push_form,
+                     pull=pull_form, accept=accept, prefer=prefer, exchange=exchange))
+
+
+@command(neighbor_grp, "remove", no_args_is_help=True)
+@click.argument("name")
+@pass_ctx
+def neighbor_remove_cmd(c, name):
+    """Unlink a neighbor store."""
+    from .federation import remove
+    for f in remove(c.kb, name):
+        click.echo(f"removed from {f}")
+
+
+@command(neighbor_grp, "fetch")
+@click.argument("names", nargs=-1)
+@pass_ctx
+def neighbor_fetch_cmd(c, names):
+    """Clone or update URL-only neighbors (read-only copies in the cache)."""
+    from .federation import fetch
+    for name, what in fetch(c.kb, list(names) or None):
+        click.echo(f"{name}: {what}")
+
+
+@command(main, "candidates", no_args_is_help=True)
+@click.option("--to", "target", required=True, help="Neighbor to promote to.")
+@click.option("--all", "include_all", is_flag=True, help="Include records already pushed and unchanged.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def candidates_cmd(c, target, include_all, json_out):
+    """Records worth pushing to a neighbor, best first, with reasons and blockers."""
+    from .push import candidates
+    rows = candidates(c.kb, target, include_all)
+    if json_out:
+        return ui.emit_json([x.as_dict() for x in rows])
+    for x in rows:
+        click.echo(f"{x.id:<16} {x.state:<8} {x.score:>3}  {x.title}")
+        if x.reasons:
+            click.echo(f"{'':<30}{'; '.join(x.reasons)}")
+        for b in x.blockers:
+            click.echo(click.style(f"{'':<30}blocked: {b}", fg="yellow"))
+
+
+@command(main, "push", no_args_is_help=True)
+@click.argument("refs", nargs=-1)
+@click.option("--to", "target", required=True, help="Neighbor to send to.")
+@click.option("--deep", is_flag=True, help="Also send everything the items reference, recursively.")
+@click.option("--with-deps", "deep", is_flag=True, hidden=True)
+@click.option("--nested", default="follow", type=click.Choice(["follow", "inherit"]), show_default=True,
+              help="Nested knowledge sets: use their own depth, or this one.")
+@click.option("--all", "all_items", is_flag=True, help="Send every new or changed item (the 'all' form).")
+@click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
+              help="Relabel more restricted records to this level in the copy (a deliberate human decision).")
+@click.option("--land", "--mode", "mode", type=click.Choice(["apply", "inbox", "pr"]),
+              help="Override how it lands there: applied, its inbox, or a pull request (the edge's default otherwise).")
+@click.option("--approved", help="The human's approval, in their words (needed by agents under 'ask' autonomy).")
+@click.option("--title", help="Title of the knowledge set made for this transfer.")
+@click.option("--message", "-m", help="Commit message in the receiving store.")
+@click.option("--dry-run", is_flag=True)
+@pass_ctx
+def push_cmd(c, refs, target, deep, nested, all_items, access, mode, approved, title, message, dry_run):
+    """Send knowledge to a neighbor: records (a new knowledge set is made of them), a ks- set, or --all.
+
+    \b
+      kb push --to home obs-... obs-...            # shallow: just these
+      kb push --to home top-... --deep             # the topic and everything it cites
+      kb push --to group ks-... --land inbox       # an existing set, for review in its inbox
+      kb push --to group ks-... --land pr          # ... or as a pull request in its exchange repository
+    """
+    from .push import push
+    ui.emit_json(push(c.kb, target, list(refs), deep=deep, nested=nested, all_items=all_items, access=access,
+                      mode=mode, approved=approved, dry_run=dry_run, message=message, title=title))
+
+
+@command(main, "pull", no_args_is_help=True)
+@click.argument("refs", nargs=-1)
+@click.option("--from", "source", required=True, help="Neighbor to receive from.")
+@click.option("--deep", is_flag=True, help="Also take everything the items reference, recursively.")
+@click.option("--nested", default="follow", type=click.Choice(["follow", "inherit"]), show_default=True)
+@click.option("--all", "all_items", is_flag=True, help="Take every new or changed item (the 'all' form).")
+@click.option("--land", type=click.Choice(["apply", "inbox"]),
+              help="Override how it lands here (default from the edge's accept: direct = apply, review = inbox).")
+@click.option("--approved")
+@click.option("--message", "-m")
+@click.option("--dry-run", is_flag=True)
+@pass_ctx
+def pull_cmd(c, refs, source, deep, nested, all_items, land, approved, message, dry_run):
+    """Receive knowledge from a neighbor (with no records named, the edge's pull form decides)."""
+    from .push import pull
+    ui.emit_json(pull(c.kb, source, list(refs), deep=deep, nested=nested, all_items=all_items,
+                      approved=approved, dry_run=dry_run, land=land, message=message))
+
+
+@command(main, "obtain")
+@click.argument("refs", nargs=-1)
+@click.option("--dangling", is_flag=True, help="Every record referenced here but not present.")
+@click.option("--deep", is_flag=True)
+@click.option("--approved")
+@click.option("--dry-run", is_flag=True)
+@pass_ctx
+def obtain_cmd(c, refs, dangling, deep, approved, dry_run):
+    """Fetch referenced records from the nearest reachable store that has them."""
+    from .push import obtain
+    if not refs and not dangling:
+        raise KBError("name records, or --dangling")
+    ui.emit_json(obtain(c.kb, list(refs), deep=deep, dangling=dangling, approved=approved, dry_run=dry_run))
+
+
+@command(main, "sync")
+@click.argument("names", nargs=-1)
+@pass_ctx
+def sync_cmd(c, names):
+    """Sync twins (copies of this same store): new and changed items both ways, later change wins."""
+    from .sync import sync
+    ui.emit_json(sync(c.kb, list(names) or None))
+
+
+@command(main, "transfers")
+@click.option("--limit", default=20, show_default=True)
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def transfers_cmd(c, limit, json_out):
+    """The transfer ledger: what this store sent and received."""
+    from .transfer import ledger
+    rows = ledger(c.kb)[-limit:]
+    if json_out:
+        return ui.emit_json(rows)
+    for e in rows:
+        other = e.get("to") or e.get("to_name") if e["dir"] == "out" else e.get("from_name") or e.get("edge")
+        acts = {}
+        for it in e.get("items", []):
+            acts[it["action"]] = acts.get(it["action"], 0) + 1
+        arrow = "->" if e["dir"] == "out" else "<-"
+        click.echo(f"{e['at'][:19]}  {arrow} {str(other):<12} {e['set']}  {e.get('land', e.get('direction', ''))}  "
+                   + ", ".join(f"{n} {a}" for a, n in acts.items()) + f"  ({e.get('approved', '')})")
+
+
+@main.group("kset")
+def kset_grp():
+    """Knowledge sets: selections of records, the unit of transfer."""
+
+
+@command(kset_grp, "new", no_args_is_help=True)
+@click.argument("members", nargs=-1, required=True)
+@click.option("--deep", is_flag=True, help="Deep: members and everything they reference (default shallow).")
+@click.option("--nested", default="follow", type=click.Choice(["follow", "inherit"]), show_default=True)
+@click.option("--title")
+@click.option("--summary")
+@click.option("--purpose", default="transfer", show_default=True)
+@pass_ctx
+def kset_new_cmd(c, members, deep, nested, title, summary, purpose):
+    """Make a knowledge set: a selection to transfer, bundle, or read."""
+    from .push import make_kset
+    rec = make_kset(c.kb, list(members), "deep" if deep else "shallow", nested, title, summary, purpose,
+                    allow_dangling=False)
+    click.echo(rec.id)
+
+
+@command(kset_grp, "expand", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def kset_expand_cmd(c, ref, json_out):
+    """The items a knowledge set denotes here, and what it references that is missing."""
+    from .transfer import expand
+    kb = c.kb
+    e = expand(kb.get(ref).data, lambda i: kb.records[i].data if i in kb.records else None)
+    out = {"items": e.items, "missing": [{"from": f, "id": i, "member": m} for f, i, m in e.missing]}
+    if json_out:
+        return ui.emit_json(out)
+    from .render import Lookup, _tree_lines, tree_view
+    click.echo("\n".join(_tree_lines(tree_view(kb.get(ref).data, Lookup(kb)))))
+    click.echo(f"\n{len(e.items)} item(s) denoted ({kb.get(ref).data['depth']}, references followed accordingly)")
+    for f, i, m in e.missing:
+        click.echo(f"{i:<16} missing ({'member' if m else 'referenced'} from {f}): kb obtain {i}")
+
+
+# -- store settings, content, history ------------------------------------------------
+
+@main.group("config")
+def config_grp():
+    """The store's settings (held in the store)."""
+
+
+@command(config_grp, "show")
+@pass_ctx
+def config_show_cmd(c):
+    """All store settings (this machine's .kb/local.toml and your config.toml apply on top)."""
+    ui.emit_json(c.kb.settings())
+
+
+@command(config_grp, "get", no_args_is_help=True)
+@click.argument("key")
+@pass_ctx
+def config_get_cmd(c, key):
+    """One setting (KEY or KEY.SUB)."""
+    head, _, rest = key.partition(".")
+    v = c.kb.setting(head)
+    for part in rest.split(".") if rest else []:
+        v = (v or {}).get(part)
+    ui.emit_json(v)
+
+
+@command(config_grp, "set", no_args_is_help=True)
+@click.argument("key")
+@click.argument("value")
+@pass_ctx
+def config_set_cmd(c, key, value):
+    """Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
+
+    \b
+      kb config set stores.default '{"path": "/eos/group/kb-cas"}'
+      kb config set views.publish_path /eos/group/www/kb
+      kb config set links.indico https://indico.example.org
+    """
+    kb = c.kb
+    try:
+        v = json.loads(value)
+    except json.JSONDecodeError:
+        v = value
+    head, _, rest = key.partition(".")
+    if head in ("policy", "autonomy", "neighbors", "policy_lock"):
+        raise KBError(f"'{head}' is managed by kb {'neighbor' if head == 'neighbors' else 'policy'}")
+    cur = kb.setting(head)
+    if rest:
+        cur = dict(cur or {})
+        node = cur
+        parts = rest.split(".")
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        if v is None:
+            node.pop(parts[-1], None)
+        else:
+            node[parts[-1]] = v
+        v = cur
+    kb.set_setting(head, v)
+    ui.emit_json(kb.setting(head))
+
+
+@command(main, "snapshot", no_args_is_help=True)
+@click.argument("dest", type=click.Path(path_type=Path))
+@pass_ctx
+def snapshot_cmd(c, dest):
+    """Write a consistent single-file copy of the store (to publish read-only, e.g. on EOS or the web, or as a backup)."""
+    click.echo(c.kb.snapshot(dest))
+
+
+@command(main, "content", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("name", required=False)
+@click.option("--file", "file", type=click.Path(dir_okay=False, allow_dash=True), help="Replace the content with this file (- for stdin).")
+@pass_ctx
+def content_cmd(c, ref, name, file):
+    """Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts)."""
+    from .edit import content_name, set_content
+    kb = c.kb
+    rec = kb.get(ref)
+    name = name or content_name(rec)
+    if file is None:
+        t = rec.text(name)
+        if t is None:
+            raise KBError(f"{rec.id}#{name} is not text held in the store (kb path {rec.id}#{name})")
+        return click.echo(t, nl=False)
+    text = sys.stdin.read() if file == "-" else Path(file).read_text()
+    click.echo(set_content(kb, rec.id, text, name).id)
+
+
+@command(main, "checkout", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("directory", required=False, type=click.Path(file_okay=False, path_type=Path))
+@pass_ctx
+def checkout_cmd(c, ref, directory):
+    """Write an item (record.json) and its content files into a directory for editing."""
+    from .edit import checkout
+    click.echo(checkout(c.kb, ref, directory))
+
+
+@command(main, "checkin", no_args_is_help=True)
+@click.argument("directory", type=click.Path(file_okay=False, exists=True, path_type=Path))
+@click.option("--dry-run", is_flag=True, help="Validate only.")
+@pass_ctx
+def checkin_cmd(c, directory, dry_run):
+    """Apply a checkout's changes (fields within policy, changed/added/removed content files)."""
+    from .edit import CHECKOUT_MARK, checkin
+    from .records import KB
+    mark = json.loads((directory / CHECKOUT_MARK).read_text()) if (directory / CHECKOUT_MARK).exists() else {}
+    kb = KB.open(Path(mark["store"])) if mark.get("store") and c.root is None else c.kb
+    ui.emit_json(checkin(kb, directory, dry_run))
+
+
+@command(main, "edit", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--content", "what", flag_value="content", default=None, help="Edit the content, not the JSON.")
+@pass_ctx
+def edit_cmd(c, ref, what):
+    """Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy."""
+    from .edit import edit
+    ui.emit_json(edit(c.kb, ref, what or "record"))
+
+
+@command(main, "render", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "md", "json"]), show_default=True)
+@click.option("--depth", default=4, show_default=True, help="How deep to unfold nested knowledge sets.")
+@pass_ctx
+def render_cmd(c, ref, fmt, depth):
+    """An item for people: facts, links, where the material is, an excerpt (sets: as a tree)."""
+    from . import render as r
+    kb = c.kb
+    rec = kb.get(ref)
+    look = r.Lookup(kb)
+    v = r.item_view(rec, look, kb, kb.cfg.raw)
+    if rec.kind == "kset":
+        v["tree"] = r.tree_view(rec.data, look, depth)
+    if fmt == "json":
+        return click.echo(r.to_json(v))
+    click.echo(r.item_text(v, md=fmt == "md"))
+    if rec.kind == "kset":
+        click.echo("")
+        click.echo("\n".join(r._tree_lines(v["tree"])))
+
+
+@command(main, "log")
+@click.argument("ref", required=False)
+@click.option("--action", help="Only this kind of event (create, set, transfer-in, publish, review ...).")
+@click.option("--limit", default=30, show_default=True)
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def log_cmd(c, ref, action, limit, json_out):
+    """History: what happened to an item (or the store), when, by whom, with whose approval."""
+    kb = c.kb
+    rows = kb.events(kb.get(ref).id if ref else None, action, limit)
+    if json_out:
+        return ui.emit_json(rows)
+    for e in rows:
+        appr = f"  (approved: {e['approved']})" if e.get("approved") else ""
+        det = e.get("detail") or {}
+        brief = ", ".join(f"{k}={v}" for k, v in det.items() if isinstance(v, (str, int)) and k not in ("from",))[:80]
+        click.echo(f"{e['at'][:19]}  {e['action']:<13} {e['item'] or '':<16} {e['actor']}{appr}  {brief}")
+
+
+# -- bundles, inbox, review ----------------------------------------------------------
+
+@main.group("bundle")
+def bundle_grp():
+    """Bundles: a knowledge set and its items in one self-checking file."""
+
+
+@command(bundle_grp, "make", no_args_is_help=True)
+@click.argument("refs", nargs=-1, required=True)
+@click.option("-o", "--output", type=click.Path(path_type=Path), default=".", show_default=True,
+              help="File or directory to write.")
+@click.option("--deep", is_flag=True, help="When naming items: also everything they reference.")
+@click.option("--note", help="A note for the reviewers.")
+@pass_ctx
+def bundle_make_cmd(c, refs, output, deep, note):
+    """Bundle a knowledge set (ks-...), or a new set made of the named items."""
+    from . import bundle as bundles
+    from .push import _selection
+    kb = c.kb
+    ks = _selection(kb, list(refs), "deep" if deep else "shallow", "follow", None)
+    b = bundles.make(kb, ks.id, note=note)
+    click.echo(bundles.write(b, output))
+    ui.info(f"bundle {b['id'][:12]}: set {ks.id}, {len(b['items'])} item(s)")
+
+
+def _load_bundle(c, what: str):
+    """A bundle file, or an inbox entry (bundle id prefix or set id)."""
+    from . import bundle as bundles
+    p = Path(what)
+    if p.exists():
+        return bundles.read(p)
+    return bundles.bundle_of(c.kb, what)
+
+
+@command(bundle_grp, "show", no_args_is_help=True)
+@click.argument("what")
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "md", "json"]), show_default=True)
+@click.option("--against/--no-against", default=True, help="Compare with this store (what accepting would do).")
+@click.option("--depth", default=4, show_default=True)
+@pass_ctx
+def bundle_show_cmd(c, what, fmt, against, depth):
+    """Render a bundle (file or inbox entry) for review: provenance, plan, tree, items with excerpts and links."""
+    from . import render as r
+    b = _load_bundle(c, what)
+    store_kb = None
+    if against:
+        try:
+            store_kb = c.kb
+        except KBError:
+            store_kb = None
+    v = r.bundle_view(b, store_kb, depth)
+    click.echo(r.to_json(v) if fmt == "json" else r.bundle_text(v, md=fmt == "md"), nl=fmt == "json")
+
+
+@command(bundle_grp, "check", no_args_is_help=True)
+@click.argument("what")
+@pass_ctx
+def bundle_check_cmd(c, what):
+    """Verify a bundle and say what applying it here would do (exit 1 if it can't be applied cleanly)."""
+    from . import bundle as bundles
+    out = bundles.check(c.kb, _load_bundle(c, what))
+    ui.emit_json(out)
+    if not out["ok"]:
+        sys.exit(1)
+
+
+@command(bundle_grp, "apply", no_args_is_help=True)
+@click.argument("file", type=click.Path(dir_okay=False, exists=True, path_type=Path))
+@click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]))
+@click.option("--approved")
+@pass_ctx
+def bundle_apply_cmd(c, file, access, approved):
+    """Apply a bundle file directly (skipping the inbox; agents: per 'accept' autonomy)."""
+    from . import bundle as bundles
+    kb = c.kb
+    who = bundles._guard(kb, approved)
+    ui.emit_json(bundles.apply(kb, bundles.read(file), approved=who, access=access))
+
+
+@main.group("inbox")
+def inbox_grp():
+    """Received bundles awaiting review, and their reviews and decisions."""
+
+
+@command(inbox_grp, "list")
+@click.option("--status", default="pending", type=click.Choice(["pending", "accepted", "rejected", "all"]),
+              show_default=True)
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def inbox_list_cmd(c, status, json_out):
+    """Inbox entries."""
+    from . import bundle as bundles
+    rows = bundles.entries(c.kb, status)
+    if json_out:
+        return ui.emit_json([e.as_dict() for e in rows])
+    for e in rows:
+        verdicts = ", ".join(f"{r['reviewer_kind']}:{r['verdict']}" for r in e.reviews) or "no reviews"
+        click.echo(f"{e.bundle[:12]}  {e.status:<9} {e.set_id:<16} from {e.sender_name or e.sender}  "
+                   f"{e.received_at[:10]}  ({verdicts})")
+
+
+@command(inbox_grp, "receive", no_args_is_help=True)
+@click.argument("files", nargs=-1, required=True, type=click.Path(dir_okay=False, exists=True, path_type=Path))
+@pass_ctx
+def inbox_receive_cmd(c, files):
+    """Put bundle files into the inbox for review."""
+    from . import bundle as bundles
+    for f in files:
+        e = bundles.receive(c.kb, bundles.read(f), note=f"received from {f}")
+        click.echo(f"{e.bundle[:12]} {e.status}")
+
+
+@command(inbox_grp, "import", no_args_is_help=True)
+@click.argument("directory", type=click.Path(file_okay=False, exists=True, path_type=Path))
+@click.option("--accept", "accept_all", is_flag=True, help="Accept them too (they were reviewed upstream, e.g. by PR).")
+@click.option("--approved")
+@pass_ctx
+def inbox_import_cmd(c, directory, accept_all, approved):
+    """Receive every bundle file under DIRECTORY (e.g. a merged exchange repository)."""
+    from . import bundle as bundles
+    ui.emit_json(bundles.import_dir(c.kb, directory, accept_all, approved))
+
+
+@main.group("review")
+def review_grp():
+    """Review inbox bundles: show, note (people and LLMs), accept, reject."""
+
+
+@command(review_grp, "show", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--format", "fmt", default="text", type=click.Choice(["text", "md", "json"]), show_default=True)
+@pass_ctx
+def review_show_cmd(c, ref, fmt):
+    """The bundle rendered against this store, followed by the reviews so far."""
+    from . import bundle as bundles
+    from . import render as r
+    kb = c.kb
+    e = bundles.get(kb, ref)
+    v = r.bundle_view(bundles.bundle_of(kb, ref), kb)
+    v["inbox"] = e.as_dict()
+    if fmt == "json":
+        return click.echo(r.to_json(v))
+    click.echo(r.bundle_text(v, md=fmt == "md"))
+    click.echo(("## " if fmt == "md" else "") + f"Reviews ({e.status})")
+    for rv in e.reviews:
+        click.echo(f"- {rv['at'][:16]} {rv['reviewer']} ({rv['reviewer_kind']}): {rv['verdict']}. {rv['text'] or ''}")
+    if not e.reviews:
+        click.echo("- none yet")
+
+
+@command(review_grp, "note", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--verdict", required=True, type=click.Choice(["accept", "reject", "changes", "comment"]))
+@click.option("--text", required=True, help="Your reasoning, for the person who decides.")
+@click.option("--reviewer", help="Who (default: you, or 'claude' when run by an agent).")
+@pass_ctx
+def review_note_cmd(c, ref, verdict, text, reviewer):
+    """Record a review. An LLM's verdict is advice; deciding follows the 'accept' autonomy."""
+    from . import bundle as bundles
+    e = bundles.review(c.kb, ref, verdict, text, reviewer)
+    click.echo(f"{e.bundle[:12]}: {len(e.reviews)} review(s)")
+
+
+@command(review_grp, "accept", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--note")
+@click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
+              help="Relabel more restricted items to this level (a deliberate decision).")
+@click.option("--approved", help="The human's approval (agents under 'ask' accept autonomy).")
+@pass_ctx
+def review_accept_cmd(c, ref, note, access, approved):
+    """Accept: apply the bundle to this store in one transaction."""
+    from . import bundle as bundles
+    ui.emit_json(bundles.accept(c.kb, ref, approved, note, access))
+
+
+@command(review_grp, "reject", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--reason", required=True)
+@click.option("--approved")
+@pass_ctx
+def review_reject_cmd(c, ref, reason, approved):
+    """Reject, saying why (the sender can see it in the bundle's record here)."""
+    from . import bundle as bundles
+    e = bundles.reject(c.kb, ref, reason, approved)
+    click.echo(f"{e.bundle[:12]} {e.status}")
+
+
+# -- git, forges, secrets -----------------------------------------------------------
+
+@main.group("git")
+def git_grp():
+    """Git integration for exchange repositories (git repositories of bundle files)."""
+
+
+@git_grp.group("hooks")
+def git_hooks_grp():
+    """Install kb into an exchange repository's git hooks (pre-commit, pre-push, post-merge)."""
+
+
+def _repo_arg(fn):
+    return click.option("--repo", type=click.Path(file_okay=False, exists=True, path_type=Path), default=".",
+                        show_default=True, help="The repository.")(fn)
+
+
+@command(git_hooks_grp, "install")
+@click.argument("names", nargs=-1)
+@_repo_arg
+def git_hooks_install_cmd(names, repo):
+    """Add the kb block to hook scripts (existing hooks are kept)."""
+    from .githooks import DEFAULT, install
+    for p in install(repo, list(names) or DEFAULT):
+        click.echo(f"installed {p}")
+
+
+@command(git_hooks_grp, "remove")
+@click.argument("names", nargs=-1)
+@_repo_arg
+def git_hooks_remove_cmd(names, repo):
+    """Remove the kb block from hook scripts."""
+    from .githooks import HOOKS, remove
+    for p in remove(repo, list(names) or HOOKS):
+        click.echo(f"removed kb from {p}")
+
+
+@command(git_hooks_grp, "status")
+@_repo_arg
+def git_hooks_status_cmd(repo):
+    """Which git hooks run kb."""
+    from .githooks import status
+    for name, st in status(repo).items():
+        click.echo(f"{name:<12} {st}")
+
+
+@main.group("exchange")
+def exchange_grp():
+    """Exchange repositories: git as transport and review for bundles."""
+
+
+@command(exchange_grp, "init", no_args_is_help=True)
+@click.argument("path", type=click.Path(file_okay=False, path_type=Path))
+def exchange_init_cmd(path):
+    """Create an exchange repository (git, README, hooks) for a store's incoming bundles."""
+    from .githooks import init_exchange
+    for p in init_exchange(path):
+        click.echo(f"created {p}")
+
+
+def _git_hook(which, repo):
+    import os
+    for v in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"):
+        if which != "pre-commit" or v != "GIT_INDEX_FILE":
+            os.environ.pop(v, None)    # set by git for hooks; would confuse kb's own git calls
+    from . import githooks
+    repo = Path(repo).resolve()
+    if which == "pre-commit":
+        code, text = githooks.run_pre_commit(repo)
+    elif which == "pre-push":
+        code, text = githooks.run_pre_push(repo, sys.stdin.read())
+    else:
+        code, text = githooks.run_post_merge(repo)
+    if text:
+        print(text, file=sys.stderr)
+    sys.exit(code)
+
+
+@command(hook_grp, "git-pre-commit")
+@click.option("--repo", default=".")
+def hook_git_pre_commit_cmd(repo):
+    """git pre-commit: staged bundles verify; existing bundles are untouched."""
+    _git_hook("pre-commit", repo)
+
+
+@command(hook_grp, "git-pre-push")
+@click.option("--repo", default=".")
+@click.argument("args", nargs=-1)
+def hook_git_pre_push_cmd(repo, args):
+    """git pre-push: the same for every commit being pushed."""
+    _git_hook("pre-push", repo)
+
+
+@command(hook_grp, "git-post-merge")
+@click.option("--repo", default=".")
+@click.argument("args", nargs=-1)
+def hook_git_post_merge_cmd(repo, args):
+    """git post-merge: a one-line notice about bundles to import."""
+    _git_hook("post-merge", repo)
+
+
+@main.group("forge")
+def forge_grp():
+    """GitHub / Gitea / Forgejo / Gogs: authentication and pull requests."""
+
+
+@command(forge_grp, "list")
+@pass_ctx
+def forge_list_cmd(c):
+    """Configured forges and where their tokens come from."""
+    from . import forge, secrets
+    for f in forge.configured(c.kb.cfg.raw):
+        src = secrets.parse(f.token).describe() if f.token is not None else "env (" + ", ".join(
+            s.split(":", 1)[1] for s in f.token_specs() if s.startswith("env:")) + ")"
+        click.echo(f"{f.name:<12} {f.type:<8} {f.host:<24} token from {src}")
+
+
+@command(forge_grp, "add", no_args_is_help=True)
+@click.argument("name")
+@click.option("--type", "ftype", required=True, type=click.Choice(["github", "gitea", "forgejo", "gogs"]))
+@click.option("--host", required=True)
+@click.option("--api", help="API base URL (default: https://HOST/api/v1, or api.github.com).")
+@click.option("--token-from", help="Secret spec, e.g. 'cmd:pass show kb/forge/NAME' (recommended) or file:PATH.")
+def forge_add_cmd(name, ftype, host, api, token_from):
+    """Add a forge to your user config (tokens are personal; never in a store)."""
+    from .forge import add_config
+    try:
+        p = add_config(name, ftype, host, api, token_from)
+    except KBError as exc:
+        raise click.ClickException(str(exc)) from None
+    click.echo(f"added [forges.{name}] to {p}; next: kb forge auth {name}")
+
+
+@command(forge_grp, "auth", no_args_is_help=True)
+@click.argument("name")
+@click.option("--token-from", help="Try this secret spec instead of the configured one.")
+@pass_ctx
+def forge_auth_cmd(c, name, token_from):
+    """Explain how to get and store a token for forge NAME, then test it."""
+    from . import forge, secrets
+    fc = forge.by_name(c.kb.cfg.raw, name)
+    click.echo(f"Forge {fc.name}: {fc.type} at {fc.host}")
+    click.echo(f"1. Create a token at {fc.token_page}")
+    click.echo(f"   with {fc.scopes}.")
+    click.echo(f"2. Store it in pass (recommended):  pass insert kb/forge/{fc.name}")
+    click.echo(f"   and point kb at it:  token = {{command = \"pass show\", id = \"kb/forge/{fc.name}\"}}")
+    click.echo(f"   in [forges.{fc.name}] of {forge.user_config_path()}")
+    click.echo("   (or a file readable only by you: chmod 600 FILE; token = {file = \"FILE\"};")
+    click.echo(f"    or the environment: KB_FORGE_TOKEN_{fc.name.upper()} / KB_FORGE_TOKEN)")
+    click.echo("3. Testing...")
+    try:
+        cl = forge.client(fc, token_from)
+        click.echo(f"   token works: logged in as {cl.whoami()} ({secrets.mask(cl.token)})")
+    except KBError as exc:
+        click.echo(f"   not yet: {exc}")
+        sys.exit(1)
+
+
+def _repo(c, forge_name, repo, remote):
+    from . import forge
+    r = forge.repo_for(c.kb.cfg.raw, c.kb.root, remote, forge_name, repo)
+    return forge.client(r.forge), r
+
+
+def _repo_options(fn):
+    for o in reversed([
+        click.option("--forge", "forge_name", help="Forge name (default: matched from the git remote's host)."),
+        click.option("--repo", help="OWNER/NAME (default: from the git remote)."),
+        click.option("--remote", default="origin", show_default=True),
+    ]):
+        fn = o(fn)
+    return fn
+
+
+@forge_grp.group("pr")
+def pr_grp():
+    """Pull requests on the store's remote repository."""
+
+
+@command(pr_grp, "create", no_args_is_help=True)
+@click.option("--head", required=True, help="Branch with the changes (push it first, or use kb push --land pr).")
+@click.option("--base", help="Target branch (default: the current branch).")
+@click.option("--title", required=True)
+@click.option("--body", default="")
+@_repo_options
+@pass_ctx
+def pr_create_cmd(c, head, base, title, body, forge_name, repo, remote):
+    """Open a pull request."""
+    from . import gitutil
+    cl, r = _repo(c, forge_name, repo, remote)
+    ui.emit_json(cl.pr_create(r.owner, r.name, head, base or gitutil.current_branch(c.kb.root), title, body))
+
+
+@command(pr_grp, "list")
+@click.option("--state", default="open", type=click.Choice(["open", "closed", "all"]), show_default=True)
+@click.option("--json", "json_out", is_flag=True)
+@_repo_options
+@pass_ctx
+def pr_list_cmd(c, state, json_out, forge_name, repo, remote):
+    """List pull requests."""
+    cl, r = _repo(c, forge_name, repo, remote)
+    rows = cl.pr_list(r.owner, r.name, state)
+    if json_out:
+        return ui.emit_json(rows)
+    for p in rows:
+        click.echo(f"#{p['number']:<5} {p['state']:<7} {p['head']} -> {p['base']}  {p['title']}  ({p['author']})")
+
+
+@command(pr_grp, "show", no_args_is_help=True)
+@click.argument("number", type=int)
+@_repo_options
+@pass_ctx
+def pr_show_cmd(c, number, forge_name, repo, remote):
+    """One pull request."""
+    cl, r = _repo(c, forge_name, repo, remote)
+    ui.emit_json(cl.pr_get(r.owner, r.name, number))
+
+
+@command(pr_grp, "merge", no_args_is_help=True)
+@click.argument("number", type=int)
+@click.option("--method", default="merge", type=click.Choice(["merge", "squash", "rebase"]), show_default=True)
+@click.option("--message")
+@click.option("--approved", help="The human's approval (agents under 'ask' merge autonomy).")
+@_repo_options
+@pass_ctx
+def pr_merge_cmd(c, number, method, message, approved, forge_name, repo, remote):
+    """Merge a pull request (agents: per 'merge' autonomy)."""
+    _guard_forge(c.kb, "merge", approved)
+    cl, r = _repo(c, forge_name, repo, remote)
+    ui.emit_json(cl.pr_merge(r.owner, r.name, number, method, message))
+
+
+@command(pr_grp, "close", no_args_is_help=True)
+@click.argument("number", type=int)
+@click.option("--approved")
+@_repo_options
+@pass_ctx
+def pr_close_cmd(c, number, approved, forge_name, repo, remote):
+    """Close a pull request without merging (agents: per 'merge' autonomy)."""
+    _guard_forge(c.kb, "merge", approved)
+    cl, r = _repo(c, forge_name, repo, remote)
+    ui.emit_json(cl.pr_close(r.owner, r.name, number))
+
+
+@command(pr_grp, "comment", no_args_is_help=True)
+@click.argument("number", type=int)
+@click.option("--body", required=True)
+@_repo_options
+@pass_ctx
+def pr_comment_cmd(c, number, body, forge_name, repo, remote):
+    """Comment on a pull request."""
+    cl, r = _repo(c, forge_name, repo, remote)
+    ui.emit_json(cl.pr_comment(r.owner, r.name, number, body))
+
+
+def _guard_forge(kb, action, approved):
+    if not kb.cfg.is_agent:
+        return
+    level = kb.cfg.autonomy_for(action)
+    if level == "never":
+        raise KBError(f"autonomy: {action} of pull requests is reserved for the human")
+    if level == "ask" and not approved:
+        raise KBError(f"autonomy: {action} needs the human's approval; ask, then pass --approved \"<their words>\"")
+
+
+@main.group("secret")
+def secret_grp():
+    """Secrets (tokens) from pass-like commands, 0600 files, or the environment."""
+
+
+@secret_grp.command("test", no_args_is_help=True)
+@click.argument("spec")
+@handle_errors
+def secret_test_cmd(spec):
+    """Resolve SPEC and show where it came from, masked: cmd:pass show NAME | file:PATH | env:VAR | value:..."""
+    from . import secrets
+    s = secrets.parse(spec)
+    click.echo(f"{s.describe()} -> {secrets.mask(secrets.resolve(s))}")
+
+
+# -- policy ---------------------------------------------------------------------
+
+@main.group("policy")
+def policy_grp():
+    """LLM policy: named, versioned instructions, skills, hooks; selection, enactment, autonomy."""
+
+
+@command(policy_grp, "list")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def policy_list_cmd(c, json_out):
+    """Policies available here (this store, reachable stores, builtins); * = selected."""
+    from . import policy
+    kb = c.kb
+    sel = {policy.parse_spec(x)[0]: x for x in policy.settings(kb).get("policy", {}).get("use", [])}
+    rows = [{"name": e.name, "version": e.version, "type": e.type, "stage": e.stage, "source": e.source,
+             "selected": e.name in sel, "summary": e.summary} for e in policy.available(kb)]
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        mark = "*" if r["selected"] else " "
+        click.echo(f"{mark} {r['name']:<20} v{r['version']:<3} {r['type']:<12} {r['stage']:<10} {r['source']:<10} {r['summary']}")
+
+
+@command(policy_grp, "show", no_args_is_help=True)
+@click.argument("spec")
+@pass_ctx
+def policy_show_cmd(c, spec):
+    """A policy's metadata and content (NAME, NAME@N or NAME@draft)."""
+    from .policy import resolve
+    e = resolve(c.kb, spec)
+    click.echo(f"# {e.spec} ({e.type}, {e.stage}, from {e.source})" + (f", based on {e.based_on}" if e.based_on else ""))
+    if e.summary:
+        click.echo(e.summary)
+    click.echo("")
+    click.echo(e.content, nl=False)
+
+
+def _read_content(file):
+    if file is None:
+        return None
+    return sys.stdin.read() if str(file) == "-" else Path(file).read_text()
+
+
+@command(policy_grp, "new", no_args_is_help=True)
+@click.argument("name")
+@click.option("--type", "ptype", required=True, type=click.Choice(["instructions", "skill", "hook", "settings"]))
+@click.option("--file", "file", required=True, type=click.Path(dir_okay=False, allow_dash=True))
+@click.option("--title")
+@click.option("--summary")
+@click.option("--order", type=int, help="Position of an instructions snippet (lower first).")
+@click.option("--applies-to", multiple=True, help="Store scope it is meant for (repeatable).")
+@pass_ctx
+def policy_new_cmd(c, name, ptype, file, title, summary, order, applies_to):
+    """Create a draft policy in this store."""
+    from .policy import new
+    rec = new(c.kb, name, ptype, _read_content(file), title, summary, order, applies_to)
+    click.echo(f"{rec.id} {name}@{rec.data['version']} (draft)")
+
+
+@command(policy_grp, "edit", no_args_is_help=True)
+@click.argument("name")
+@click.option("--file", "file", required=True, type=click.Path(dir_okay=False, allow_dash=True))
+@pass_ctx
+def policy_edit_cmd(c, name, file):
+    """Replace the content of this store's draft of NAME."""
+    from .policy import edit
+    rec = edit(c.kb, name, _read_content(file))
+    click.echo(f"{rec.id} {name}@{rec.data['version']} (draft)")
+
+
+@command(policy_grp, "revise", no_args_is_help=True)
+@click.argument("name")
+@click.option("--file", "file", type=click.Path(dir_okay=False, allow_dash=True), help="New content (default: copy current).")
+@pass_ctx
+def policy_revise_cmd(c, name, file):
+    """Start the next version as a draft here (forks builtin or neighbor policies)."""
+    from .policy import revise
+    rec = revise(c.kb, name, _read_content(file))
+    click.echo(f"{rec.id} {name}@{rec.data['version']} (draft; edit, then kb policy release {name})")
+
+
+@command(policy_grp, "release", no_args_is_help=True)
+@click.argument("name")
+@click.option("--approved", help="The human's approval (agents under 'ask' policy autonomy).")
+@pass_ctx
+def policy_release_cmd(c, name, approved):
+    """Freeze this store's draft of NAME as a released version."""
+    from .policy import release
+    rec = release(c.kb, name, approved)
+    click.echo(f"{rec.id} {name}@{rec.data['version']} released")
+
+
+@command(policy_grp, "deprecate", no_args_is_help=True)
+@click.argument("name")
+@click.option("--approved")
+@pass_ctx
+def policy_deprecate_cmd(c, name, approved):
+    """Mark the latest released version of NAME here as deprecated."""
+    from .policy import deprecate
+    rec = deprecate(c.kb, name, approved)
+    click.echo(f"{rec.id} {name}@{rec.data['version']} deprecated")
+
+
+@command(policy_grp, "use", no_args_is_help=True)
+@click.argument("specs", nargs=-1, required=True)
+@click.option("--approved")
+@pass_ctx
+def policy_use_cmd(c, specs, approved):
+    """Select policies (NAME follows the latest release; NAME@N pins). Then kb policy enact."""
+    from .policy import use
+    click.echo(" ".join(use(c.kb, list(specs), approved)))
+
+
+@command(policy_grp, "drop", no_args_is_help=True)
+@click.argument("names", nargs=-1, required=True)
+@click.option("--approved")
+@pass_ctx
+def policy_drop_cmd(c, names, approved):
+    """Deselect policies. Then kb policy enact."""
+    from .policy import drop
+    click.echo(" ".join(drop(c.kb, list(names), approved)))
+
+
+@command(policy_grp, "enact")
+@click.option("--target", help="Override the target: a directory, or 'user' for ~/.claude.")
+@click.option("--dry-run", is_flag=True, help="Show what would change.")
+@pass_ctx
+def policy_enact_cmd(c, target, dry_run):
+    """Write the selected policies: CLAUDE.md block, skills, hooks; record them in policy.lock.json."""
+    from .policy import enact
+    r = enact(c.kb, target, dry_run)
+    click.echo(f"target: {r['target']}")
+    click.echo("policies: " + ", ".join(r["policies"]))
+    for ch in r["changes"]:
+        click.echo(f"{ch['action']:<7} {ch['path']}")
+        if dry_run and ch["diff"]:
+            click.echo(ch["diff"])
+    if not r["changes"]:
+        click.echo("nothing to change")
+
+
+@command(policy_grp, "status")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def policy_status_cmd(c, json_out):
+    """What needs attention: unenacted selections, newer versions, hand edits of enacted files."""
+    from .policy import status
+    items = status(c.kb)
+    if json_out:
+        return ui.emit_json(items)
+    for i in items:
+        click.echo(f"{i.get('policy', '-'):<20} {i['what']}")
+        click.echo(f"{'':<20} fix: {i['fix']}")
+    if not items:
+        click.echo("policy is enacted and current")
+
+
+@command(policy_grp, "diff", no_args_is_help=True)
+@click.argument("name")
+@click.option("--against", help="Compare with this version instead of the enacted text.")
+@pass_ctx
+def policy_diff_cmd(c, name, against):
+    """Enacted text vs its source version (or two versions)."""
+    from .policy import diff
+    click.echo(diff(c.kb, name, against) or "no difference", nl=False)
+
+
+@command(policy_grp, "capture", no_args_is_help=True)
+@click.argument("name")
+@pass_ctx
+def policy_capture_cmd(c, name):
+    """Turn edits made to an enacted CLAUDE.md snippet or skill into a draft version here."""
+    from .policy import capture
+    rec = capture(c.kb, name)
+    click.echo(f"{rec.id} {name}@{rec.data['version']} (draft; review, then kb policy release {name})")
+
+
+@command(policy_grp, "autonomy")
+@click.argument("assignments", nargs=-1)
+@pass_ctx
+def policy_autonomy_cmd(c, assignments):
+    """Show autonomy, or set it (people only): capture=auto review=ask push=ask push.home=auto ..."""
+    from .policy import AUTONOMY_MEANING, set_autonomy
+    kb = c.kb
+    if assignments:
+        set_autonomy(kb, list(assignments))
+        from .records import KB
+        kb = KB.open(kb.root)
+    from .federation import neighbors
+    for key in ("capture", "review", "curate", "policy", "pull", "accept", "merge"):
+        if key in kb.cfg.autonomy:
+            click.echo(f"{key:<16} {kb.cfg.autonomy_for(key):<6} {AUTONOMY_MEANING[key]}")
+    for n in [x.name for x in neighbors(kb)] or ["default"]:
+        click.echo(f"{'push.' + n:<16} {kb.cfg.autonomy_for('push', n):<6} {AUTONOMY_MEANING['push']}")
+    if assignments:
+        click.echo("now run kb policy enact so CLAUDE.md shows the change")
+
+
+if __name__ == "__main__":
+    main()

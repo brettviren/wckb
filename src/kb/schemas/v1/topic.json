@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/topic.json",
+  "title": "Topic",
+  "description": "Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites a record by ID and every cited record is listed in derived_from. Not a source: edit freely, then kb stamp.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    },
+    {
+      "properties": {
+        "renditions": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "content"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "topic"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^top-"
+    },
+    "derived_from": {
+      "minItems": 1
+    }
+  },
+  "required": [
+    "derived_from",
+    "renditions",
+    "subject"
+  ],
+  "unevaluatedProperties": false
+}

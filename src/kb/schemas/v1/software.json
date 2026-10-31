@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/software.json",
+  "title": "Software",
+  "description": "A code repository at a version, referenced for provenance of datasets, configs and views.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "software"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^sw-"
+    },
+    "repository": {
+      "$ref": "common.json#/$defs/url"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,64}$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "language": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "repository"
+  ],
+  "unevaluatedProperties": false
+}

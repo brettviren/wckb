@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/view.json",
+  "title": "View",
+  "description": "Recipe for a human-facing product (HTML site, PDF note, slides). The record directory holds the sources; kb build runs the build tool and writes manifest.json; kb publish copies the output.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "view"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^view-"
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "enum": [
+            "make",
+            "snakemake",
+            "quarto",
+            "pandoc",
+            "command"
+          ]
+        },
+        "target": {
+          "type": "string"
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "tool": {
+                "const": "command"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "command"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "tool": {
+                "enum": [
+                  "quarto",
+                  "pandoc"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "target"
+            ]
+          }
+        }
+      ]
+    },
+    "audience": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "build",
+    "derived_from"
+  ],
+  "unevaluatedProperties": false
+}

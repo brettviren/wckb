@@ -1,0 +1,1 @@
+{"event": "UserPromptSubmit", "command": "kb hook recall", "timeout": 10}

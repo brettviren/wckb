@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/policy.json",
+  "title": "Policy",
+  "description": "A named, versioned element of LLM policy: an instructions snippet for CLAUDE.md, a skill, a hook, or settings such as autonomy. Content is a content rendition. Editable while stage is draft; once released it is frozen, and a change is a new version that supersedes it.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    },
+    {
+      "properties": {
+        "renditions": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "content"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "policy"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^pol-"
+    },
+    "name": {
+      "description": "Stable name shared by all versions, e.g. kb-routine or group-review.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+    },
+    "version": {
+      "description": "Version number; each release supersedes the previous one with version + 1.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "policy_type": {
+      "description": "instructions: a CLAUDE.md snippet; skill: a SKILL.md; hook: Claude Code hook settings (JSON); settings: autonomy and similar (TOML).",
+      "enum": [
+        "instructions",
+        "skill",
+        "hook",
+        "settings"
+      ]
+    },
+    "stage": {
+      "description": "draft (editable), released (frozen), deprecated (still usable, not recommended).",
+      "enum": [
+        "draft",
+        "released",
+        "deprecated"
+      ]
+    },
+    "applies_to": {
+      "description": "Store scopes this policy is meant for: project, home, group ...; empty means any.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "order": {
+      "description": "Position of an instructions snippet in CLAUDE.md; lower first.",
+      "type": "integer"
+    },
+    "based_on": {
+      "description": "The policy this one was forked from: builtin:NAME@V or STORE:NAME@V.",
+      "type": "string"
+    },
+    "renditions": {
+      "minItems": 1
+    }
+  },
+  "required": [
+    "name",
+    "version",
+    "policy_type",
+    "stage",
+    "renditions"
+  ],
+  "unevaluatedProperties": false
+}
