@@ -33,7 +33,13 @@ kb source show src-…                                  # URLs, paths, the clone
 
 `kb source add` works for any kind of source: it guesses the type from
 what you give it (a DataLad dataset directory; a URL whose repository has a
-git-annex branch), or takes `--type datalad`. `--just-guess` only says what
+git-annex branch), or takes `--type datalad`. A directory counts as a
+dataset when it has `.datalad/config`, or other signs of DataLad or
+git-annex control (git-annex initialized, annex settings in
+`.gitattributes`, `[DATALAD]` commits, subdatasets in `.gitmodules`). A
+dataset created without a dataset ID is identified by its first commit,
+which every clone shares. A plain directory is a `filesystem` source, but
+only with `--type filesystem` ([assets](assets.md)). `--just-guess` only says what
 it would use, or why it can't tell, and adds nothing:
 
 ```

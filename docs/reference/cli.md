@@ -960,17 +960,21 @@ Usage: kb source add [OPTIONS] TARGETS...
 
   Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-  The type is guessed from TARGETS unless --type says. Adding a source this store already describes
-  gives it the new URLs and paths instead.
+  The type is guessed from TARGETS unless --type says (a plain directory is accepted only with
+  --type filesystem). Adding a source this store already describes gives it the new URLs and paths
+  instead.
 
     kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
     kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
     kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+    kb source add --type filesystem /eos/group/talks --name eos-talks   # a directory tree (never guessed)
     kb source add --just-guess https://example.org/x   # what kind of source is this?
 
 Options:
   --type TEXT     The kind of source (kb source types); default: guessed from TARGETS.
   --just-guess    Only say which type would be used (or why none fits); add nothing.
+  --name TEXT     Identity for a source without one of its own (a filesystem tree; default: its
+                  directory name).
   --title TEXT
   --summary TEXT
   --no-check      Don't check that the TARGETS name one and the same source.

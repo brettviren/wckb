@@ -231,6 +231,9 @@ to be right; please fix the other place.
   it can be had from and `paths` holding it on given hosts. Knowledge sets
   always carry the source items their items need. Two source items with the
   same identity describe the same source and share its local copy.
+  Source types: `datalad` (identity: the dataset ID, or `git:<first commit>`
+  for a dataset without one) and `filesystem` (a named directory tree;
+  identity: its name; never guessed, only with `--type filesystem`).
   `kb source add` guesses a target's source type (or takes `--type`).
   *Code:* kind `source`, `kb.sources` (types, `guess`, `add`),
   `kb.datasets`, `kb source list|show|add`.
@@ -311,8 +314,10 @@ to be right; please fix the other place.
 
 **filesystem root** (named)
 : A name for a directory tree, mapped to a path per machine (setting
-  `filesystems.NAME.path`), so one binding works wherever the tree is
-  mounted.
+  `filesystems.NAME.path`, or a path its `filesystem` source item lists for
+  this host), so one binding works wherever the tree is mounted. An `fs`
+  binding to a name that has a source item refers to it, so the item
+  travels with the asset.
 
 **versioning** (of a binding)
 : How a source's own versions relate to the asset's:

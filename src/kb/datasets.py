@@ -76,6 +76,7 @@ def _git(root: Path, *args: str, check: bool = True, binary: bool = False, stdin
 # -- datasets on disk -------------------------------------------------------------------
 
 def dataset_id(path: Path) -> str | None:
+    """The DataLad dataset ID recorded in .datalad/config, if there is one."""
     cfg = Path(path) / ".datalad" / "config"
     if not cfg.is_file():
         return None
@@ -83,13 +84,63 @@ def dataset_id(path: Path) -> str | None:
     return r.stdout.strip() or None
 
 
+def _toplevel(path: Path) -> Path | None:
+    p = Path(path)
+    r = subprocess.run(["git", "-C", str(p if p.is_dir() else p.parent), "rev-parse", "--show-toplevel"],
+                       capture_output=True, text=True)
+    return Path(r.stdout.strip()).resolve() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def evidence(root: Path) -> list[str]:
+    """Signs that the git repository at ROOT is under DataLad (or git-annex) control."""
+    out = []
+    uid = dataset_id(root)
+    if uid:
+        out.append(f"dataset ID {uid} in .datalad/config")
+    if _git(root, "config", "--get", "annex.uuid", check=False).stdout.strip():
+        out.append("git-annex is initialized")
+    attrs = Path(root) / ".gitattributes"
+    if attrs.is_file() and "annex." in attrs.read_text(errors="replace"):
+        out.append("annex settings in .gitattributes")
+    if _git(root, "log", "-n1", "--format=%h", "--grep=^\\[DATALAD", check=False).stdout.strip():
+        out.append("DataLad commits in its history")
+    mods = Path(root) / ".gitmodules"
+    if mods.is_file():
+        n = mods.read_text(errors="replace").count("datalad-id")
+        if n:
+            out.append(f"{n} subdataset(s) with DataLad IDs in .gitmodules")
+    return out
+
+
+def _root_commit(root: Path) -> str | None:
+    roots = _git(root, "rev-list", "--max-parents=0", "HEAD", check=False).stdout.split()
+    return sorted(roots)[0] if roots else None
+
+
+def identity(root: Path) -> str | None:
+    """A dataset's global identity: its DataLad dataset ID, or, for a dataset created without one, its
+    first git commit ("git:<sha>"), which every clone shares.  None if ROOT is not a dataset."""
+    root = Path(root)
+    if not (root / ".git").exists():
+        return None
+    uid = dataset_id(root)
+    if uid:
+        return uid
+    if not evidence(root):
+        return None
+    rc = _root_commit(root)
+    return f"git:{rc}" if rc else None
+
+
+def short(ident: str) -> str:
+    """Eight characters of an identity, for directory names."""
+    return ident.split(":")[-1][:8]
+
+
 def dataset_root(path: Path) -> Path | None:
     """The innermost dataset holding *path* (a file or directory)."""
-    p = Path(path).resolve()
-    for d in [p] + list(p.parents):
-        if (d / ".datalad" / "config").is_file():
-            return d
-    return None
+    top = _toplevel(Path(path).resolve())
+    return top if top is not None and evidence(top) else None
 
 
 def _is_remote(url: str) -> bool:
@@ -141,15 +192,24 @@ def recognize(target: str) -> tuple[bool, str]:
     """Is TARGET a DataLad dataset (a local directory) or something to clone one from (a URL)? And why."""
     p = Path(target).expanduser()
     if p.exists():
-        uuid = dataset_id(p)
-        if uuid:
-            return True, f"DataLad dataset {uuid}"
-        inner = dataset_root(p)
-        if inner is not None:
-            return False, f"inside the DataLad dataset at {inner}; give that directory"
-        if (p / ".git").exists():
-            return False, "a git repository, not a DataLad dataset"
-        return False, "not a DataLad dataset"
+        if not p.is_dir():
+            return False, "a file, not a directory"
+        top = _toplevel(p)
+        if top is None:
+            return False, "not a git repository, so not a DataLad dataset"
+        if top != p.resolve():
+            inner = dataset_root(p)
+            return False, (f"inside the DataLad dataset at {inner}; give that directory" if inner
+                           else f"inside the git repository at {top}, which is not a DataLad dataset")
+        ev = evidence(top)
+        if not ev:
+            return False, "a git repository, not a DataLad dataset (no .datalad/config, git-annex or DataLad commits)"
+        ident = identity(top)
+        if ident is None:
+            return False, f"a DataLad dataset with no commits yet ({'; '.join(ev)}): datalad save first"
+        what = "no dataset ID, so identified by its first commit" if ident.startswith("git:") else f"dataset ID {ident}"
+        signs = [e for e in ev if not e.startswith("dataset ID")]
+        return True, f"a DataLad dataset, {what}" + (f" ({'; '.join(signs)})" if signs else "")
     if target.startswith(("ria+", "datalad-annex::")):
         return True, "a DataLad store URL"
     if not _is_remote(target):
@@ -185,10 +245,10 @@ def describe(kb: Store, targets: list[str] | str, title: str | None = None, summ
     if local:
         ids = {}
         for root in local:
-            uuid = dataset_id(root)
+            uuid = identity(root)
             if uuid is None:
-                inner = dataset_root(root)
-                raise KBError(f"{root} is not a DataLad dataset" + (f" (it is inside {inner})" if inner else ""))
+                ok, why = recognize(str(root))
+                raise KBError(f"{root}: {why}")
             ids[root] = uuid
         if len(set(ids.values())) > 1:
             raise KBError("these are different datasets: " + ", ".join(f"{r} ({u})" for r, u in ids.items()))
@@ -203,7 +263,9 @@ def describe(kb: Store, targets: list[str] | str, title: str | None = None, summ
         paths = [{"host": kb.cfg.host, "path": str(r)} for r in local]
     else:
         root = _clone_from(kb, given, None, title or _slug(Path(given[0].rstrip("/")).name.removesuffix(".git")))
-        uuid = dataset_id(root)
+        uuid = identity(root)
+        if uuid is None:
+            raise KBError(f"cloned {given[0]} to {root}, but it is not a DataLad dataset (or has no commits)")
         urls, paths = list(dict.fromkeys(given + remote_urls(root))), []
     remember(uuid, root)
     have = sources_for(kb, uuid)
@@ -230,7 +292,7 @@ def add_places(kb: Store, rec: Item, urls: list[str], paths: list[dict]) -> Item
 
 def ensure_source(kb: Store, root: Path) -> Item:
     """The source item for the dataset at *root*, made if this store has none."""
-    uuid = dataset_id(root)
+    uuid = identity(root)
     have = sources_for(kb, uuid) if uuid else []
     return have[0] if have else describe(kb, [str(root)])
 
@@ -269,7 +331,7 @@ def _candidates(kb: Store, uuid: str) -> list[tuple[Path, str]]:
         out += [(Path(p["path"]), "item") for p in rec.data.get("paths", []) if p.get("host") == kb.cfg.host]
     base = source_dir(kb.cfg.raw, SOURCE_TYPE)
     if base.is_dir():
-        out += [(d, "cache") for d in sorted(base.glob(f"*-{uuid[:8]}"))]
+        out += [(d, "cache") for d in sorted(base.glob(f"*-{short(uuid)}"))]
     return out
 
 
@@ -277,7 +339,7 @@ def locate(kb: Store, src: Item | str, clone: bool = False) -> Path | None:
     """The local clone of a dataset (a source item, or a dataset ID); with CLONE, make one if needed."""
     uuid = src if isinstance(src, str) else src.data["source_id"]
     for path, how in _candidates(kb, uuid):
-        if path.is_dir() and dataset_id(path) == uuid:
+        if path.is_dir() and identity(path) == uuid:
             if how != "registry" and how != "settings":
                 remember(uuid, path)
             return path
@@ -287,7 +349,7 @@ def locate(kb: Store, src: Item | str, clone: bool = False) -> Path | None:
 
 
 def suggested_dir(kb: Store, rec: Item) -> Path:
-    return source_dir(kb.cfg.raw, SOURCE_TYPE) / f"{_slug(rec.data.get('title', ''))}-{rec.data['source_id'][:8]}"
+    return source_dir(kb.cfg.raw, SOURCE_TYPE) / f"{_slug(rec.data.get('title', ''))}-{short(rec.data['source_id'])}"
 
 
 def _clone(kb: Store, uuid: str, dest: Path | None = None) -> Path:
@@ -308,7 +370,7 @@ def _clone(kb: Store, uuid: str, dest: Path | None = None) -> Path:
                if p.get("host") == kb.cfg.host and Path(p["path"]).is_dir()]
     origins += [u for r in items for u in r.data.get("urls", [])]
     root = _clone_from(kb, list(dict.fromkeys(origins)), dest, rec.data.get("title", ""))
-    got = dataset_id(root)
+    got = identity(root)
     if got != uuid:
         raise KBError(f"cloned {root}, but it is dataset {got}, not {uuid} ({rec.id} lists a wrong URL?)")
     remember(uuid, root)
@@ -338,7 +400,7 @@ def _clone_from(kb: Store, origins: list[str], dest: Path | None, name: str) -> 
     else:
         raise KBError("could not clone the dataset: " + "; ".join(errors))
     if tmp:
-        final = dest.parent / f"{_slug(name)}-{(dataset_id(dest) or 'unknown')[:8]}"
+        final = dest.parent / f"{_slug(name)}-{short(identity(dest) or 'unknown')}"
         if final.exists():
             shutil.rmtree(dest, ignore_errors=True)
             return final
@@ -360,7 +422,7 @@ def link(kb: Store, ref: str, path: Path) -> Path:
     """Tell kb that PATH is a clone of source REF (checked), for every store of this user."""
     rec = source_item(kb, ref)
     path = Path(path).expanduser().resolve()
-    got = dataset_id(path)
+    got = identity(path)
     if got != rec.data["source_id"]:
         raise KBError(f"{path} is " + (f"dataset {got}" if got else "not a DataLad dataset")
                       + f", not {rec.data['source_id']} ({rec.id})")
@@ -481,17 +543,3 @@ def tags(root: Path, refresh: bool = False) -> list[str]:
         _git(root, "fetch", "--all", "--tags", "--quiet", check=False)
     return [t for t in _git(root, "tag", "--list", "--sort=creatordate").stdout.split() if t]
 
-
-def report(kb: Store, rec: Item) -> dict:
-    """A source item and its state on this machine: where its clone is, which items use it."""
-    root = locate(kb, rec)
-    used = [r[0] for r in kb.conn.execute("SELECT DISTINCT src FROM refs WHERE dst = ? AND rel = 'source'", (rec.id,))]
-    same = [r.id for r in sources_for(kb, rec.data["source_id"]) if r.id != rec.id]
-    return {"id": rec.id, "title": rec.data.get("title"), "type": rec.data.get("source_type"),
-            "source_id": rec.data.get("source_id"), "urls": rec.data.get("urls", []),
-            "paths": rec.data.get("paths", []), "clone": str(root) if root else None,
-            "used_by": used, "same_as": same}
-
-
-def report_all(kb: Store) -> list[dict]:
-    return [report(kb, r) for r in kb.items.values() if r.kind == "source"]

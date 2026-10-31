@@ -85,7 +85,7 @@ def status(v: dict) -> None:
         click.echo(f"cas       {name}: {'mounted' if ok else 'not available here'}")
     for src in v.get("sources", []):
         click.echo(f"source    {src['id']} {src['type']} {src['title']}: "
-                   + ("cloned here" if src["here"] else "not cloned here (fetched when needed)"))
+                   + ("on this machine" if src["here"] else "not on this machine"))
     if v["attention"]:
         click.echo(click.style(f"\nNeeds attention ({len(v['attention'])}):", bold=True))
         findings(v["attention"], "  ")

@@ -33,7 +33,6 @@ def status(kb: Store) -> dict:
 
 
 def _sources(kb: Store) -> list[dict]:
-    from . import datasets
-    return [{"id": r.id, "type": r.data.get("source_type"), "title": r.data.get("title"),
-             "here": datasets.locate(kb, r) is not None}
-            for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") == datasets.SOURCE_TYPE]
+    from .sources import report_all
+    return [{"id": r["id"], "type": r["type"], "title": r["title"], "here": r["here"] is not None}
+            for r in report_all(kb)]

@@ -241,3 +241,36 @@ def test_cli_source_add(kb, origin, tmp_path):
     r = run("source", "add", str(origin), "--title", "Origin")
     assert r.exit_code == 0 and r.output.startswith("src-")
     assert "Origin" in run("source", "list").output
+
+
+@pytest.fixture
+def annex_repo(tmp_path) -> Path:
+    """A git-annex repository with DataLad-style commits but no .datalad/config (no dataset ID)."""
+    root = tmp_path / "noid"
+    root.mkdir()
+    g = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True)  # noqa: E731
+    g("init", "-q")
+    g("annex", "init", "-q")
+    (root / ".gitattributes").write_text("* annex.backend=MD5E\n")
+    _write(root / "books" / "a.pdf", "a book\n")
+    g("annex", "add", "-q", "books/a.pdf")
+    g("add", ".gitattributes")
+    g("-c", "user.name=t", "-c", "user.email=t@x", "commit", "-q", "-m", "[DATALAD] Recorded changes")
+    return root
+
+
+def test_a_dataset_without_an_id_is_known_by_its_first_commit(kb, annex_repo, tmp_path):
+    from kb import sources
+    import datalad.api as dl
+    assert datasets.dataset_id(annex_repo) is None
+    m = sources.TYPES["datalad"].recognize(str(annex_repo))
+    assert m.ok and "first commit" in m.reason and "git-annex is initialized" in m.reason
+    ident = datasets.identity(annex_repo)
+    assert ident.startswith("git:")
+    clone = tmp_path / "clone"
+    dl.clone(source=str(annex_repo), path=str(clone), result_renderer="disabled")
+    assert datasets.identity(clone) == ident                         # every clone shares it
+    rec = sources.add(kb, [str(clone), annex_repo.as_uri()])
+    assert rec.data["source_id"] == ident
+    doc = _doc(Store.open(kb.root), annex_repo / "books" / "a.pdf")
+    assert doc.rendition("original")["locations"][0]["source"] == rec.id

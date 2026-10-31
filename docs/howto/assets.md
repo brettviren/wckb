@@ -25,6 +25,14 @@ machine, so the binding works wherever the tree is mounted:
 path = "/eos/experiment/group"
 ```
 
+Or describe the tree as a **filesystem source item**, so the name travels
+with the asset and each machine's path is recorded with it (a plain
+directory is never guessed to be one; say `--type filesystem`):
+
+```
+kb source add --type filesystem /eos/experiment/group --name eos-group
+```
+
 ```
 kb asset bind as-… copies --source fs --set root=eos-group --set path=talks/noise \
    --versioning pattern --pattern '{version}'       # versions are the subdirectories v1/, v2/ ...

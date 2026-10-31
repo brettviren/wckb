@@ -19,6 +19,11 @@
    DataLad-specific: each source type recognizes its targets (paths, URLs)
    and the type is guessed unless given; several targets may name one
    source (a local clone and its remote URL, checked to share history).
+   A dataset is recognized by its `.datalad/config`, or by other signs of
+   DataLad or git-annex control (git-annex initialized, annex settings in
+   `.gitattributes`, `[DATALAD]` commits, subdatasets with DataLad IDs).
+   One created without a dataset ID is identified by its first commit
+   (`git:<sha>`), which every clone shares.
 
 2. **Knowledge sets carry their sources.** Whatever a set's depth, the
    expansion includes the source items its items need for their content:

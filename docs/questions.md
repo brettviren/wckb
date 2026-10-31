@@ -462,11 +462,13 @@ Status:
   `[sources.indico] token = {command = "pass show", id = "..."}` in the
   user config).
 
-**DS5. Source items for every source.** *(open)*
-- DataLad datasets are source items (decisions/0003). Should a named
-  filesystem root (`filesystems.NAME`), an Indico server or a DocDB server
-  be source items too, so they travel with knowledge sets and each
-  machine maps them locally the same way?
+**DS5. Source items for every source.** *(partly done)*
+- DataLad datasets and named filesystem trees (`--type filesystem`) are
+  source items. Indico and DocDB servers next, the same way?
+- Should a file in a filesystem source get its own location type
+  (`{source, path}`), rather than `local` (one host) or an asset?
+- Should a filesystem source be guessable in some cases (a directory with a
+  marker file), or always need `--type filesystem`?
 
 **DS6. One clone, several users.** *(open)*
 - A dataset on a shared filesystem (a `paths` entry for a host) is used

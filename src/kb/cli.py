@@ -1462,13 +1462,13 @@ def _ask_location(rec, suggestion):
 @pass_ctx
 def source_list_cmd(c, json_out):
     """Source items in this store (DataLad datasets ...), and whether each is on this machine."""
-    from .datasets import report_all
+    from .sources import report_all
     rows = report_all(c.kb)
     if json_out:
         return ui.emit_json(rows)
     for r in rows:
         click.echo(f"{r['id']:<16} {r['type']:<8} {r['title']}")
-        click.echo(f"{'':<16} {'clone: ' + r['clone'] if r['clone'] else 'not on this machine'}; "
+        click.echo(f"{'':<16} {'here: ' + r['here'] if r['here'] else 'not on this machine'}; "
                    f"used by {len(r['used_by'])} item(s)" + (f"; same as {', '.join(r['same_as'])}" if r["same_as"] else ""))
     if not rows:
         ui.info("no sources yet (kb source add PATH|URL)")
@@ -1478,20 +1478,23 @@ def source_list_cmd(c, json_out):
 @click.argument("targets", nargs=-1, required=True)
 @click.option("--type", "source_type", help="The kind of source (kb source types); default: guessed from TARGETS.")
 @click.option("--just-guess", is_flag=True, help="Only say which type would be used (or why none fits); add nothing.")
+@click.option("--name", help="Identity for a source without one of its own (a filesystem tree; default: its directory name).")
 @click.option("--title")
 @click.option("--summary")
 @click.option("--no-check", is_flag=True, help="Don't check that the TARGETS name one and the same source.")
 @pass_ctx
-def source_add_cmd(c, targets, source_type, just_guess, title, summary, no_check):
+def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no_check):
     """Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-    The type is guessed from TARGETS unless --type says. Adding a source this
-    store already describes gives it the new URLs and paths instead.
+    The type is guessed from TARGETS unless --type says (a plain directory is
+    accepted only with --type filesystem). Adding a source this store already
+    describes gives it the new URLs and paths instead.
 
     \b
       kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
       kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
       kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+      kb source add --type filesystem /eos/group/talks --name eos-talks   # a directory tree (never guessed)
       kb source add --just-guess https://example.org/x   # what kind of source is this?
     """
     from . import sources
@@ -1503,7 +1506,7 @@ def source_add_cmd(c, targets, source_type, just_guess, title, summary, no_check
             return
         click.echo(f"cannot guess: {g.explain()}")
         sys.exit(1)
-    rec = sources.add(c.kb, list(targets), source_type, title, summary, check=not no_check)
+    rec = sources.add(c.kb, list(targets), source_type, title, summary, check=not no_check, name=name)
     click.echo(rec.id)
     ui.info(f"{rec.data['title']}: {rec.data['source_type']} source {rec.data['source_id']}")
 
@@ -1514,8 +1517,11 @@ def source_add_cmd(c, targets, source_type, just_guess, title, summary, no_check
 @pass_ctx
 def source_show_cmd(c, ref, json_out):
     """One source: its identity, where it can be had from, its clone here, and the items using it."""
-    from . import datasets
-    r = datasets.report(c.kb, datasets.source_item(c.kb, ref))
+    from . import sources
+    rec = c.kb.get(ref)
+    if rec.kind != "source":
+        raise KBError(f"{rec.id} is a {rec.kind}, not a source (kb source list)")
+    r = sources.report(c.kb, rec)
     if json_out:
         return ui.emit_json(r)
     click.echo(f"{r['id']}  {r['title']}  ({r['type']} {r['source_id']})")
@@ -1523,9 +1529,10 @@ def source_show_cmd(c, ref, json_out):
         click.echo(f"  url    {u}")
     for p in r["paths"]:
         click.echo(f"  path   {p['host']}:{p['path']}")
-    click.echo(f"  here   {r['clone'] or 'not on this machine (kb source clone ' + r['id'] + ')'}")
+    hint = f"kb source clone {r['id']}" if r["type"] == "datalad" else "mount it, or set filesystems." + r["source_id"] + ".path"
+    click.echo(f"  here   {r['here'] or 'not on this machine (' + hint + ')'}")
     if r["same_as"]:
-        click.echo(f"  same dataset as {', '.join(r['same_as'])} (one clone serves them all)")
+        click.echo(f"  same source as {', '.join(r['same_as'])} (one local copy serves them all)")
     click.echo(f"  used by {len(r['used_by'])} item(s)" + (": " + " ".join(r["used_by"][:8]) if r["used_by"] else ""))
 
 

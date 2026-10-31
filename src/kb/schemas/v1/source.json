@@ -20,11 +20,12 @@
     "source_type": {
       "description": "The kind of source (kb source types lists them).",
       "enum": [
-        "datalad"
+        "datalad",
+        "filesystem"
       ]
     },
     "source_id": {
-      "description": "The source's own global identity: for DataLad, the dataset ID (a UUID).",
+      "description": "The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a filesystem, its root name (as in filesystems.NAME and fs bindings).",
       "type": "string",
       "minLength": 1
     },

@@ -186,10 +186,10 @@ class FsSource(AssetSource):
         if root.startswith("/") or root.startswith("~"):
             r = Path(root).expanduser()
         else:
-            p = kb.cfg.raw.get("filesystems", {}).get(root, {}).get("path")
-            if not p:
+            from .sources import filesystem_path
+            r = filesystem_path(kb, root)
+            if r is None:
                 return None
-            r = Path(p).expanduser()
         return r / locator.get("path", "") if locator.get("path") else r
 
     def _files_under(self, d: Path) -> list[CFile]:
@@ -442,6 +442,11 @@ def bind(kb: Store, ref: str, name: str, source_type: str, locator: dict, versio
     asset = get_asset(kb, ref)
     if any(b["name"] == name for b in asset.data.get("bindings", [])):
         raise KBError(f"{asset.id} already has a binding {name!r}")
+    if source_type == "fs" and "source" not in locator and not str(locator.get("root", "/")).startswith(("/", "~")):
+        from .sources import find
+        src = find(kb, "filesystem", locator["root"])
+        if src is not None:                     # the named tree is a source item: it travels with the asset
+            locator = locator | {"source": src.id}
     b = {"name": name, "type": source_type, "locator": locator, "versioning": versioning}
     d = driver(b)
     d.check_locator(locator, asset.data["asset_type"])
