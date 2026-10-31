@@ -116,7 +116,7 @@ of that, and that still pins down exactly which bytes it meant.
    candidates: native version ID, mapped label, and files with a lazy
    fetch and hash. `kb`, `fs` and `url` are implemented. `annex` (DataLad),
    `indico` and `docdb` are declared, with their locator shapes, and report
-   "planned".
+   "planned". *Later:* `datalad` is implemented ([0003](0003-datalad-sources.md)).
 
 ## 3. Your scenario, worked through
 

@@ -324,6 +324,61 @@ def _refresh(kb, f):
     return f"built {man['view']}: {len(man['outputs'])} output(s)"
 
 
+def _datalad_sources(kb):
+    return [r for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") == "datalad"]
+
+
+@remedy("datalad-support", "DataLad sources in use, but DataLad support is not installed")
+def _datalad_support(kb):
+    from .datasets import INSTALL, available
+    srcs = _datalad_sources(kb)
+    why = available() if srcs else None
+    if why:
+        return [Finding("datalad-support", f"{len(srcs)} DataLad source(s) here, but {why}",
+                        f"install it: {INSTALL}; until then only content already on this machine is reachable")]
+    return []
+
+
+@remedy("gitattributes", "git ignores .gitattributes, which DataLad datasets need")
+def _gitattributes(kb):
+    from .datasets import locate
+    for rec in _datalad_sources(kb):
+        root = locate(kb, rec)
+        if root is None:
+            continue
+        r = subprocess.run(["git", "-C", str(root), "check-ignore", "--no-index", "-v", ".gitattributes"],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            rule = r.stdout.split("\t")[0]
+            return [Finding("gitattributes", f"your git ignore rules ignore .gitattributes ({rule}); DataLad "
+                            "cannot create datasets or change annex settings while they do",
+                            "remove that pattern (usually from ~/.config/git/ignore or core.excludesFile)")]
+        return []
+    return []
+
+
+@remedy("clones", "DataLad datasets used here but not cloned on this machine", quick=False)
+def _clones(kb):
+    from .datasets import available, locate
+    if available() is not None:
+        return []
+    out = []
+    used = {r[0] for r in kb.conn.execute("SELECT DISTINCT dst FROM refs WHERE rel = 'source'")}
+    for rec in _datalad_sources(kb):
+        if rec.id in used and locate(kb, rec) is None:
+            out.append(Finding("clones", f"{rec.id} ({rec.data.get('title')}) is not cloned here",
+                               f"clone it (kb source clone {rec.id}); content is fetched only when needed", "ask",
+                               rec.id))
+    return out
+
+
+@_clones.fixer
+def _clone(kb, f):
+    from .datasets import clone
+    path, _ = clone(kb, f.where)
+    return f"cloned {f.where} to {path}"
+
+
 @remedy("embeddings", "Items without embeddings for semantic search")
 def _embeddings(kb):
     c = kb.cfg.embed

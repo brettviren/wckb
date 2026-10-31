@@ -139,7 +139,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
         },
         "type": {
-          "description": "Source type: kb, fs, url, annex, indico, docdb ... (kb source list lists them).",
+          "description": "Source type: kb, fs, url, datalad, indico, docdb ... (kb source types lists them).",
           "type": "string"
         },
         "locator": {
@@ -165,7 +165,7 @@
           }
         },
         "priority": {
-          "description": "Lower is tried first (default by source type: kb, fs, annex, docdb, url, indico).",
+          "description": "Lower is tried first (default by source type: kb, fs, datalad, docdb, url, indico).",
           "type": "integer"
         },
         "note": {

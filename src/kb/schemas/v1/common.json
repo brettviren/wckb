@@ -6,12 +6,12 @@
     "id": {
       "description": "Item ID: kind prefix, a dash, and a random (or, for persons, readable) suffix.",
       "type": "string",
-      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as)-[a-z0-9][a-z0-9-]{2,62}$"
+      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as|src)-[a-z0-9][a-z0-9-]{2,62}$"
     },
     "ref": {
       "description": "Reference to an item, optionally to one of its renditions: ID or ID#rendition.",
       "type": "string",
-      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as)-[a-z0-9][a-z0-9-]{2,62}(#[A-Za-z0-9_.-]+)?$"
+      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as|src)-[a-z0-9][a-z0-9-]{2,62}(#[A-Za-z0-9_.-]+)?$"
     },
     "url": {
       "type": "string",
@@ -289,24 +289,26 @@
           "type": "object",
           "properties": {
             "type": {
-              "const": "annex"
+              "const": "datalad"
             },
-            "dataset": {
-              "description": "DataLad dataset ID (or URL).",
-              "type": "string"
+            "source": {
+              "description": "The source item (src-...) describing the DataLad dataset.",
+              "type": "string",
+              "pattern": "^src-"
             },
             "path": {
               "description": "Path within the dataset.",
               "type": "string"
             },
             "key": {
-              "description": "git-annex key, e.g. SHA256E-s123--<sha256>.pdf",
+              "description": "git-annex key of the content (absent for files kept in git), e.g. MD5E-s123--<md5>.pdf",
               "type": "string"
             }
           },
           "required": [
             "type",
-            "dataset"
+            "source",
+            "path"
           ],
           "additionalProperties": false
         },

@@ -17,6 +17,7 @@ Read these in order if you are new; later on, go straight to the task you need.
 | [search](search.md) | ls, search, context, show, log, semantic search, Datasette |
 | [stores-and-promotion](stores-and-promotion.md) | scopes and edges; reading across stores; knowledge sets; push, pull, obtain; twins; snapshots |
 | [review](review.md) | reviewing incoming knowledge: bundles, the inbox, rendering, human and LLM review |
+| [datalad](datalad.md) | DataLad datasets: source items, adding files by reference, clones, assets from tags |
 | [storage](storage.md) | where content lives, content stores, network filesystems, snapshots and backups |
 | [git-and-forges](git-and-forges.md) | exchange repositories, git hooks, pull requests on GitHub/Gitea/Forgejo, tokens |
 | [policy](policy.md) | named, versioned instructions, skills and hooks; enactment; autonomy |

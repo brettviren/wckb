@@ -13,7 +13,7 @@ why it works this way.
 ```
 kb asset new --type fileset --title "TPC noise talk, collaboration meeting" \
    --summary "Slides and notes of the 28 Oct noise talk."
-kb source list                       # source types and their status
+kb source types                      # source types and their status
 ```
 
 **A directory tree.** Name the root, and map the name to a path on each
@@ -36,6 +36,13 @@ kb asset bind as-… current --source fs --set root=eos-group --set path=talks/n
 ```
 kb asset bind as-… indico --source url \
    --locator '{"urls": {"slides.pdf": "https://indico.example/.../slides.pdf"}}'
+```
+
+**A DataLad dataset**, described by a source item (see [datalad](datalad.md));
+its git tags are versions:
+
+```
+kb asset bind as-… dataset --source datalad --set source=src-… --set path=talks/noise --versioning native
 ```
 
 **Versioning modes:**

@@ -35,13 +35,14 @@ kb add https://arxiv.org/pdf/2601.01234 --set doctype=preprint \
 | file of 1 MiB or less | held in the store's database, with its file name |
 | larger file, content store configured | copied into the content-addressed store (`cas`), addressed by SHA-256 |
 | larger file, no content store | recorded as local to your host. `kb lint` warns, because nobody else can read it |
-| URL | always recorded; downloaded content is cached in `.kb/cache` and stored per the rows above |
+| file committed in a DataLad dataset | left there: a `datalad` location ([datalad](datalad.md)) |
+| URL | always recorded; downloaded content is kept in the url source directory (`~/.cache/wckb/url/`) and stored per the rows above |
 
 The URL is the canonical location, and the copy in the store or the content
 store is a mirror that is checked by hash. Later mirrors can be added with
 `kb rendition locate ID#original --cas default` or `--url URL`.
 Where content can live is a pluggable set of *data sources* (`db`, `cas`,
-`url`, `local`, and experimentally `annex` for DataLad datasets);
+`url`, `local`, and `datalad` for DataLad datasets);
 see [storage](storage.md).
 
 ## Duplicates

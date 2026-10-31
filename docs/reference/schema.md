@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.3) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.4) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -195,6 +195,19 @@ An abstract file or file set: a stable reference independent of where the bytes 
 | `versions` |  | list of version |  |
 | `bindings` |  | list of binding |  |
 
+## source
+
+ID prefix `src-`; not a source (editable).
+
+One concrete data source that renditions and asset bindings refer to, such as a DataLad dataset. Its identity (source_type, source_id) never changes; the places it can be had from (urls, paths) are united as it travels. Where it is on a given machine (a local clone) is that machine's business: see kb source show.
+
+| field | required | type | description |
+|---|---|---|---|
+| `source_type` | yes | `datalad` | The kind of source (kb source types lists them). |
+| `source_id` | yes | string | The source's own global identity: for DataLad, the dataset ID (a UUID). |
+| `urls` |  | list of string | Where it can be cloned or fetched from (for DataLad: anything datalad clone accepts: https, ssh, ria+...). |
+| `paths` |  | list of object | Local file trees holding it, by host (a shared filesystem path is usable by everyone on that host). |
+
 ## Shared definitions
 
 ### rendition
@@ -221,7 +234,7 @@ Where a rendition's bytes are. Each type is served by a data source (kb.sources)
 - `cas`: `name`
 - `url`: `url`, `retrieved`, `auth`
 - `local`: `host`, `path`
-- `annex`: `dataset`, `path`, `key`
+- `datalad`: `source`, `path`, `key`
 - `asset`: `asset`, `version`, `path`
 
 ### valid

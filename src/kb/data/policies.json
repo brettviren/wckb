@@ -49,7 +49,7 @@
   {
     "name": "kb-ingest",
     "type": "skill",
-    "version": 4,
+    "version": 5,
     "file": "skills/kb-ingest/SKILL.md",
     "title": "kb-ingest",
     "description": "Add documents, datasets, configs, snapshots."

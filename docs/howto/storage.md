@@ -8,8 +8,10 @@
 | large files you have | a content-addressed store (location `cas`): `<path>/sha256/ab/cd/<sha256>` |
 | material that has a home (Indico, arXiv, CDS, EOS) | its URL (location `url`), plus a hash, plus optionally a `cas` copy |
 | files only on one machine | location `local`, flagged by `kb lint` |
-| files in a DataLad dataset | location `annex` (experimental) |
-| URL cache, materialized files, view builds | `.kb/`, beside the store, this machine only |
+| files in a DataLad dataset | location `datalad`: the dataset (a source item), path and annex key ([datalad](datalad.md)) |
+| downloaded URL content | the url source directory, `sources.url.dir` (default `~/.cache/wckb/url/`), shared by your stores |
+| DataLad clones | where you have them, or the datalad source directory (default `~/.cache/wckb/datalad/`) |
+| materialized files, view builds | `.kb/`, beside the store, this machine only |
 | published views | the publish store |
 
 The inline limit is the store setting `limits.max_inline_bytes`
@@ -20,11 +22,9 @@ Each location type is served by a **data source**, an interface in
 materializing as needed) and describe it for people. New kinds of storage
 plug in there.
 
-DataLad is the first planned addition: an `annex` location names a dataset
-and a path. You map the dataset's local clone with
-`kb config set datasets.<dataset-id>.path ~/data/ds`, or per machine in
-`.kb/local.toml`. Content is then fetched with `datalad get`. This is
-experimental until spike S3 (see `docs/decisions/0001-knowledge-store.md`).
+DataLad datasets are a source too: files stay in the dataset, and a
+*source item* says which dataset and where to clone it from. See
+[datalad](datalad.md).
 
 ## The database lives on local disk
 

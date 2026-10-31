@@ -43,13 +43,16 @@ What `kb doctor` knows today (`kb doctor --list` is authoritative):
 | `edges` | a neighbor can't be reached | `kb edge fetch` for snapshot neighbors (auto); otherwise advice |
 | `secret-perms` | a forge token file is readable by others | `chmod 600` (ask) |
 | `stale` | derived renditions, views or topics whose inputs changed | re-extract (auto); rebuild views (ask); revise topics (advice: an LLM's job) |
+| `datalad-support` | DataLad sources in use, but DataLad not installed | install the extra (advice) |
+| `gitattributes` | your git ignore rules ignore `.gitattributes`, which DataLad needs | remove the pattern (advice) |
 | `embeddings` | items without embeddings for semantic search | `kb store embed` (ask) |
 | `schema-version` | items written by an older kb | `kb store migrate` (ask) |
 | `dangling` | references to items not in this store | `kb pull --dangling` (ask) |
+| `clones` | DataLad datasets used here but not cloned on this machine | `kb source clone` (ask) |
 | `local-only` | content only on this machine while a content store is mounted | `kb rendition locate` (ask) |
 | `check` | errors from the consistency scan | advice; details from `kb check` |
 
-The last four (and `check`) are *full* diagnoses: `kb doctor` runs them,
+The last five (and `check`) are *full* diagnoses: `kb doctor` runs them,
 `kb status` doesn't.
 
 ## LLMs and the doctor

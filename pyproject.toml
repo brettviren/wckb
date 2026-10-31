@@ -23,6 +23,8 @@ kb = "kb.cli:main"
 pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
 root = ["uproot>=5"]
+# Data sources that need a Python library (and, for DataLad, git-annex on PATH).
+datalad = ["datalad>=1.0"]
 
 [build-system]
 requires = ["setuptools>=77.0.3"]

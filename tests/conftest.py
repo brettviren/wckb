@@ -23,6 +23,9 @@ def _isolate(monkeypatch, tmp_path_factory):
     for v in ("KB_AGENT", "CLAUDECODE", "AI_AGENT"):   # tests may run inside Claude Code
         monkeypatch.delenv(v, raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / "cache"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / "config"))         # no user git ignore rules
+    (home / "gitconfig").touch()
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / "gitconfig"))
     monkeypatch.setenv("GIT_AUTHOR_NAME", "t")
     monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.org")
     monkeypatch.setenv("GIT_COMMITTER_NAME", "t")

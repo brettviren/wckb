@@ -54,7 +54,7 @@ to be right; please fix the other place.
 **kind**
 : The type of an item, which selects its schema: `observation`,
   `document`, `dataset`, `config`, `snapshot`, `software`, `kset`, `asset`,
-  `topic`, `view`, `person`, `policy`. *Code:* `kb.ids.KINDS`,
+  `source`, `topic`, `view`, `person`, `policy`. *Code:* `kb.ids.KINDS`,
   `schemas/v1/<kind>.json`.
 
 **primary item**
@@ -70,7 +70,8 @@ to be right; please fix the other place.
 
 **frozen**
 : Cannot change what it asserts. Frozen items are primary items, released
-  or deprecated policies, and the registered versions of assets. The
+  or deprecated policies, the registered versions of assets, and the
+  identity of source items. The
   database enforces this. *Code:* `kb.items.is_frozen`, the `items_frozen`
   trigger in `kb.db.GUARD`.
 
@@ -131,6 +132,7 @@ to be right; please fix the other place.
   | `cfg` | config | `view` | view |
   | `snp` | snapshot | `per` | person |
   | `sw` | software | `pol` | policy |
+  | `src` | source | | |
 
   *Code:* `kb.ids`.
 
@@ -212,7 +214,7 @@ to be right; please fix the other place.
   | `url` | the web (with `retrieved`) |
   | `local` | one host's path |
   | `asset` | an asset version (and `path`) |
-  | `annex` | a DataLad dataset (experimental) |
+  | `datalad` | a file in a DataLad dataset (a source item, a path, an annex key) |
 
 **data source**
 : Anything that can supply content. There are two interfaces:
@@ -220,17 +222,47 @@ to be right; please fix the other place.
   - **location sources** resolve one rendition location to a local file
     (*Code:* `kb.locations`, `LocationSource`, `for_location`, `resolve`);
   - **asset sources** enumerate the versions of assets (*Code:*
-    `kb.assets.AssetSource`, `SOURCES`, `kb source list`).
+    `kb.assets.AssetSource`, `SOURCES`, `kb source types`).
+
+**source item**
+: An item (kind `source`, `src-…`) describing one concrete source that
+  renditions and asset bindings depend on, today a DataLad dataset: its
+  `source_type`, its own global identity `source_id` (frozen), the `urls`
+  it can be had from and `paths` holding it on given hosts. Knowledge sets
+  always carry the source items their items need. Two source items with the
+  same identity describe the same source and share its local copy.
+  *Code:* kind `source`, `kb.datasets`, `kb source list|show|add`.
+
+**local copy / clone**
+: Where a source is on this machine: a DataLad clone, downloaded URL
+  content. Never part of an item; found by the source's identity
+  (`kb.datasets.locate`: explicit `datasets.<id>.path`, kb's clone registry
+  `datasets.toml`, the item's paths for this host, the source directory).
+  *Code:* `kb source clone`, `kb source link`.
+
+**source directory**
+: Where a source type keeps new local copies: `sources.<type>.dir`, by
+  default `~/.cache/wckb/<type>/` (`url`, `datalad`). With
+  `sources.datalad.new = "ask"`, kb asks where a novel dataset goes.
+  *Code:* `kb.config.source_dir`.
+
+**DataLad dataset**
+: A git + git-annex repository managed by DataLad, identified by a dataset
+  ID (a UUID). Not to be confused with kb's `dataset` item kind (data
+  described as knowledge). *Code:* `kb.datasets`, location type and asset
+  source `datalad`; optional extra `wckb[datalad]`.
 
 **placing**
-: Deciding where new content goes: `auto` (in the store if small, else a
-  content store, else local-only), `db`, `cas`, `local`, or `none` (only a
-  hash, for content at a URL). *Code:* `kb.content.place`,
+: Deciding where new content goes: `auto` (left in its DataLad dataset if
+  committed there, else in the store if small, else a content store, else
+  local-only), `db`, `cas`, `local`, `datalad`, or `none` (only a hash, for
+  content at a URL). *Code:* `kb.content.place`,
   `kb add --place`.
 
 **materialize**
 : Write content to a local file so tools can read it. Content from the
-  database goes into `.kb/cache/` under its real file name. *Code:*
+  database goes into `.kb/cache/` under its real file name; downloads and
+  clones go to source directories. *Code:*
   `kb rendition path ID#NAME`.
 
 **checkout / checkin**

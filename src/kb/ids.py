@@ -23,6 +23,7 @@ PREFIX = {
     "policy": "pol",
     "kset": "ks",
     "asset": "as",
+    "source": "src",
 }
 KIND = {v: k for k, v in PREFIX.items()}
 KINDS = tuple(PREFIX)

@@ -1,7 +1,9 @@
 # 0001: Where knowledge items live: git + JSON files, or a database
 
 - **Status:** **accepted** 2026-10-31. Spikes S1 and S2 are done (see §13);
-  S3 (DataLad) is deferred, S4 (twins) is partly done.
+  S3 (DataLad) is deferred, S4 (twins) is partly done. *Later:* DataLad
+  sources were settled by [0003](0003-datalad-sources.md), which replaces
+  the `annex` location of §6.
 - **Date:** 2026-10-31
 - **Terminology note:** written before the [glossary](../glossary.md);
   "record" here means *item*, "source record" means *primary item*, and

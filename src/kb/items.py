@@ -20,7 +20,8 @@ from .ids import PRIMARY_KINDS, parse_ref
 # Fields of a frozen item (source, released policy) that never change: what it asserts.
 IMMUTABLE = ("id", "kind", "created", "asserted_by", "creators", "date", "valid", "doctype",
              "system", "query", "retrieved", "parameters", "repository", "commit",
-             "members", "depth", "nested", "follow", "asset_type", "match")
+             "members", "depth", "nested", "follow", "asset_type", "match",
+             "source_type", "source_id")
 POLICY_FROZEN = ("name", "version", "policy_type")
 FIXED_ROLES = ("original", "content")
 
@@ -71,14 +72,23 @@ def digest(data: dict) -> str:
 
 
 def is_frozen(data: dict) -> bool:
-    return data.get("kind") in PRIMARY_KINDS or data.get("kind") == "asset" or (
+    return data.get("kind") in PRIMARY_KINDS or data.get("kind") in ("asset", "source") or (
         data.get("kind") == "policy" and data.get("stage") in ("released", "deprecated"))
+
+
+def source_refs(data: dict) -> list[str]:
+    """Source items (src-...) an item needs to get its content: from rendition locations and asset bindings."""
+    out = [loc["source"] for r in data.get("renditions", []) if isinstance(r, dict)
+           for loc in r.get("locations", []) if isinstance(loc, dict) and loc.get("source")]
+    out += [b["locator"]["source"] for b in data.get("bindings", [])
+            if isinstance(b, dict) and isinstance(b.get("locator"), dict) and b["locator"].get("source")]
+    return list(dict.fromkeys(out))
 
 
 def core(data: dict) -> dict:
     """What a frozen item asserts: never changes once written (hashes are in ``fixed``)."""
     c = {k: data.get(k) for k in IMMUTABLE + POLICY_FROZEN}
-    if data.get("kind") != "asset":      # an asset may gain versions; their digests are guarded via fixed
+    if data.get("kind") not in ("asset", "source"):   # assets gain versions (digests guarded via fixed)
         c["_fixed"] = sorted(fixed(data))
     return c
 
@@ -342,6 +352,7 @@ class Store:
         rel = [(i, parse_ref(r)[0], f) for f in ("supersedes", "retracts", "related", "members") for r in d.get(f, [])]
         rel += [(i, parse_ref(r)[0], "derived_from") for r in rec.inputs()]
         rel += [(i, parse_ref(e)[0], "evidence") for e in d.get("evidence", []) if "://" not in e]
+        rel += [(i, s, "source") for s in source_refs(d)]
         c.executemany("INSERT INTO refs VALUES (?,?,?)", rel)
         c.executemany("INSERT INTO identifiers VALUES (?,?,?)", [(i, k, v) for k, v in d.get("identifiers", {}).items()])
         c.executemany("INSERT INTO renditions VALUES (?,?,?,?,?,?,?,?)", [

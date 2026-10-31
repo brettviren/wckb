@@ -27,5 +27,13 @@ def status(kb: Store) -> dict:
         "edges": [{"name": n.name, "relation": n.relation, "available": n.available, "writable": n.writable,
                    "land": n.mode} for n in neighbors(kb)],
         "content_stores": {name: (p is not None and p.is_dir()) for name, p in sorted(cfg.cas.items())},
+        "sources": _sources(kb),
         "attention": [f.as_dict() for f in findings],
     }
+
+
+def _sources(kb: Store) -> list[dict]:
+    from . import datasets
+    return [{"id": r.id, "type": r.data.get("source_type"), "title": r.data.get("title"),
+             "here": datasets.locate(kb, r) is not None}
+            for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") == datasets.SOURCE_TYPE]

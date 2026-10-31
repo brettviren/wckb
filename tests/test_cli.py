@@ -163,7 +163,7 @@ def test_data_describe_files_and_sources(root, tmp_path):
     pkg = json.loads(run(root, "data", "describe", str(f)).output)
     assert pkg["resources"][0]["schema"]["fields"] == [{"name": "ch", "type": "integer"},
                                                        {"name": "gain", "type": "number"}]
-    out = run(root, "source", "list").output
+    out = run(root, "source", "types").output
     assert "location  cas" in out and "asset     fs" in out
 
 

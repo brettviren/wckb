@@ -13,7 +13,7 @@ nothing else in kb needs to change.
     local  a file on one host only
     asset  a file of an asset (an abstract file or file set) at a version; the
            asset's own bindings say which sources supply it (kb.assets)
-    annex  a file in a DataLad dataset (experimental; see decisions/0001, spike S3)
+    datalad  a file in a DataLad dataset, described by a source item (see kb.datasets)
 """
 
 import shutil
@@ -24,7 +24,14 @@ from .errors import KBError
 
 
 def cache_path(kb, sha: str) -> Path:
+    """Where content from the database is materialized for tools (the store's own cache)."""
     return kb.cfg.cache_dir / "sha256" / sha[:2] / sha
+
+
+def url_cache_path(kb, sha: str) -> Path:
+    """Where downloaded URL content is kept: the url source directory (sources.url.dir), shared by stores."""
+    from .config import source_dir
+    return source_dir(kb.cfg.raw, "url") / "sha256" / sha[:2] / sha
 
 
 def blob_path(root: Path, sha: str) -> Path:
@@ -98,8 +105,8 @@ class UrlSource(LocationSource):
 
     def resolve(self, kb, rec, rendition, loc, fetch):
         sha = rendition.get("sha256")
-        if sha and cache_path(kb, sha).is_file():
-            return cache_path(kb, sha)
+        if sha and url_cache_path(kb, sha).is_file():
+            return url_cache_path(kb, sha)
         if not fetch:
             return None
         from .content import fetch as do_fetch
@@ -133,32 +140,50 @@ class LocalSource(LocationSource):
         return f"only on {loc['host']}: {loc['path']}"
 
 
-class AnnexSource(LocationSource):
-    """A file in a DataLad dataset. The dataset's local clone is mapped in settings:
-    ``datasets.<dataset id> = {path = "..."}``; content is fetched with ``datalad get``."""
-    type, label = "annex", "DataLad dataset"
-
-    def _root(self, kb, loc) -> Path | None:
-        ds = kb.cfg.raw.get("datasets", {}).get(loc["dataset"], {})
-        return Path(ds["path"]).expanduser() if ds.get("path") else None
+class DataladSource(LocationSource):
+    """A file in a DataLad dataset: {source: src-..., path, key?}.  The source item says which dataset;
+    kb.datasets finds (or makes) the local clone and gets the content."""
+    type, label = "datalad", "DataLad dataset"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
-        root = self._root(kb, loc)
-        if root is None or not loc.get("path"):
+        from . import datasets
+        src = kb.items.get(loc["source"])
+        if src is None:
             return None
-        p = root / loc["path"]
-        if p.exists() and p.resolve().is_file():
-            return p
-        if fetch and shutil.which("datalad"):
-            r = subprocess.run(["datalad", "get", "-d", str(root), str(p)], capture_output=True, text=True)
-            if r.returncode == 0 and p.resolve().is_file():
-                return p
-        return None
+        fetch = fetch and datasets.available() is None       # without DataLad, only what is already here
+        root = datasets.locate(kb, src, clone=fetch)
+        if root is None:
+            return None
+        p = datasets.key_content(root, loc["key"], fetch) if loc.get("key") else None
+        if p is None:
+            f = root / loc["path"]
+            if f.exists():
+                p = f
+            elif fetch:
+                p = datasets.get(root, loc["path"])
+        if p is None:
+            return None
+        sha = rendition.get("sha256")
+        if sha:
+            from .content import sha256_file
+            if sha256_file(p)[0] != sha:
+                return None          # the dataset now has other bytes at that path
+        return p
+
+    def available(self, kb, rendition, loc):
+        return loc["source"] in kb.items
 
     def describe(self, kb, loc):
-        root = self._root(kb, loc)
-        return f"DataLad dataset {loc['dataset']}" + (f": {loc.get('path', '')}" if loc.get("path") else "") + \
-            ("" if root else " (no local clone mapped)")
+        from . import datasets
+        src = kb.items.get(loc["source"])
+        if src is None:
+            return f"DataLad dataset {loc['source']} (source not in this store): {loc['path']}"
+        root = datasets.locate(kb, src)
+        return (f"DataLad dataset {src.data.get('title')}: {loc['path']}"
+                + (f" (clone at {root})" if root else " (not cloned here; fetched on demand)"))
+
+    def link(self, loc):
+        return None
 
 
 class AssetLocation(LocationSource):
@@ -193,7 +218,7 @@ class AssetLocation(LocationSource):
 REGISTRY: dict[str, LocationSource] = {}
 
 # Resolution order: cheapest and most local first; URLs (network) last.
-ORDER = ["db", "cas", "local", "asset", "annex", "url"]
+ORDER = ["db", "cas", "local", "asset", "datalad", "url"]
 
 
 def register(source: LocationSource, position: int | None = None) -> None:
@@ -202,13 +227,19 @@ def register(source: LocationSource, position: int | None = None) -> None:
         ORDER.insert(len(ORDER) - 1 if position is None else position, source.type)
 
 
-for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), AnnexSource()):
+for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), DataladSource()):
     register(_s)
 
 
 def sources_table() -> list[dict]:
-    return [{"interface": "location", "type": t, "status": "experimental" if t == "annex" else "implemented",
-             "what": REGISTRY[t].label} for t in ORDER if t in REGISTRY]
+    from . import datasets
+    out = []
+    for t in ORDER:
+        if t in REGISTRY:
+            why = datasets.available() if t == "datalad" else None
+            out.append({"interface": "location", "type": t, "status": "implemented", "what": REGISTRY[t].label,
+                        "available": why is None, "needs": f"{why}: {datasets.INSTALL}" if why else ""})
+    return out
 
 
 def for_location(loc: dict) -> LocationSource:
@@ -219,22 +250,18 @@ def for_location(loc: dict) -> LocationSource:
 
 
 def resolve(kb, rec, rendition: dict, fetch: bool = True) -> Path | None:
-    """A local file holding the rendition's content, trying sources in ORDER."""
+    """A local file holding the rendition's content: first whatever is already here, trying sources in
+    ORDER, then (with FETCH) whatever must be fetched or cloned, in the same order (URLs last)."""
     locs = sorted(rendition.get("locations", []),
                   key=lambda l: ORDER.index(l["type"]) if l["type"] in ORDER else len(ORDER))
     sha = rendition.get("sha256")
-    if sha and cache_path(kb, sha).is_file() and not any(l["type"] == "db" for l in locs):
-        return cache_path(kb, sha)
-    for loc in locs:
-        p = for_location(loc).resolve(kb, rec, rendition, loc, fetch=fetch and loc["type"] == "url")
-        if p is not None:
-            return p
-    if fetch:
+    if sha and url_cache_path(kb, sha).is_file() and not any(l["type"] == "db" for l in locs):
+        return url_cache_path(kb, sha)
+    for passes in ([False, True] if fetch else [False]):
         for loc in locs:
-            if loc["type"] == "annex":
-                p = for_location(loc).resolve(kb, rec, rendition, loc, fetch=True)
-                if p is not None:
-                    return p
+            p = for_location(loc).resolve(kb, rec, rendition, loc, fetch=passes)
+            if p is not None:
+                return p
     return None
 
 

@@ -56,7 +56,7 @@ Non-goals for now:
         └───────────────────────────────────────────┘            bundle files ◄─ pull requests
                 │ renditions point at bytes through data sources
                 ▼
-        db (in the store) · cas (EOS/NFS content store) · url · local · annex (DataLad)
+        db (in the store) · cas (EOS/NFS content store) · url · local · datalad (DataLad)
 ```
 
 The central decisions:
@@ -236,12 +236,22 @@ resolve to a local file, describe for people, link.
 |---|---|---|
 | `db` | in the store's `blobs` table, with a file name | small content, at most 1 MiB by default |
 | `cas` | a content-addressed directory, `<store>/sha256/ab/cd/<sha>` | EOS, NFS (plain files are fine there) |
-| `url` | the web, fetched into the cache and hash-checked | Indico, arXiv, CDS ... |
+| `url` | the web, fetched into the url source directory and hash-checked | Indico, arXiv, CDS ... |
 | `local` | one host only | flagged by lint |
-| `annex` | a DataLad dataset (setting `datasets.<id>.path`; `datalad get`) | experimental, spike S3 |
+| `datalad` | a file in a DataLad dataset, named by a source item (`src-…`), path and annex key | optional extra; [decision 0003](decisions/0003-datalad-sources.md) |
 
 New kinds of storage (S3, an institutional repository, a native Indico
 source) register a `Source` subclass. Nothing else changes.
+
+**Source items.** A concrete source that items depend on, such as a DataLad
+dataset, is itself an item (kind `source`, `src-…`): its identity (type and
+the source's own ID) and where it can be had (URLs, per-host paths).
+Knowledge sets always carry the source items their items need. Where a
+source is on this machine (a clone, a download cache) is per-machine state,
+found by the source's identity, so one clone serves every item and store;
+new local copies go to the type's *source directory* (`sources.<type>.dir`,
+default `~/.cache/wckb/<type>/`), or kb asks
+([decision 0003](decisions/0003-datalad-sources.md)).
 
 **Adding content.** `kb add` places small files in the store, large ones in
 the content store, or records them as local when there is none. URLs are
@@ -265,7 +275,7 @@ point to an **asset** rather than to locations. An asset has three parts:
 
 - **Versions**, each with a label and a digest of its content manifest.
   The digest is the version's identity and never changes.
-- **Bindings** to sources (`kb`, `fs`, `url` today; `annex`, `indico` and
+- **Bindings** to sources (`kb`, `fs`, `url`, `datalad` today; `indico` and
   `docdb` planned). Each binding has a locator and a versioning mode:
   `none`, `native`, `pattern` or `map`.
 - **Resolution.** For a version, the first source in priority order whose

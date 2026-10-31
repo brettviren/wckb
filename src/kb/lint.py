@@ -10,7 +10,7 @@ from . import graph
 from .build import publications
 from .checks import Problem
 from .ids import parse_ref
-from .items import Store
+from .items import Store, source_refs
 
 
 def _warn(code, where, msg, hint=""):
@@ -82,7 +82,7 @@ def dangling(kb: Store) -> list[tuple[str, str]]:
     for rec in kb.items.values():
         d = rec.data
         refs = d.get("members", []) + d.get("supersedes", []) + d.get("retracts", []) + d.get("related", [])
-        refs += rec.inputs() + [e for e in d.get("evidence", []) if "://" not in e]
+        refs += rec.inputs() + [e for e in d.get("evidence", []) if "://" not in e] + source_refs(d)
         for r in refs:
             if not kb.exists(r):
                 out.append((rec.id, r))

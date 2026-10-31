@@ -34,8 +34,8 @@ in scope.
   Item JSON stays validated by JSON Schema on every write.
 - Logic modules: `items` (model, digest, `Store`), `authoring` (new/add/supersede),
   `edit` (set, renditions, content, checkout/checkin), `locations` (location
-  sources: db, cas, url, local, asset, annex), `assets` (assets, bindings, asset
-  sources), `content` (placing content, hashing, fetch, verify), `checks`
+  sources: db, cas, url, local, asset, datalad), `assets` (assets, bindings, asset
+  sources), `datasets` (DataLad: source items, clones, content), `content` (placing content, hashing, fetch, verify), `checks`
   (consistency scan), `lint` (advice), `doctor` (remedies: diagnose and fix
   common problems), `status` (the store at a glance), `graph` (staleness, stamping), `build` (views),
   `query`/`search`/`embed`/`context`, `transforms`, `fair` (data describe and

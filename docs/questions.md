@@ -28,11 +28,7 @@ Status:
 **S3. Signed bundles?** *(open)*
 - minisign or ssh signatures, so an inbox can verify the sender.
 
-**S4. DataLad dataset granularity.** *(deferred with spike S3)*
-- One dataset per store, or per project or collection? How do subdatasets
-  relate to the store graph?
-
-**S5. `datalad run` vs our provenance.** *(deferred with spike S3)*
+**S5. `datalad run` vs our provenance.** *(open; DataLad sources are done, see decisions/0003)*
 - Can it replace view manifests and transform provenance, or should it
   complement them?
 
@@ -88,7 +84,8 @@ Status:
 - Today: a per-user cache keyed by (path, size, mtime) means each file is
   hashed once.
 - Large trees on EOS still mean a first full read. DataLad's annex keys
-  carry hashes for free; for plain trees, should kb trust size and mtime for
+  carry hashes for free when the dataset uses `SHA256E` keys (DataLad's
+  default is `MD5E`: then kb fetches and hashes once); for plain trees, should kb trust size and mtime for
   "known" status between full checks?
 
 **V7. Label collisions across sources.** *(open)*
@@ -103,11 +100,13 @@ Status:
   directly as evidence (`as-…@v2`), rather than going through a document
   item?
 
-**V9. DataLad mapping.** *(deferred: spike S3)*
-- Commits, tags or branch heads as native versions?
-- Should `annex` scans use `git annex find` / `datalad status` to get keys
-  without fetching?
-- A dataset per asset, or many assets per dataset (S4)?
+**V9. DataLad mapping.** *(partly decided: decisions/0003)*
+- Done: tags are native versions; files and annex keys are listed from git
+  without fetching; many assets may bind to one dataset (each binding
+  names a path).
+- Open: commits or branch heads as versions too? Subdatasets (a binding
+  path crossing into a subdataset is not followed yet)? Should kb offer
+  to make datasets use `SHA256E` keys so hashes are free?
 
 **V10. Kept content.** *(open)*
 - `keep = auto` copies versions from unversioned sources into the store (or
@@ -434,21 +433,25 @@ Status:
 ## DS. Data sources (see decisions/0001 §13)
 
 **DS0. Two source interfaces.** *(exploring)*
-- Rendition locations (`kb.sources`: db, cas, url, local, annex, asset)
+- Rendition locations (`kb.locations`: db, cas, url, local, asset, datalad)
   resolve one file by hash.
-- Asset sources (`kb.assets`: kb, fs, url; planned annex, indico, docdb)
+- Asset sources (`kb.assets`: kb, fs, url, datalad; planned indico, docdb)
   enumerate versions of files and file sets.
-- New concrete sources should eventually be asset sources only, reached
-  from renditions through the `asset` location. Retire `annex` as a
-  location type when DataLad becomes an asset source?
+- DataLad is both (decisions/0003): a `datalad` location for one committed
+  file (by annex key), an asset source for versioned material. Should
+  other new sources be asset sources only, reached through the `asset`
+  location?
 
-**DS1. DataLad as a source.** *(deferred: spike S3)*
-- The `annex` location type exists, experimentally. Questions to settle
-  once DataLad is understood better:
-  - dataset per store or per collection (S4);
+**DS1. DataLad as a source.** *(decided: decisions/0003; follow-ups open)*
+- Decided: source items, clones by dataset ID, source directories,
+  `datalad` locations and asset source, optional extra.
+- Open:
   - `datalad run` vs our provenance (S5);
-  - EOS through rclone or WebDAV;
-  - Indico through datalad-next credentials.
+  - EOS through rclone or WebDAV special remotes;
+  - Indico through datalad-next credentials (DS2);
+  - adding a file whose annex content is not present locally (today kb
+    needs the content to hash it);
+  - dropping content (`datalad drop`) that no item here needs.
 
 **DS2. Indico.** *(open)*
 - A native `indico` source (Indico's API with a token), or URLs through
@@ -459,11 +462,29 @@ Status:
   `[sources.indico] token = {command = "pass show", id = "..."}` in the
   user config).
 
+**DS5. Source items for every source.** *(open)*
+- DataLad datasets are source items (decisions/0003). Should a named
+  filesystem root (`filesystems.NAME`), an Indico server or a DocDB server
+  be source items too, so they travel with knowledge sets and each
+  machine maps them locally the same way?
+
+**DS6. One clone, several users.** *(open)*
+- A dataset on a shared filesystem (a `paths` entry for a host) is used
+  in place. Getting content into it needs write access; should kb then
+  clone from it into the user's source directory instead?
+
 **DS4. Third-party sources.** *(open)*
 - Register `Source` classes through Python entry points
   (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
 ## Decided
+
+**S4. DataLad dataset granularity.** *(decided 2026-10-31, decisions/0003)*
+- Zero or more DataLad datasets per store, each described by a source
+  item (remote URL, local tree, or both). Knowledge sets carry the source
+  items their items need; receivers clone on demand into a configured
+  directory or ask where, and reuse a clone they already have (matched by
+  dataset ID).
 
 **S0. git + JSON, or a database, for knowledge items?** *(decided 2026-10-31)*
 - A SQLite store per store, with bundles for transfer and review and git

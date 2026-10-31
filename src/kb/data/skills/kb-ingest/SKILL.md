@@ -22,12 +22,16 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    - If the URL needs SSO and the user has the file: `kb add FILE --url URL ...`.
    - For papers, add `--identifier arxiv=... --identifier doi=...`.
    - Datasets: `--kind dataset --set format=csv`, then `kb data describe ID`.
+   - Files committed in a DataLad dataset are added by reference (kb records
+     the dataset as a source item; nothing is copied). If a file there is
+     not saved yet, ask the user to `datalad save` it first rather than
+     copying it into the store.
    - Snapshots from the conditions DB, elog etc.:
      `--kind snapshot --set system=... --set query="..." --set retrieved=<datetime>`.
    - **Material that has versions or lives in several places** (a talk's
      materials re-uploaded on Indico, copies on EOS as `v1/`, `v2/`, a
      DataLad dataset): make an **asset** (`kb asset new --type fileset`),
-     bind its sources (`kb asset bind ... --source fs|url ...`), then run
+     bind its sources (`kb asset bind ... --source fs|url|datalad ...`), then run
      `kb asset scan --register`. Point the document's rendition at it with
      the location `{"type": "asset", "asset": ID, "version": LABEL, "path": FILE}`.
      See `kb asset --help`.

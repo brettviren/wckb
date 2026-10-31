@@ -50,7 +50,8 @@ Commands by thing (kb THING --help):
   item       Items: change, correct, withdraw, edit, inspect derivation, schemas.
   rendition  Renditions of an item: add, mirror, extract text, get a file, verify.
   asset      Assets: abstract files and file sets, their versions, and the sources that supply them.
-  source     Data sources: where content and asset versions can come from.
+  source     Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items
+             use.
   kset       Knowledge sets: selections of items, the unit of transfer.
   edge       Edges to neighbor stores (up, down, peer, twin), and what moved along them.
   bundle     Bundles: a knowledge set and its items in one self-checking file.
@@ -142,8 +143,9 @@ Options:
   --license TEXT
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
   --via TEXT                      Tool or session making the item (e.g. claude-code).
-  --place [auto|db|cas|local|none]
-                                  Where content goes: auto = in the store if small, else the content
+  --place [auto|db|cas|local|datalad|none]
+                                  Where content goes: auto = left in its DataLad dataset if
+                                  committed there, else in the store if small, else the content
                                   store (cas), else local-only.  [default: auto]
   --cas TEXT                      Content store (cas) to use (default: 'default').
   --url TEXT                      Canonical URL of a single local file (e.g. Indico behind SSO).
@@ -159,7 +161,7 @@ Options:
 
 ```
 Usage: kb new [OPTIONS] {observation|document|dataset|config|snapshot|software|topic|view|person|pol
-              icy|kset|asset}
+              icy|kset|asset|source}
 
   Make a new item of KIND.
 
@@ -224,7 +226,7 @@ Usage: kb ls [OPTIONS]
   List items (current ones unless --all), newest first.
 
 Options:
-  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset|asset]
+  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset|asset|source]
   --subject TEXT                  Subject path or prefix.
   --runs TEXT                     Overlapping run range: N or FIRST-LAST.
   --status [draft|unverified|verified|disputed]
@@ -820,7 +822,7 @@ Usage: kb asset bind [OPTIONS] REF NAME
     kb asset bind as-... indico --source url --set url=https://indico.example/.../slides.pdf
 
 Options:
-  --source TEXT                   Source type (kb source list lists them): fs, url, kb ...
+  --source TEXT                   Source type (kb source types lists them): fs, url, datalad, kb ...
                                   [required]
   --locator TEXT                  Source-specific identifiers as JSON, e.g. '{"root": "eos-group",
                                   "path": "talks/x"}'.
@@ -909,14 +911,22 @@ Options:
 ```
 Usage: kb source [OPTIONS] COMMAND [ARGS]...
 
-  Data sources: where content and asset versions can come from.
+  Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.
 
 Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  list  Data source types: location sources (where a rendition's bytes are) and asset sources (what
-        bindings use).
+  list   Source items in this store (DataLad datasets ...), and whether each is on this machine.
+  show   One source: its identity, where it can be had from, its clone here, and the items using it.
+  add    Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a
+         source item.
+  clone  Make sure this machine has a clone of source REF (content is still fetched only when
+         needed).
+  link   Tell kb that PATH is a clone of source REF (checked by dataset ID); every store of yours
+         will use it.
+  types  Kinds of data source: location sources (where a rendition's bytes are) and asset sources
+         (what bindings use).
 ```
 
 ## kb source list
@@ -924,7 +934,75 @@ Commands:
 ```
 Usage: kb source list [OPTIONS]
 
-  Data source types: location sources (where a rendition's bytes are) and asset sources (what
+  Source items in this store (DataLad datasets ...), and whether each is on this machine.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb source show
+
+```
+Usage: kb source show [OPTIONS] REF
+
+  One source: its identity, where it can be had from, its clone here, and the items using it.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb source add
+
+```
+Usage: kb source add [OPTIONS] TARGET
+
+  Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a source
+  item.
+
+  A dataset this store already describes gains the new URL or path instead.
+
+    kb source add ~/data/tpc-calib                     # a dataset you have (its remotes are recorded)
+    kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+
+Options:
+  --title TEXT
+  --summary TEXT
+  -h, --help      Show this message and exit.
+```
+
+## kb source clone
+
+```
+Usage: kb source clone [OPTIONS] REF
+
+  Make sure this machine has a clone of source REF (content is still fetched only when needed).
+
+Options:
+  --to DIRECTORY  Where (default: the existing clone, or sources.datalad.dir, or ask if
+                  sources.datalad.new = ask).
+  -h, --help      Show this message and exit.
+```
+
+## kb source link
+
+```
+Usage: kb source link [OPTIONS] REF PATH
+
+  Tell kb that PATH is a clone of source REF (checked by dataset ID); every store of yours will use
+  it.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb source types
+
+```
+Usage: kb source types [OPTIONS]
+
+  Kinds of data source: location sources (where a rendition's bytes are) and asset sources (what
   bindings use).
 
 Options:

@@ -10,7 +10,7 @@ kb --version
 Optional features need extras:
 
 ```
-uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
+uv tool install 'wckb[pdf,pptx,root,datalad] @ git+https://...'
 ```
 
 | extra | adds |
@@ -18,6 +18,7 @@ uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
 | `pdf` | PyMuPDF |
 | `pptx` | slide extraction |
 | `root` | ROOT file summaries |
+| `datalad` | DataLad datasets as sources (also needs git-annex; see [datalad](datalad.md)) |
 
 `kb` also uses `pdftotext` (poppler) and `pandoc` when they're installed.
 

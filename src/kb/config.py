@@ -214,4 +214,17 @@ def access_rank(level: str) -> int:
 
 
 def cache_home() -> Path:
-    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "kb"
+    """The user's kb cache: $XDG_CACHE_HOME/wckb (snapshots of neighbors, source directories ...)."""
+    return Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "wckb"
+
+
+def source_settings(raw: dict, source_type: str) -> dict:
+    """Settings of one source type: ``[sources.<type>]`` (store, user config or .kb/local.toml)."""
+    return raw.get("sources", {}).get(source_type, {}) or {}
+
+
+def source_dir(raw: dict, source_type: str) -> Path:
+    """Where a source type keeps local copies on this machine (URL downloads, DataLad clones):
+    ``sources.<type>.dir``, by default under the user cache."""
+    d = source_settings(raw, source_type).get("dir")
+    return Path(os.path.expandvars(str(d))).expanduser() if d else cache_home() / source_type

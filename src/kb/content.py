@@ -88,17 +88,19 @@ def default_cas(kb) -> str | None:
 
 
 def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
-    """Download *url* into the cache; return (path, sha256, size)."""
-    kb.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
+    """Download *url* into the url source directory (content-addressed); return (path, sha256, size)."""
+    from .config import source_dir
+    tmpdir = source_dir(kb.cfg.raw, "url")
+    tmpdir.mkdir(parents=True, exist_ok=True)
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp, \
-                tempfile.NamedTemporaryFile(dir=kb.cfg.cache_dir, delete=False) as tmp:
+                tempfile.NamedTemporaryFile(dir=tmpdir, delete=False) as tmp:
             shutil.copyfileobj(resp, tmp)
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise KBError(f"cannot fetch {url}: {exc}") from exc
     tmp_path = Path(tmp.name)
     sha, size = sha256_file(tmp_path)
-    dest = cache_path(kb, sha)
+    dest = locations.url_cache_path(kb, sha)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp_path.replace(dest)
     return dest, sha, size
@@ -108,19 +110,25 @@ def resolve(kb, rec, rendition: dict, fetch_urls: bool = True, verify: bool = Fa
     return locations.resolve(kb, rec, rendition, fetch=fetch_urls)
 
 
-PLACE_MODES = ("auto", "db", "cas", "local", "none")
+PLACE_MODES = ("auto", "db", "cas", "local", "datalad", "none")
 
 
 def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = None) -> tuple[list[dict], str, int]:
     """Put *src* where *mode* says; return (locations, sha256, size).
 
-    ``auto``: small files in the store's database, large ones in the
-    content-addressed store if there is one, else recorded as local to this
-    host.  ``none`` items only the hash (the content lives at a URL).
+    ``auto``: a file committed in a DataLad dataset stays there (when DataLad
+    support is installed); otherwise small files go in the store's database,
+    large ones in the content-addressed store if there is one, else are
+    recorded as local to this host.  ``datalad`` insists on the dataset.
+    ``none`` records only the hash (the content lives at a URL).
     """
     if mode not in PLACE_MODES:
-        raise KBError(f"store mode must be one of {', '.join(PLACE_MODES)}")
+        raise KBError(f"--place must be one of {', '.join(PLACE_MODES)}")
     sha, size = sha256_file(src)
+    if mode in ("auto", "datalad"):
+        loc = _datalad_location(kb, src, required=mode == "datalad")
+        if loc is not None:
+            return [loc], sha, size
     if mode == "auto":
         if size <= kb.cfg.max_inline_bytes:
             mode = "db"
@@ -143,6 +151,31 @@ def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = No
     if mode == "local":
         return [{"type": "local", "host": kb.cfg.host, "path": str(src.resolve())}], sha, size
     return [], sha, size
+
+
+def _datalad_location(kb, src: Path, required: bool) -> dict | None:
+    """A datalad location for SRC if it is committed, unchanged, in a DataLad dataset."""
+    from . import datasets
+    root = datasets.dataset_root(src.parent)
+    if root is None:
+        if required:
+            raise KBError(f"{src} is not inside a DataLad dataset")
+        return None
+    if datasets.available() is not None:
+        if required:
+            datasets.need()
+        return None
+    rel = (src.parent.resolve() / src.name).relative_to(root).as_posix()   # annexed files are symlinks: keep the name
+    tf = datasets.tracked(root, rel)
+    if tf is None:
+        if required:
+            raise KBError(f"{rel} is not committed (or has changed) in the dataset at {root}: datalad save it first")
+        return None
+    srcitem = datasets.ensure_source(kb, root)
+    loc = {"type": "datalad", "source": srcitem.id, "path": rel}
+    if tf.key:
+        loc["key"] = tf.key
+    return loc
 
 
 def place_bytes(kb, data: bytes, filename: str) -> tuple[list[dict], str, int]:

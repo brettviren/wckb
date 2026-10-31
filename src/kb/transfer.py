@@ -28,9 +28,9 @@ from . import content
 from .config import access_rank
 from .errors import KBError
 from .ids import parse_ref
-from .items import Store, Item, blob_shas, canonical, core, fixed_compatible, is_frozen, now
+from .items import Store, Item, blob_shas, canonical, core, fixed_compatible, is_frozen, now, source_refs
 REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "related")
-MUTABLE_LISTS = ("subject", "tags", "evidence", "related")
+MUTABLE_LISTS = ("subject", "tags", "evidence", "related", "urls", "paths")
 MUTABLE_SCALARS = ("status", "summary", "license")
 MUTABLE = MUTABLE_SCALARS + MUTABLE_LISTS + ("identifiers",)
 
@@ -64,8 +64,10 @@ def expand(kset: dict, lookup: Callable[[str], dict | None]) -> Expansion:
     them (the fields in ``follow``), recursively.  A member, or a reference
     reached deeply, that is itself a set contributes its members, at its own
     depth (``nested = "follow"``, the default) or at the depth in force where
-    it was reached (``nested = "inherit"``).  Missing items are reported,
-    not fatal: references are store-independent.
+    it was reached (``nested = "inherit"``).  Whatever the depth, the source
+    items an included item needs for its content (a DataLad dataset ...) come
+    along.  Missing items are reported, not fatal: references are
+    store-independent.
     """
     nested = kset.get("nested", "follow")
     follow = [f for f in kset.get("follow", REF_FIELDS) if f != "members"]
@@ -93,6 +95,8 @@ def expand(kset: dict, lookup: Callable[[str], dict | None]) -> Expansion:
             child = own if (ident == kset["id"] or nested == "follow") else mode
             for m in refs_of(data, ["members"]):
                 queue.append((m, child, ident, True))
+        for r in source_refs(data):
+            queue.append((r, "shallow", ident, False))
         if mode == "deep":
             for r in refs_of(data, follow):
                 queue.append((r, "deep", ident, False))
@@ -272,11 +276,18 @@ def plan(sender, dst: Store, kset: dict, *, prefer: str = "ours", access: str | 
             relabeled.append(ident)
         if sender.cfg.id != dst.cfg.id:      # twins are one store: provenance stays as it was
             data["origin"] = _origin(sender, rec, kset["id"])
-        items.append(classify(data, rec, dst.items.get(ident), sender.cfg.id, prefer))
+        entry = classify(data, rec, dst.items.get(ident), sender.cfg.id, prefer)
+        if entry.action == "new" and data.get("kind") == "source":
+            same = [r.id for r in dst.items.values() if r.kind == "source" and r.id != ident
+                    and (r.data.get("source_type"), r.data.get("source_id")) == (data["source_type"], data["source_id"])]
+            if same:
+                entry.notes.append(f"the same {data['source_type']} source as {', '.join(same)} here: "
+                                   "they share its local copy")
+        items.append(entry)
     sent = {i.id for i in items} | {kset["id"]}
     dangling = []
     for it in items:
-        for r in refs_of(it.data, REF_FIELDS):
+        for r in refs_of(it.data, REF_FIELDS) + source_refs(it.data):
             if r not in sent and r not in dst.items and r not in dangling:
                 dangling.append(r)
     return Plan(items, exp, dangling, relabeled)

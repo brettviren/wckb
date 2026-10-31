@@ -30,6 +30,9 @@ class Ctx:
                 if "network filesystem" not in str(exc):
                     raise
                 self._kb = Store.open(self.root, readonly=True)   # reading is fine; writes will say why not
+            if sys.stdin.isatty():           # a person is here: ask where new DataLad clones go (if so configured)
+                from . import datasets
+                datasets.ASK = _ask_location
         return self._kb
 
 
@@ -131,7 +134,8 @@ item_grp = group("item", "Items: change, correct, withdraw, edit, inspect deriva
 rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract text, get a file, verify.",
                       order=["path", "add", "extract", "transforms", "locate", "verify"])
 asset_grp = group("asset", "Assets: abstract files and file sets, their versions, and the sources that supply them.")
-source_grp = group("source", "Data sources: where content and asset versions can come from.")
+source_grp = group("source", "Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.",
+                   order=["list", "show", "add", "clone", "link", "types"])
 kset_grp = group("kset", "Knowledge sets: selections of items, the unit of transfer.")
 edge_grp = group("edge", "Edges to neighbor stores (up, down, peer, twin), and what moved along them.",
                  order=["list", "add", "remove", "fetch", "candidates", "ledger"])
@@ -281,8 +285,9 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
               show_default=True)
 @item_options
 @click.option("--place", "mode", default="auto", show_default=True,
-              type=click.Choice(["auto", "db", "cas", "local", "none"]),
-              help="Where content goes: auto = in the store if small, else the content store (cas), else local-only.")
+              type=click.Choice(["auto", "db", "cas", "local", "datalad", "none"]),
+              help="Where content goes: auto = left in its DataLad dataset if committed there, else in the store "
+                   "if small, else the content store (cas), else local-only.")
 @click.option("--cas", "cas_name", help="Content store (cas) to use (default: 'default').")
 @click.option("--url", help="Canonical URL of a single local file (e.g. Indico behind SSO).")
 @click.option("--no-fetch", is_flag=True, help="Record URLs without downloading (no hash).")
@@ -1307,7 +1312,7 @@ def asset_new_cmd(c, asset_type, title, summary, subject, match):
 @command(asset_grp, "bind", no_args_is_help=True)
 @click.argument("ref")
 @click.argument("name")
-@click.option("--source", "source_type", required=True, help="Source type (kb source list lists them): fs, url, kb ...")
+@click.option("--source", "source_type", required=True, help="Source type (kb source types lists them): fs, url, datalad, kb ...")
 @click.option("--locator", help="Source-specific identifiers as JSON, e.g. '{\"root\": \"eos-group\", \"path\": \"talks/x\"}'.")
 @click.option("--set", "sets", multiple=True, help="Locator field key=value (repeatable), instead of --locator.")
 @click.option("--versioning", default="none", type=click.Choice(["none", "native", "pattern", "map"]), show_default=True,
@@ -1428,18 +1433,109 @@ def asset_resolve_cmd(c, ref, member, dest, no_remote, json_out):
         click.echo(f"  note: {n}")
 
 
-@command(source_grp, "list")
+@command(source_grp, "types")
 @click.option("--json", "json_out", is_flag=True)
-def source_list_cmd(json_out):
-    """Data source types: location sources (where a rendition's bytes are) and asset sources (what bindings use)."""
+def source_types_cmd(json_out):
+    """Kinds of data source: location sources (where a rendition's bytes are) and asset sources (what bindings use)."""
     from .assets import sources_table as asset_sources
     from .locations import sources_table as location_sources
     rows = location_sources() + asset_sources()
     if json_out:
         return ui.emit_json(rows)
     for r in rows:
-        click.echo(f"{r['interface']:<9} {r['type']:<8} {r['status']:<12} {r['what']}"
+        state = r["status"] if r["available"] or r["status"] != "implemented" else "unavailable"
+        click.echo(f"{r['interface']:<9} {r['type']:<8} {state:<12} {r['what']}"
                    + (f"  locator {r['locator']}" if r.get("locator") else ""))
+        if r.get("needs"):
+            click.echo(f"{'':<31}needs: {r['needs']}")
+
+
+def _ask_location(rec, suggestion):
+    """Ask where a new DataLad clone goes (only when a person is at the terminal)."""
+    click.echo(f"DataLad dataset {rec.data.get('title')} ({rec.id}) is not on this machine.", err=True)
+    answer = click.prompt("Clone it to (empty: don't)", default=str(suggestion), err=True).strip()
+    return Path(answer).expanduser() if answer else None
+
+
+@command(source_grp, "list")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def source_list_cmd(c, json_out):
+    """Source items in this store (DataLad datasets ...), and whether each is on this machine."""
+    from .datasets import report_all
+    rows = report_all(c.kb)
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        click.echo(f"{r['id']:<16} {r['type']:<8} {r['title']}")
+        click.echo(f"{'':<16} {'clone: ' + r['clone'] if r['clone'] else 'not on this machine'}; "
+                   f"used by {len(r['used_by'])} item(s)" + (f"; same as {', '.join(r['same_as'])}" if r["same_as"] else ""))
+    if not rows:
+        ui.info("no sources yet (kb source add PATH|URL)")
+
+
+@command(source_grp, "add", no_args_is_help=True)
+@click.argument("target")
+@click.option("--title")
+@click.option("--summary")
+@pass_ctx
+def source_add_cmd(c, target, title, summary):
+    """Describe the DataLad dataset at TARGET (a local dataset directory, or a URL to clone) as a source item.
+
+    A dataset this store already describes gains the new URL or path instead.
+
+    \b
+      kb source add ~/data/tpc-calib                     # a dataset you have (its remotes are recorded)
+      kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+    """
+    from . import datasets
+    rec = datasets.describe(c.kb, target, title, summary)
+    click.echo(rec.id)
+    ui.info(f"{rec.data['title']}: DataLad dataset {rec.data['source_id']}")
+
+
+@command(source_grp, "show", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def source_show_cmd(c, ref, json_out):
+    """One source: its identity, where it can be had from, its clone here, and the items using it."""
+    from . import datasets
+    r = datasets.report(c.kb, datasets.source_item(c.kb, ref))
+    if json_out:
+        return ui.emit_json(r)
+    click.echo(f"{r['id']}  {r['title']}  ({r['type']} {r['source_id']})")
+    for u in r["urls"]:
+        click.echo(f"  url    {u}")
+    for p in r["paths"]:
+        click.echo(f"  path   {p['host']}:{p['path']}")
+    click.echo(f"  here   {r['clone'] or 'not on this machine (kb source clone ' + r['id'] + ')'}")
+    if r["same_as"]:
+        click.echo(f"  same dataset as {', '.join(r['same_as'])} (one clone serves them all)")
+    click.echo(f"  used by {len(r['used_by'])} item(s)" + (": " + " ".join(r["used_by"][:8]) if r["used_by"] else ""))
+
+
+@command(source_grp, "clone", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--to", "dest", type=click.Path(file_okay=False, path_type=Path),
+              help="Where (default: the existing clone, or sources.datalad.dir, or ask if sources.datalad.new = ask).")
+@pass_ctx
+def source_clone_cmd(c, ref, dest):
+    """Make sure this machine has a clone of source REF (content is still fetched only when needed)."""
+    from . import datasets
+    path, made = datasets.clone(c.kb, ref, dest)
+    click.echo(path)
+    ui.info("cloned" if made else "already here")
+
+
+@command(source_grp, "link", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("path", type=click.Path(file_okay=False, exists=True, path_type=Path))
+@pass_ctx
+def source_link_cmd(c, ref, path):
+    """Tell kb that PATH is a clone of source REF (checked by dataset ID); every store of yours will use it."""
+    from . import datasets
+    click.echo(datasets.link(c.kb, ref, path))
 
 
 # -- bundles, inbox, review ----------------------------------------------------------

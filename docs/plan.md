@@ -14,7 +14,8 @@ Deliverables:
 | Item model, IDs, canonical JSON and digest | `src/kb/items.py`, `ids.py` | done |
 | Configuration: store settings, user config, `.kb/local.toml`, `KB_*` env | `src/kb/config.py` | done |
 | The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `items.py` | done |
-| Data sources (polymorphic): db, cas, url, local, annex (experimental) | `src/kb/sources.py`, `store.py` | done |
+| Data sources (polymorphic): db, cas, url, local, asset, datalad | `src/kb/locations.py`, `content.py` | done |
+| DataLad datasets: source items, clones by dataset ID, `datalad` locations and asset source (optional extra) | `src/kb/datasets.py` | done |
 | `kb check` (gate) and `kb lint` (advice) | `src/kb/checks.py`, `lint.py` | done |
 | Append-only in the database; consistency and tamper scan | `src/kb/db.py`, `checks.py` | done |
 | Query tables, full-text search, faceted listing | `src/kb/query.py` | done |
@@ -95,8 +96,9 @@ Steps:
 Rendering next steps (TUI, web, thumbnails) are in [rendering.md](rendering.md),
 and data sources (DataLad, Indico) in questions DS1–DS4. The next sources
 are asset sources ([decision 0002](decisions/0002-assets-and-versions.md)):
-DataLad (`annex`, after spike S3), then Indico and DocDB once questions V1
-and V2 are answered.
+DataLad is done ([decision 0003](decisions/0003-datalad-sources.md)); Indico
+and DocDB follow once questions V1 and V2 are answered, as source items
+like DataLad datasets.
 
 Planned, in rough priority order. Open design questions are tracked in
 [questions.md](questions.md):

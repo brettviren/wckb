@@ -9,7 +9,7 @@ outlives renames, moves and new content.  Three things hang off it:
   identity: once recorded it never changes (the store's triggers guard it),
   so a label can never quietly come to mean different bytes.
 * **bindings** to concrete *sources*: a directory tree on a filesystem, a
-  URL, the store itself (``kb``), and later DataLad, Indico, DocDB ...  Each
+  URL, the store itself (``kb``), a DataLad dataset, and later Indico, DocDB ...  Each
   binding carries the source's own concrete identifiers (its *locator*) and
   says how the source's versions relate to the asset's (*versioning*):
   ``none`` (the source has only its current content), ``native`` (its
@@ -39,7 +39,7 @@ from . import content
 from .errors import KBError
 from .items import Store, Item, canonical, now
 
-DEFAULT_PRIORITY = {"kb": 0, "fs": 10, "annex": 20, "docdb": 40, "url": 50, "indico": 60}
+DEFAULT_PRIORITY = {"kb": 0, "fs": 10, "datalad": 20, "docdb": 40, "url": 50, "indico": 60}
 
 
 # -- manifests and digests ------------------------------------------------------------
@@ -297,6 +297,88 @@ class UrlSource(AssetSource):
         return loc.get("url") or f"{len(loc.get('urls', {}))} URLs"
 
 
+class DataladSource(AssetSource):
+    """A DataLad dataset described by a source item.  locator: {source: src-..., path: within the dataset}.
+
+    Versions: ``native`` (or ``map``) = the dataset's git tags; ``pattern`` = paths in the
+    current tree; ``none`` = the current tree.  Files are listed from git without fetching
+    content; hashes come from SHA256 annex keys where the dataset uses them, otherwise
+    content is fetched (on demand) and hashed once.
+    """
+    type = "datalad"
+    describe_text = "a DataLad dataset (git + git-annex): versions are tags; content fetched on demand"
+    locator_doc = "{source: src-..., path}"
+
+    def check_locator(self, locator, asset_type):
+        if not str(locator.get("source", "")).startswith("src-"):
+            raise KBError("a datalad binding needs source (a src-... item; kb source add makes one) and path")
+
+    def _cfile(self, kb, root, tf, rel: str, remote: bool) -> CFile:
+        from . import datasets
+
+        def fetch():
+            p = datasets.content(kb, root, tf, fetch=remote)
+            if p is None:
+                raise KBError(f"{tf.path}: content not present in {root} (and remote access is off)")
+            return p
+        return CFile(rel, tf.size, tf.sha256, fetch=fetch)
+
+    def offers(self, kb, asset, binding, remote=True):
+        from . import datasets
+        loc = binding["locator"]
+        src = kb.items.get(loc["source"])
+        if src is None:
+            raise KBError(f"source {loc['source']} is not in this store (kb pull {loc['source']})")
+        root = datasets.locate(kb, src, clone=remote and datasets.available() is None)
+        if root is None:
+            return []
+        sub = loc.get("path", "").strip("/")
+        atype, versioning = asset.data["asset_type"], binding.get("versioning", "none")
+        title = src.data.get("title", src.id)
+        out = []
+
+        def offer(native, rev, base):
+            tfs = datasets.ls(root, rev, base)
+            if atype == "file":
+                tfs = [t for t in tfs if t.path == base]
+                files = [self._cfile(kb, root, t, Path(t.path).name, remote) for t in tfs]
+            else:
+                files = [self._cfile(kb, root, t, t.path[len(base) + 1:] if base else t.path, remote)
+                         for t in tfs if not base or t.path.startswith(base + "/")]
+            if files:
+                out.append(Offer(binding["name"], self.type, native, _label_for(binding, native), files,
+                                 f"{title}:{base}" + (f"@{rev}" if rev != "HEAD" else "")))
+
+        if versioning == "none":
+            offer(None, "HEAD", sub)
+        elif versioning in ("native", "map"):
+            for t in datasets.tags(root, refresh=remote):
+                offer(t, t, sub)
+        else:
+            pattern = binding.get("pattern")
+            if not pattern:
+                raise KBError(f"binding {binding['name']}: versioning pattern needs a pattern such as '{{version}}'")
+            rx = _pattern_regex(pattern.rstrip("/"))
+            rels = [t.path[len(sub) + 1:] if sub else t.path for t in datasets.ls(root, "HEAD", sub)]
+            cands = set(rels) if atype == "file" else {"/".join(r.split("/")[:i]) for r in rels
+                                                        for i in range(1, r.count("/") + 1)}
+            for rel in sorted(cands):
+                m = rx.match(rel)
+                if m:
+                    offer(m["version"], "HEAD", f"{sub}/{rel}" if sub else rel)
+        return out
+
+    def describe(self, kb, binding):
+        from . import datasets
+        loc = binding["locator"]
+        src = kb.items.get(loc["source"])
+        root = datasets.locate(kb, src) if src else None
+        v = binding.get("versioning", "none")
+        return (f"DataLad dataset {src.data.get('title') if src else loc['source']}:{loc.get('path', '')}"
+                + (f" (clone at {root})" if root else " (not cloned here)")
+                + ("" if v == "none" else f", versions by {'tags' if v in ('native', 'map') else binding.get('pattern')}"))
+
+
 class PlannedSource(AssetSource):
     status = "planned"
 
@@ -314,9 +396,7 @@ def register_source(s: AssetSource) -> None:
     SOURCES[s.type] = s
 
 
-for _s in (KbSource(), FsSource(), UrlSource(),
-           PlannedSource("annex", "a DataLad dataset: versions are commits or tags (spike S3)",
-                         "{dataset, path}"),
+for _s in (KbSource(), FsSource(), UrlSource(), DataladSource(),
            PlannedSource("indico", "Indico materials: attachments of an event or contribution",
                          "{server, event, contribution?, attachment?}"),
            PlannedSource("docdb", "a DocDB document: each version has its own file set",
@@ -723,6 +803,12 @@ def materialize(res: Resolution, dest: Path) -> list[Path]:
 
 
 def sources_table() -> list[dict]:
-    return [{"interface": "asset", "type": s.type, "status": s.status, "what": s.describe_text,
-             "locator": getattr(s, "locator_doc", "")} for s in SOURCES.values()]
+    from . import datasets
+    out = []
+    for s in SOURCES.values():
+        why = datasets.available() if s.type == "datalad" else None
+        out.append({"interface": "asset", "type": s.type, "status": s.status, "what": s.describe_text,
+                    "locator": getattr(s, "locator_doc", ""), "available": s.status == "implemented" and why is None,
+                    "needs": f"{why}: {datasets.INSTALL}" if why else ""})
+    return out
 

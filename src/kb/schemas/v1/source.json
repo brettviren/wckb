@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/source.json",
+  "title": "Source",
+  "description": "One concrete data source that renditions and asset bindings refer to, such as a DataLad dataset. Its identity (source_type, source_id) never changes; the places it can be had from (urls, paths) are united as it travels. Where it is on a given machine (a local clone) is that machine's business: see kb source show.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "item.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "source"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^src-"
+    },
+    "source_type": {
+      "description": "The kind of source (kb source types lists them).",
+      "enum": [
+        "datalad"
+      ]
+    },
+    "source_id": {
+      "description": "The source's own global identity: for DataLad, the dataset ID (a UUID).",
+      "type": "string",
+      "minLength": 1
+    },
+    "urls": {
+      "description": "Where it can be cloned or fetched from (for DataLad: anything datalad clone accepts: https, ssh, ria+...).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "paths": {
+      "description": "Local file trees holding it, by host (a shared filesystem path is usable by everyone on that host).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "source_type",
+    "source_id"
+  ],
+  "unevaluatedProperties": false
+}
