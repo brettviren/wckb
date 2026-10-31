@@ -28,11 +28,11 @@ def sync(kb: Store, names: list[str] | None = None) -> list[dict]:
     twins = [n for n in neighbors(kb) if n.relation == "twin" and (not names or n.name in names)]
     if not twins:
         raise KBError("no twin neighbors" + (f" named {', '.join(names)}" if names else "")
-                      + "; kb neighbor add NAME --relation twin --path PATH (or --url SNAPSHOT)")
+                      + "; kb edge add NAME --relation twin --path PATH (or --url SNAPSHOT)")
     out = []
     for n in twins:
         if not n.available:
-            out.append({"twin": n.name, "result": "not available here (kb neighbor fetch, or a path)"})
+            out.append({"twin": n.name, "result": "not available here (kb edge fetch, or a path)"})
             continue
         other = open_store(n.location, readonly=not n.writable)
         if other.cfg.id != kb.cfg.id:

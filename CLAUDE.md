@@ -21,15 +21,24 @@ in scope.
 - `cli.py` parses arguments, calls logic modules and renders through `ui.py`.
   No data processing goes in either. Every subcommand with required
   arguments shows its help when given none.
+- The command tree: everyday verbs at the top, then one family per thing
+  (a glossary noun: `kb item`, `kb edge`, `kb inbox` ...); see "The command
+  line" in `docs/glossary.md`. Put a new command in the family of the thing
+  it acts on, and name it for what it does, not for the format or tool.
+  Top-level sections are `cli.SECTIONS`; a family's listing order is its
+  `order`. After changing commands run `uv run python tools/gen_cli_doc.py`
+  (a test checks `docs/reference/cli.md`).
 - The store is one SQLite file per store: `db` (DDL, guard triggers,
   transactions, the network-filesystem guard) and `items` (`Store`: items,
   blobs, events, settings, query tables kept in step on every write).
   Item JSON stays validated by JSON Schema on every write.
 - Logic modules: `items` (model, digest, `Store`), `authoring` (new/add/supersede),
-  `edit` (set, renditions, content, checkout/checkin), `sources` (data sources:
-  db, cas, url, local, annex), `store` (placing content, hashing, fetch), `checks`
+  `edit` (set, renditions, content, checkout/checkin), `locations` (location
+  sources: db, cas, url, local, asset, annex), `assets` (assets, bindings, asset
+  sources), `content` (placing content, hashing, fetch, verify), `checks`
   (consistency scan), `lint` (advice), `graph` (staleness, stamping), `build` (views),
-  `index`/`search`/`embed`/`context`, `transforms`, `fair`, `migrate`,
+  `query`/`search`/`embed`/`context`, `transforms`, `fair` (data describe and
+  export), `migrate`,
   `scaffold`, `federation` (neighbors) and `federated` (cross-store
   queries), `transfer` (knowledge sets, atomic transfers, multi-path
   reconciliation), `bundle` (bundles, inbox, reviews), `render` (view models
@@ -38,7 +47,7 @@ in scope.
   (Claude Code hook entry points), `githooks` (git hooks for exchange repositories), `forge`
   (GitHub/Gitea/Forgejo/Gogs APIs) and `secrets` (secret specs).
 - Schemas: hand-written JSON Schema in `src/kb/schemas/v<N>/`. After
-  changing them, run `uv run kb schema --markdown > docs/reference/schema.md`
+  changing them, run `uv run kb item schema --markdown > docs/reference/schema.md`
   (a test checks this). Additive changes bump `schema.REVISION`. Breaking
   changes bump `MAJOR` and add a migration in `migrate.MIGRATIONS` with a test.
 - Builtin policy elements live in `src/kb/data/`. Bump an element's

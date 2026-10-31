@@ -19,7 +19,7 @@ Push it to the forge, and have contributors clone it. A contributor then
 links it to their edge to the store:
 
 ```
-kb neighbor add tpc --relation up --url https://example.org/kb/tpc.sqlite --land pr --exchange ~/exchange/tpc
+kb edge add tpc --relation up --url https://example.org/kb/tpc.sqlite --land pr --exchange ~/exchange/tpc
 kb push --to tpc obs-…                 # commits the bundle on a branch, pushes it, opens the pull request
 ```
 
@@ -35,9 +35,9 @@ kb -C /data/kb/tpc inbox import ~/exchange/tpc --accept   # the pull request was
 ## Git hooks
 
 ```
-kb git hooks install [--repo PATH]    # pre-commit, pre-push, post-merge
-kb git hooks status  [--repo PATH]
-kb git hooks remove  [--repo PATH]
+kb exchange hooks install [--repo PATH]    # pre-commit, pre-push, post-merge
+kb exchange hooks status  [--repo PATH]
+kb exchange hooks remove  [--repo PATH]
 ```
 
 | hook | effect |
@@ -53,7 +53,7 @@ How installation behaves:
   takes out only kb's block.
 - It respects `core.hooksPath`.
 - `kb exchange init` installs the hooks. Hooks aren't cloned, so after
-  cloning an exchange repository, run `kb git hooks install` once.
+  cloning an exchange repository, run `kb exchange hooks install` once.
 
 In an emergency, `git commit --no-verify` skips the hooks. CI checks again
 ([ci](ci.md)).

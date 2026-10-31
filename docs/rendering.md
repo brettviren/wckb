@@ -31,7 +31,7 @@ Rendering has two stages, so that every front end shows the same thing:
 
    | format | where | status |
    |---|---|---|
-   | terminal text | `kb render`, `kb bundle show`, `kb review show` | done |
+   | terminal text | `kb show`, `kb bundle show`, `kb inbox show` | done |
    | markdown | `--format md`: pull request descriptions (`--land pr`), LLM reading, pasting into chats and email | done |
    | JSON (the view model itself) | `--format json`: LLMs, scripts, future front ends | done |
    | TUI | navigable tree and item panes in a terminal | planned |
@@ -63,7 +63,7 @@ Next:
 
 - **TUI** ([Textual](https://textual.textualize.io/) is a good fit: pure
   Python and fast). A tree on the left, the selected item's card on the
-  right. Keys to expand and collapse, open the material (`kb path`), jump
+  right. Keys to expand and collapse, open the material (`kb rendition path`), jump
   along references, and, in review mode, record a note or verdict.
 - **Web** (Flask, or FastAPI plus htmx; server-rendered, with no build
   step). A page per item and per bundle, a collapsible set tree, and
@@ -78,7 +78,7 @@ Next:
   autonomy). Authentication comes from the host (a reverse proxy with the
   lab's SSO) rather than from kb. A read-only mode serves a published
   snapshot.
-- **Static HTML export** (`kb render --format html`, and
+- **Static HTML export** (`kb show --format html`, and
   `kb bundle show --format html`): one self-contained file, so a bundle
   can be reviewed by email or on a web server with no kb installed.
 
@@ -93,7 +93,7 @@ able to see:
 - **Plots and figures:** images that *are* the data are shown. Plots that a
   view makes are shown from the view's published output.
 - **Long text:** the excerpt, with a "full text" link to the whole rendition
-  (web), or `kb content ID NAME` (terminal).
+  (web), or `kb item content ID NAME` (terminal).
 - **External material:** a link always; a cached copy when the reviewer's
   machine can fetch it (Indico behind SSO: through the data source's
   credentials).
@@ -107,7 +107,7 @@ LLMs read the markdown or JSON rendering:
   checks.
 
 The `kb-review` skill tells Claude to judge item by item, record a
-specific review (`kb review note`), and leave the decision to the human
+specific review (`kb inbox review`), and leave the decision to the human
 unless `accept` autonomy allows otherwise. A later step is for LLM
 reviewers to attach *structured* findings (per-item verdicts, suspected
 duplicates with IDs) as JSON alongside the prose, for the web review page
@@ -115,7 +115,7 @@ to display.
 
 ## Implementation notes
 
-- The view model is the contract. New front ends consume `kb render
+- The view model is the contract. New front ends consume `kb show
   --format json` (or the Python functions) and add no logic of their own
   about what to show.
 - Rendering must stay cheap: no network calls by default. Fetching

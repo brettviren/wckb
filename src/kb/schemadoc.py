@@ -33,7 +33,7 @@ def render() -> str:
         "# Item schema reference",
         "",
         f"Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision {REVISION}) by",
-        "`kb schema --markdown`; a test keeps this file in sync. `kb schema KIND` prints",
+        "`kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints",
         "the schema itself, which is authoritative.",
         "",
         "## Fields common to every item",

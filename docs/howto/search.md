@@ -48,19 +48,19 @@ Semantic search needs an embedding service with an OpenAI-compatible
 kb config set embed '{"url": "http://127.0.0.1:8080", "model": "nomic-embed-text-v1.5", "identity": "nomic-embed-text"}'
 ```
 
-Vectors from different model identities never mix. Run `kb embed` after
+Vectors from different model identities never mix. Run `kb store embed` after
 new material arrives: only new or changed text is embedded. Vectors live in
-the store's `vectors` table, and `kb reindex` leaves them alone.
+the store's `vectors` table, and `kb store reindex` leaves them alone.
 
 ## Reading one item
 
 ```
 kb show obs-…              # the item and its neighbourhood, compact
-kb render obs-…            # for people: names, dates, links, where the material is, an excerpt
-kb render ks-… --depth 2   # a knowledge set as a tree
-kb render top-… --format md    # markdown; --format json gives the view model
-kb content top-…           # the text itself
-kb path doc-…#original     # a file with the content, for other tools
+kb show obs-…            # for people: names, dates, links, where the material is, an excerpt
+kb show ks-… --depth 2   # a knowledge set as a tree
+kb show top-… --format md    # markdown; --format view gives the view model; --json the item
+kb item content top-…           # the text itself
+kb rendition path doc-…#original     # a file with the content, for other tools
 kb log obs-…               # its history: created, changed, transferred, reviewed …
 ```
 
@@ -69,7 +69,7 @@ kb log obs-…               # its history: created, changed, transferred, revie
 The store is `kb.sqlite`, a plain SQLite file. Query tables (`subjects`,
 `runs`, `refs`, `identifiers`, `renditions`, `fts`) are kept in step on
 every write. Items are in `items` (the JSON in column `json`), and history
-is in `events`. `kb reindex` rebuilds the query tables after a repair.
+is in `events`. `kb store reindex` rebuilds the query tables after a repair.
 
 Read it, but never write it: write through `kb` only.
 
@@ -77,7 +77,7 @@ For browsing with facets in a web page, open a snapshot (or the database,
 immutably):
 
 ```
-kb snapshot /tmp/kb-view.sqlite && uvx datasette /tmp/kb-view.sqlite
+kb store snapshot /tmp/kb-view.sqlite && uvx datasette /tmp/kb-view.sqlite
 ```
 
 Some useful queries:

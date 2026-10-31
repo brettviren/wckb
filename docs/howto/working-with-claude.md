@@ -20,7 +20,7 @@ you run Claude.
 | `kb-routine` instructions | Claude consults the store before answering about the project, and files established facts as it works (`capture` autonomy) |
 | recall hook | on every prompt, a quick keyword search; up to five relevant items are added to Claude's context |
 | session hook | at session start, one line: item count, promotion candidates, stale items, policy drift |
-| check hook | when Claude edits files in a `kb checkout` directory, the checkout is validated; problems go straight back to Claude |
+| check hook | when Claude edits files in a `kb item checkout` directory, the checkout is validated; problems go straight back to Claude |
 | skills | consult, capture, ingest, correct, view, curate, promote, review (inbox), review-prs (bundle pull requests): procedures loaded only when needed |
 
 To use your home store from *every* session, enact its policy user-wide:
@@ -32,7 +32,7 @@ questions C5 first.
 Ask normally. "Was anything odd about run 1243?" or "what drift velocity
 did the 2025 production use? Check the KB." The `kb-consult` skill runs
 `kb context` and `kb search`, then answers with item IDs as citations, so
-you can check them (`kb render ID`).
+you can check them (`kb show ID`).
 
 ## Capturing knowledge from a session
 
@@ -57,7 +57,7 @@ filed.
 Items normally change only through `kb` commands, and the store itself
 refuses changes to what a source asserts. Occasionally files are the
 natural way to work, for example on a view's scripts. Then Claude uses
-`kb checkout ID DIR`, edits the files, and runs `kb checkin DIR`.
+`kb item checkout ID DIR`, edits the files, and runs `kb item checkin DIR`.
 
 While it edits files in such a directory, `kb hook check` dry-runs the
 checkin. Problems, such as changing a frozen field or breaking the schema,

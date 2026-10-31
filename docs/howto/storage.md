@@ -72,15 +72,15 @@ To let others read a store (a group store especially), publish a
 **snapshot**: a consistent single-file copy.
 
 ```
-kb snapshot /eos/experiment/group/www/kb/tpc.sqlite
+kb store snapshot /eos/experiment/group/www/kb/tpc.sqlite
 ```
 
 Don't copy `kb.sqlite` itself. Recent writes may still be in its `-wal`
 file. Readers declare the snapshot as a neighbor by URL and fetch it:
 
 ```
-kb neighbor add tpc --relation up --url https://example.org/group/kb/tpc.sqlite --shared
-kb neighbor fetch tpc
+kb edge add tpc --relation up --url https://example.org/group/kb/tpc.sqlite --shared
+kb edge fetch tpc
 ```
 
 Writes to a shared store go through bundles ([review](review.md)), never
@@ -88,7 +88,7 @@ through the snapshot.
 
 ## Backups
 
-`kb snapshot DEST` is also the backup: it's safe while the store is in use.
+`kb store snapshot DEST` is also the backup: it's safe while the store is in use.
 A nightly job writing dated snapshots next to the content store is enough
 for most stores.
 

@@ -18,7 +18,7 @@ description: Answer a question from the group knowledge base (kb) before working
    - `kb search -s "what it means"` (semantic, if embeddings are set up);
    - `kb ls --subjects` to see the subject vocabulary.
 3. Read only what you need: `kb context ID` for one item, its inputs and its
-   users; `kb content ID text` for the extracted text of a document.
+   users; `kb item content ID text` for the extracted text of a document.
 4. Answer with citations: every fact gets its item ID, e.g. "run 1243 was
    noisy [obs-7k2m9q4xha]". Say what each fact's status is
    (`unverified`/`verified`/`disputed`). Never cite superseded or retracted

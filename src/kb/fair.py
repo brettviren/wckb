@@ -129,6 +129,20 @@ def infer_resource(path: Path, name: str, sample: int = 1000) -> dict:
     }
 
 
+def describe_files(paths: list[Path]) -> dict:
+    """A Frictionless data package describing CSV/TSV files (nothing is stored)."""
+    bad = [p for p in paths if p.suffix.lower() not in (".csv", ".tsv", ".tab")]
+    if bad:
+        raise KBError(f"not CSV/TSV: {', '.join(map(str, bad))}")
+    resources = []
+    for p in paths:
+        res = infer_resource(p, p.stem)
+        res["hash"] = f"sha256:{content.sha256_file(p)[0]}"
+        resources.append(res)
+    return {"name": re.sub(r"[^a-z0-9._-]", "-", (paths[0].parent.resolve().name or "data").lower()),
+            "resources": resources}
+
+
 def datapackage(kb: Store, ident: str) -> dict:
     """Infer datapackage.json for a dataset's CSV/TSV renditions and add it as a metadata rendition."""
     rec = kb.get(ident)

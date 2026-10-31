@@ -107,11 +107,11 @@ class UrlSource(LocationSource):
         if sha and got != sha:
             who = f"{rec.id}#{rendition['name']}" if rec is not None else rendition["name"]
             raise KBError(f"{who}: {loc['url']} now has sha256 {got[:12]}…, recorded {sha[:12]}… "
-                          "(content changed upstream; see kb verify)")
+                          "(content changed upstream; see kb rendition verify)")
         return path
 
     def available(self, kb, rendition, loc):
-        return True   # assume reachable; kb verify checks
+        return True   # assume reachable; kb rendition verify checks
 
     def describe(self, kb, loc):
         return loc["url"] + (f" (needs {loc['auth']})" if loc.get("auth") else "")
@@ -204,6 +204,11 @@ def register(source: LocationSource, position: int | None = None) -> None:
 
 for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), AnnexSource()):
     register(_s)
+
+
+def sources_table() -> list[dict]:
+    return [{"interface": "location", "type": t, "status": "experimental" if t == "annex" else "implemented",
+             "what": REGISTRY[t].label} for t in ORDER if t in REGISTRY]
 
 
 def for_location(loc: dict) -> LocationSource:

@@ -57,7 +57,7 @@ def validate(data: dict) -> list[str]:
         return [f"kind: {kind!r} is not one of {', '.join(KINDS)}"]
     version = data.get("schema_version")
     if version != MAJOR:
-        return [f"schema_version: {version!r}, but this kb implements {MAJOR} (run kb migrate, or upgrade kb)"]
+        return [f"schema_version: {version!r}, but this kb implements {MAJOR} (run kb store migrate, or upgrade kb)"]
     validator = _validators(MAJOR)[kind]
     errors = sorted(validator.iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
     return [_describe(e) for e in errors]

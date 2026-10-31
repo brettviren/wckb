@@ -5,7 +5,7 @@ this scan catches everything else that can be wrong: items that fail their
 schema, kinds that disagree with IDs, content whose bytes are missing or do
 not match their hash, columns tampered with outside kb, access leaks,
 verified claims without real evidence.  Unresolved references are warnings:
-references are store-independent (``kb obtain`` fetches them).
+references are store-independent (``kb pull`` fetches them).
 """
 
 import hashlib
@@ -47,7 +47,7 @@ def _warn(code, where, msg, hint=""):
 def check_data(kb: Store, data: dict) -> list[Problem]:
     """Checks that need only this item and the store (used for incoming items too)."""
     rid = data.get("id", "?")
-    probs = [_err("schema", rid, m, "kb schema " + str(data.get("kind", "KIND"))) for m in schema.validate(data)]
+    probs = [_err("schema", rid, m, "kb item schema " + str(data.get("kind", "KIND"))) for m in schema.validate(data)]
     if not isinstance(data.get("id"), str):
         return probs
     prefix = data["id"].split("-", 1)[0]
@@ -71,7 +71,7 @@ def _check_content(kb: Store, rec: Item, deep: bool = False) -> list[Problem]:
             sha = r.get("sha256")
             if not sha or not kb.has_blob(sha):
                 probs.append(_err("missing", rec.id, f"rendition {r.get('name')}: content is not in the store",
-                                  "re-add the file (kb content / kb rendition add)"))
+                                  "re-add the file (kb item content / kb rendition add)"))
             elif deep and hashlib.sha256(kb.blob(sha)).hexdigest() != sha:
                 probs.append(_err("hash", rec.id, f"rendition {r.get('name')}: stored bytes do not match their hash"))
             if r.get("size") is not None and r["size"] > kb.cfg.max_inline_bytes:
@@ -111,7 +111,7 @@ def _check_refs(kb: Store, rec: Item) -> list[Problem]:
             continue
         if not kb.exists(ref):
             probs.append(_warn("dangling", rec.id, f"{field}: {ref} is not in this store",
-                               "kb obtain " + ref + " (or fix the reference)"))
+                               "kb pull " + ref + " (or fix the reference)"))
         elif parse_ref(ref)[0] == rec.id:
             probs.append(_err("ref", rec.id, f"{field}: refers to itself"))
     for ref in d.get("supersedes", []):

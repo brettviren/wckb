@@ -432,7 +432,7 @@
       }
     },
     "origin": {
-      "description": "Where an item copied from another store came from; set by kb transfers (push, pull, obtain).",
+      "description": "Where an item copied from another store came from; set by transfers (push, pull).",
       "type": "object",
       "properties": {
         "store": {

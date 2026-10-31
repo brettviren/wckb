@@ -2,7 +2,7 @@
 
 The query tables (subjects, runs, refs, identifiers, renditions, fts) live in
 the store's database and are kept in step on every write (``Store.save``);
-``kb reindex`` (``Store.reindex``) rebuilds them only after a repair.
+``kb store reindex`` (``Store.reindex``) rebuilds them only after a repair.
 """
 
 from .items import Store

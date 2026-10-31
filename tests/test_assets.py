@@ -214,5 +214,5 @@ def test_cli(root, tmp_path):
     out = run("asset", "resolve", f"{aid}@v1", "--to", str(d)).output
     assert (d / "slides.pdf").read_text() == "slides, first upload" and "from copies" in out
     assert json.loads(run("asset", "resolve", aid, "--json").output)["version"] == "v2"
-    r = run("render", aid).output
+    r = run("show", aid).output
     assert "a file set, 2 version(s), latest v2" in r and "versions: {version}" in r

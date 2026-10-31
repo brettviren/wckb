@@ -17,7 +17,7 @@ https://…/kb/tpc.sqlite     a published snapshot of it, for everyone to read
 ```
 kb init ~/kb --scope home
 cd ~/work/sigproc && kb init kb --scope project --up ~/kb
-cd ~/kb && kb neighbor add tpc --relation up --url https://example.org/kb/tpc.sqlite --land inbox
+cd ~/kb && kb edge add tpc --relation up --url https://example.org/kb/tpc.sqlite --land inbox
 ```
 
 To make your home store the `up` of every project without repeating
@@ -32,7 +32,7 @@ relation = "up"
 path = "~/kb"
 ```
 
-`kb neighbor list` shows the neighborhood, including neighbors of
+`kb edge list` shows the neighborhood, including neighbors of
 neighbors.
 
 ## Scope labels and edges
@@ -53,9 +53,9 @@ knowledge flowing down from a broader store is accepted. Override any of it
 per edge:
 
 ```
-kb neighbor add tpc --relation up --path /data/kb/tpc --pull none        # read it live, never copy
-kb neighbor add lab --relation peer --path ~/peers/lab --prefer theirs    # trust their status values
-kb neighbor add tpc --relation up --path /data/kb/tpc --land inbox       # pushes wait for review there
+kb edge add tpc --relation up --path /data/kb/tpc --pull none        # read it live, never copy
+kb edge add lab --relation peer --path ~/peers/lab --prefer theirs    # trust their status values
+kb edge add tpc --relation up --path /data/kb/tpc --land inbox       # pushes wait for review there
 ```
 
 | option | values |
@@ -77,7 +77,7 @@ them in the store's settings for everyone using it.
 kb context "induction plane noise" --reach 1     # here + up/peer neighbors
 kb search deconvolution --reach 2                # two hops: home, then the group
 kb ls --subject software/sigproc --in tpc
-kb neighbor fetch                                # refresh snapshot neighbors
+kb edge fetch                                # refresh snapshot neighbors
 ```
 
 Results are labelled with their store. An item present in several stores is
@@ -99,7 +99,7 @@ inner set's own depth, and `--nested inherit` uses the outer one.
 ```
 kb kset new obs-a obs-b top-c --deep --title "Noise findings for the group"
 kb kset expand ks-…            # the tree it denotes here, and what it references that is missing
-kb render ks-…                 # the same, for people
+kb show ks-…                 # the same, for people
 ```
 
 Usually you don't make sets by hand: `kb push` and `kb pull` make one from
@@ -109,7 +109,7 @@ what was sent together.
 ## Push: sending selected knowledge
 
 ```
-kb candidates --to home                          # what is worth sending, ranked, with reasons
+kb edge candidates home                          # what is worth sending, ranked, with reasons
 kb push --to home obs-1kfv obs-9c2               # shallow: just these
 kb push --to home top-… --deep                   # the topic and everything it cites
 kb push --to tpc ks-… --access group --land inbox   # a named set, relabeled, for review there
@@ -126,11 +126,11 @@ How a push lands:
 
 Either way, each copy keeps its ID and gets an `origin`: the sender, the
 `path` of stores it travelled, the set, and the approval. Both stores log
-the transfer (`kb transfers`, `kb log`).
+the transfer (`kb edge ledger`, `kb log`).
 
 A shallow push of a topic leaves its citations **dangling** in the
 receiver. That's allowed, because references are store-independent: the
-receiver can `kb obtain` them later. Use `--deep` when the receiver should
+receiver can `kb pull` them later. Use `--deep` when the receiver should
 get everything at once.
 
 **Access never widens by accident.** A `private` item can't go to a `group`
@@ -146,8 +146,8 @@ in the receiver as well.
 ```
 kb pull --from home                    # the edge's form: from an up store, every new or changed item
 kb pull --from lab obs-… --deep        # a peer: name what you want; it lands in your inbox
-kb obtain obs-…                        # a referenced item: from the nearest store that has it
-kb obtain --dangling                   # every reference here to an item not here
+kb pull obs-…                        # a referenced item: from the nearest store that has it
+kb pull --dangling                   # every reference here to an item not here
 ```
 
 ## The same item along two paths
@@ -171,9 +171,9 @@ moves every new or changed item both ways. When both sides changed the same
 item's mutable fields, the later change wins.
 
 ```
-kb snapshot /media/usb/kb.sqlite                  # on the laptop: a consistent copy
+kb store snapshot /media/usb/kb.sqlite                  # on the laptop: a consistent copy
 # on the desktop: mkdir ~/kb && cp /media/usb/kb.sqlite ~/kb/   (the twin)
-kb neighbor add desk --relation twin --path /mnt/desktop/kb   # where this machine sees the twin
+kb edge add desk --relation twin --path /mnt/desktop/kb   # where this machine sees the twin
 kb sync
 ```
 

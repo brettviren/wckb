@@ -95,7 +95,7 @@ def context(kb: Store, target: str, runs=None, budget: int = 12000, limit: int =
         out.add("\n## Superseded or retracted (history only; do not cite as current)")
         for r in old[:limit]:
             out.add(line(kb, r))
-    out.add("\nMore: kb show ID; kb context ID; kb path ID#RENDITION for content files.")
+    out.add("\nMore: kb show ID; kb context ID; kb rendition path ID#RENDITION for content files.")
     return str(out)
 
 

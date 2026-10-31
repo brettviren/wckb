@@ -2,7 +2,7 @@
 
 The model sits behind an OpenAI-compatible ``/v1/embeddings`` endpoint (the
 same convention as orgface), configured in ``[embed]``.  Vectors live in
-``.kb/vectors.sqlite``, apart from the index, so ``kb reindex`` never throws
+``.kb/vectors.sqlite``, apart from the index, so ``kb store reindex`` never throws
 them away; each chunk is embedded once per text hash and model identity.
 """
 
@@ -141,7 +141,7 @@ def semantic(kb: Store, query: str, limit: int = 20, embedder: Embedder | None =
     """(item ID, best cosine similarity) ordered best first."""
     embedder = embedder or Embedder.from_config(kb)
     if not kb.conn.execute("SELECT 1 FROM vectors WHERE identity = ? LIMIT 1", (embedder.identity,)).fetchone():
-        raise KBError("no embeddings yet: run kb embed")
+        raise KBError("no embeddings yet: run kb store embed")
     q = _norm(embedder([query])[0])
     best: dict[str, float] = {}
     for rid, dim, blob in _db(kb).execute(

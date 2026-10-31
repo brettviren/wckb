@@ -13,7 +13,7 @@ why it works this way.
 ```
 kb asset new --type fileset --title "TPC noise talk, collaboration meeting" \
    --summary "Slides and notes of the 28 Oct noise talk."
-kb asset sources                       # source types and their status
+kb source list                       # source types and their status
 ```
 
 **A directory tree.** Name the root, and map the name to a path on each
@@ -109,7 +109,7 @@ the bytes:
  "locations": [{"type": "asset", "asset": "as-…", "version": "v2", "path": "slides.pdf"}]}
 ```
 
-`kb path DOC#original` then resolves through the asset, from whichever
+`kb rendition path DOC#original` then resolves through the asset, from whichever
 source has v2.
 
 ## Moving assets between stores

@@ -692,9 +692,9 @@ def resolve(kb: Store, ref: str, version: str = "latest", path: str | None = Non
             if len({d for _, d in labelled}) > 1:
                 raise KBError(f"{asset.id} {label} is ambiguous: sources offer different content under that label: "
                               + "; ".join(f"{c.binding} ({c.where}): {d[:12]}…" for c, d in labelled)
-                              + ". Register the right one (kb asset scan, then kb asset register).")
+                              + ". Register the right one (kb asset scan --register).")
             chosen = labelled[0][0]
-            notes.append(f"{label} was known only by name; its content is now pinned by kb asset register")
+            notes.append(f"{label} was known only by name; its content is now pinned by registering it")
         if chosen is None:
             raise KBError(f"no reachable source holds {asset.id} {label} (digest {want[:12]}…)"
                           + (f": {'; '.join(notes)}" if notes else ""))
@@ -723,6 +723,6 @@ def materialize(res: Resolution, dest: Path) -> list[Path]:
 
 
 def sources_table() -> list[dict]:
-    return [{"type": s.type, "status": s.status, "what": s.describe_text,
+    return [{"interface": "asset", "type": s.type, "status": s.status, "what": s.describe_text,
              "locator": getattr(s, "locator_doc", "")} for s in SOURCES.values()]
 

@@ -11,7 +11,7 @@ from kb.cli import main
 def walk(cmd, path):
     yield path, cmd
     if isinstance(cmd, click.Group):
-        for name in sorted(cmd.commands):
+        for name in cmd.list_commands(None):
             yield from walk(cmd.commands[name], path + [name])
 
 

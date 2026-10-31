@@ -17,7 +17,7 @@ Hierarchies and graphs are both just sets of such edges.
 
 A neighbor is found by ``path`` (a store directory on this machine) or
 ``url`` (a published read-only snapshot of a store, downloaded into the
-cache by ``kb neighbor fetch``).  Neighbors are opened read-only (SQLite
+cache by ``kb edge fetch``).  Neighbors are opened read-only (SQLite
 ``mode=ro``) with their scratch files in the user cache, so reading never
 writes to somebody else's store.
 """
@@ -110,7 +110,7 @@ def neighbor(kb: Store, name: str) -> Neighbor:
         if n.name == name:
             return n
     have = ", ".join(n.name for n in neighbors(kb)) or "none"
-    raise KBError(f"no neighbor {name!r} (have: {have}); see kb neighbor add")
+    raise KBError(f"no neighbor {name!r} (have: {have}); see kb edge add")
 
 
 def open_store(path: Path, readonly: bool = True) -> Store:
@@ -190,7 +190,7 @@ def fetch(kb: Store, names: list[str] | None = None) -> list[tuple[str, str]]:
     return done
 
 
-LOCAL_HEADER = "# Per-machine settings for this store (paths as seen from this machine). kb neighbor rewrites this file.\n"
+LOCAL_HEADER = "# Per-machine settings for this store (paths as seen from this machine). kb edge rewrites this file.\n"
 
 
 def _write_toml(path: Path, data: dict, header: str) -> None:

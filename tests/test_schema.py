@@ -70,7 +70,7 @@ def test_bad_values():
 
 def test_version_mismatch_is_explained():
     errs = schema.validate({**VALID[0], "schema_version": 2})
-    assert "kb migrate" in errs[0]
+    assert "kb store migrate" in errs[0]
 
 
 def test_revision_gate():
@@ -99,4 +99,4 @@ def test_reference_doc_in_sync():
     from pathlib import Path
     from kb.schemadoc import render
     doc = Path(__file__).parent.parent / "docs" / "reference" / "schema.md"
-    assert doc.read_text() == render(), "regenerate with: uv run kb schema --markdown > docs/reference/schema.md"
+    assert doc.read_text() == render(), "regenerate with: uv run kb item schema --markdown > docs/reference/schema.md"

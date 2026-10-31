@@ -14,8 +14,8 @@ do. The relation of each link sets how knowledge moves by default:
   `kb search ... --reach 2`, `--in NAME`. Cite items from other stores with
   the store name.
 - **References are store-independent.** An item may cite one that isn't
-  here. `kb check` warns `dangling`, and `kb obtain ID` (or
-  `kb obtain --dangling`) fetches it from the nearest store that has it.
+  here. `kb check` warns `dangling`, and `kb pull ID` (or
+  `kb pull --dangling`) fetches it from the nearest store that has it.
 - **Transfers move knowledge sets.** A set is shallow (just the named items)
   or deep (also everything they reference). `kb push --to N IDS` makes the
   set for you, and `--deep` follows references. A transfer is atomic, and

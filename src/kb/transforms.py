@@ -261,11 +261,11 @@ def choose(kb: Store, media_type: str, name: str | None = None) -> Transform:
                 if not t.available():
                     raise KBError(f"transform {name} is not available on this machine")
                 return t
-        raise KBError(f"no transform {name!r}; see kb transforms")
+        raise KBError(f"no transform {name!r}; see kb rendition transforms")
     usable = sorted((t for t in candidates if media_type in t.media_types and t.available()),
                     key=lambda t: t.priority)
     if not usable:
-        raise KBError(f"no available transform for {media_type}; see kb transforms")
+        raise KBError(f"no available transform for {media_type}; see kb rendition transforms")
     return usable[0]
 
 

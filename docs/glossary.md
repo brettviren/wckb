@@ -41,7 +41,7 @@ to be right; please fix the other place.
 
 **snapshot**
 : A consistent single-file copy of a store (`VACUUM INTO`). It is used to
-  publish a store read-only, or as a backup. *Code:* `kb snapshot`,
+  publish a store read-only, or as a backup. *Code:* `kb store snapshot`,
   `Store.snapshot`.
 
 ## Items
@@ -89,12 +89,12 @@ to be right; please fix the other place.
 : What may change on a frozen item, because it describes our relationship
   to it rather than what it asserts: `status`, `subject`, `tags`,
   `summary`, `evidence`, `related`, `identifiers`, `license` (plus added
-  derived renditions and mirrors). *Code:* `kb set`, `kb.transfer.MUTABLE`.
+  derived renditions and mirrors). *Code:* `kb item set`, `kb.transfer.MUTABLE`.
 
 **current / superseded / retracted**
 : An item is *current* unless another item names it in `supersedes`
   (replaced) or `retracts` (withdrawn). *Code:* `Store.is_current`,
-  `Store.superseded_by`, `kb supersede`, `kb retract`.
+  `Store.superseded_by`, `kb item supersede`, `kb item retract`.
 
 **status**
 : Our confidence in an item's content: `draft`, `unverified`, `verified`
@@ -141,7 +141,7 @@ to be right; please fix the other place.
 
 **dangling reference**
 : A reference to an item not in this store. It is reported as a warning
-  by `kb check` and fetched by `kb obtain`.
+  by `kb check` and fetched by `kb pull`.
 
 **identifiers**
 : External identifiers of what an item describes: `doi`, `arxiv`,
@@ -184,7 +184,7 @@ to be right; please fix the other place.
 
 **transform**
 : A tool that makes one rendition from another (pdftotext, pandoc,
-  python-pptx, uproot ...). *Code:* `kb.transforms`, `kb extract`.
+  python-pptx, uproot ...). *Code:* `kb.transforms`, `kb rendition extract`.
 
 **content**
 : The bytes of a rendition. *Code:* `kb.content` (placing, hashing,
@@ -220,7 +220,7 @@ to be right; please fix the other place.
   - **location sources** resolve one rendition location to a local file
     (*Code:* `kb.locations`, `LocationSource`, `for_location`, `resolve`);
   - **asset sources** enumerate the versions of assets (*Code:*
-    `kb.assets.AssetSource`, `SOURCES`, `kb asset sources`).
+    `kb.assets.AssetSource`, `SOURCES`, `kb source list`).
 
 **placing**
 : Deciding where new content goes: `auto` (in the store if small, else a
@@ -231,12 +231,12 @@ to be right; please fix the other place.
 **materialize**
 : Write content to a local file so tools can read it. Content from the
   database goes into `.kb/cache/` under its real file name. *Code:*
-  `kb path ID#NAME`.
+  `kb rendition path ID#NAME`.
 
 **checkout / checkin**
 : The file round trip for the few cases where files are natural.
-  `kb checkout ID DIR` writes `item.json` and the item's content files;
-  `kb checkin DIR` validates and applies the changes, within policy.
+  `kb item checkout ID DIR` writes `item.json` and the item's content files;
+  `kb item checkin DIR` validates and applies the changes, within policy.
 
 ## Assets: files, file sets, versions
 
@@ -333,11 +333,11 @@ to be right; please fix the other place.
   once stamped or built.
 
 **stamp**
-: Pin a topic's inputs by their current digests. *Code:* `kb stamp`.
+: Pin a topic's inputs by their current digests. *Code:* `kb item stamp`.
 
 **stale**
 : A derived thing whose inputs changed or stopped being current: a derived
-  rendition, a topic or a view. *Code:* `kb stale`, `kb.graph`.
+  rendition, a topic or a view. *Code:* `kb item stale`, `kb.graph`.
 
 **manifest** (of a view)
 : What a build used and made: input digests, source-file hashes, tool
@@ -345,16 +345,17 @@ to be right; please fix the other place.
   with an asset version's manifest.
 
 **build / publish / world**
-: `kb build` runs a view's tool in `.kb/build/<id>/`. `kb publish` copies
+: `kb view build` runs a view's tool in `.kb/build/<id>/`. `kb view publish` copies
   the output to the publish store as an immutable version.
-  `kb build --world` re-extracts stale renditions and rebuilds stale views
+  `kb view build --world` re-extracts stale renditions and rebuilds stale views
   in dependency order.
 
 ## Moving knowledge
 
 **neighbor / edge**
-: Another store linked from this one, with a relation and a transfer
-  behavior. *Code:* `kb.federation.Neighbor`, `kb neighbor`.
+: A *neighbor* is another store linked from this one; the *edge* is the
+  link, with a relation and a transfer behavior. Commands manage edges
+  (`kb edge add NAME`); settings and code speak of neighbors. *Code:* `kb.federation.Neighbor`, `kb edge`.
 
 **relation**
 : `up` (broader), `down` (narrower), `peer`, `twin` (a copy of this same
@@ -396,8 +397,11 @@ to be right; please fix the other place.
   `plan`, `PlanEntry` (`new`, `update`, `same`, `conflict`).
 
 **push / pull / obtain**
-: A transfer started by the sender, by the receiver, or for dangling
-  references (from whichever reachable store has them).
+: A transfer started by the sender (`kb push --to NEIGHBOR`), by the
+  receiver from a named neighbor (`kb pull --from NEIGHBOR`), or by the
+  receiver for referenced items from whichever reachable store has them
+  (*obtain*: `kb pull ID ...` or `kb pull --dangling`, without `--from`).
+  *Code:* `kb.push.push`, `pull`, `obtain`.
 
 **conflict**
 : In a transfer: the receiver holds an item with the same ID that asserts
@@ -410,7 +414,7 @@ to be right; please fix the other place.
 
 **candidate** (for promotion)
 : An item worth pushing to a neighbor, ranked with reasons and blockers.
-  *Code:* `kb candidates`, `kb.push.Candidate`.
+  *Code:* `kb edge candidates`, `kb.push.Candidate`.
 
 **bundle**
 : A knowledge set, its items, their small content and the people they
@@ -424,7 +428,7 @@ to be right; please fix the other place.
 **review**
 : A person's or an LLM's assessment of an inbox bundle: a `verdict`
   (`accept`, `reject`, `changes`, `comment`) and reasons. An LLM's review is
-  advice. *Code:* the `reviews` table, `kb review note|show|accept|reject`.
+  advice. *Code:* the `reviews` table, `kb inbox review|show|accept|reject`.
 
 **exchange repository**
 : A git repository of bundle files, where git is transport and review
@@ -433,7 +437,7 @@ to be right; please fix the other place.
 
 **ledger**
 : The record of transfers in and out of a store: `transfer-in` and
-  `transfer-out` events. *Code:* `kb transfers`.
+  `transfer-out` events. *Code:* `kb edge ledger`.
 
 ## History, checks and rendering
 
@@ -467,7 +471,7 @@ to be right; please fix the other place.
 : Turning items, sets and bundles into something people can judge.
   Rendering first builds a view model (plain data: names, dates, links,
   excerpts, a tree, no hashes), then a formatter makes text, markdown or
-  JSON. *Code:* `kb.render`, `kb render`, `kb bundle show`. (A *view*, the
+  JSON. *Code:* `kb.render`, `kb show`, `kb bundle show`. (A *view*, the
   item kind, is something else: a built HTML/PDF product.)
 
 ## Policy and autonomy
@@ -489,7 +493,27 @@ to be right; please fix the other place.
 
 **agent hooks / git hooks**
 : Claude Code hooks (`kb hook check|recall|session`), managed as policy;
-  git hooks (`kb git hooks`) guard exchange repositories.
+  git hooks (`kb exchange hooks`) guard exchange repositories.
+
+## The command line
+
+**verbs and things**
+: `kb` has two kinds of commands. *Verbs* used every day stand at the top
+  (`init`, `add`, `new`, `show`, `ls`, `search`, `context`, `log`, `check`,
+  `lint`, `config`, `push`, `pull`, `sync`). Everything else lives in one
+  command family per *thing*, named by a noun from this glossary: `kb item`,
+  `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge`,
+  `kb bundle`, `kb inbox`, `kb view`, `kb data`, `kb policy`, `kb store`,
+  plus `kb exchange`, `kb forge` and `kb secret` for integration. A family
+  run without a subcommand lists its commands. A new command joins the
+  family of the thing it acts on, and is named for what it does rather
+  than for the format or tool that does it.
+
+**describe / export** (data)
+: Describe data for use outside kb, in a community standard
+  (`kb data describe --schema frictionless`: a Frictionless Data Package
+  for CSV/TSV files or a dataset item), or package items with their
+  content (`kb data export --format ro-crate`). *Code:* `kb.fair`.
 
 ## Words kb avoids
 

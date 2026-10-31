@@ -27,10 +27,10 @@ def lint(kb: Store) -> list[Problem]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
     for s in graph.stale(kb):
-        hint = {"rendition": f"kb extract {s.id} --name {s.rendition} --force",
-                "view": f"kb build {s.id}",
-                "topic": "revise the page with an LLM (kb-correct / kb-curate skill), then kb stamp " + s.id,
-                }.get(s.what, f"review {s.id}, then kb stamp {s.id}")
+        hint = {"rendition": f"kb rendition extract {s.id} --name {s.rendition} --force",
+                "view": f"kb view build {s.id}",
+                "topic": "revise the page with an LLM (kb-correct / kb-curate skill), then kb item stamp " + s.id,
+                }.get(s.what, f"review {s.id}, then kb item stamp {s.id}")
         where = s.id + (f"#{s.rendition}" if s.rendition else "")
         out.append(_warn("stale", where, "; ".join(s.reasons), hint))
 
@@ -54,7 +54,7 @@ def lint(kb: Store) -> list[Problem]:
                                  "put it in a content store (kb rendition locate) or add a URL others can reach"))
             if r["role"] == "original" and "sha256" not in r:
                 out.append(_warn("unhashed", f"{rec.id}#{r['name']}", "no sha256: changes upstream cannot be detected",
-                                 "fetch it (kb verify --record) or add a local copy"))
+                                 "fetch it (kb rendition verify --record) or add a local copy"))
         if rec.kind == "view":
             for pub in publications(kb, rec)[-1:]:
                 gone = [i for i in pub.get("inputs", []) if parse_ref(i)[0] in kb.items
@@ -62,7 +62,7 @@ def lint(kb: Store) -> list[Problem]:
                 if gone:
                     out.append(_warn("published-stale", rec.id,
                                      f"latest published version {pub['version']} used superseded inputs: {', '.join(gone)}",
-                                     f"kb build {rec.id} && kb publish {rec.id}"))
+                                     f"kb view build {rec.id} && kb view publish {rec.id}"))
         if rec.kind == "observation" and d.get("subject") and d.get("valid", {}).get("runs"):
             current_obs.append(rec)
 

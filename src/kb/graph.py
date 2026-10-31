@@ -150,10 +150,10 @@ def stamp(kb: Store, ident: str) -> Item:
     if rec.frozen:
         raise KBError(f"{rec.id} is frozen; frozen items are not stamped")
     if rec.kind == "view":
-        raise KBError("views are pinned by kb build, which records a manifest")
+        raise KBError("views are pinned by kb view build, which records a manifest")
     missing = [ref for ref in rec.inputs() if not kb.exists(ref)]
     if missing:
-        raise KBError(f"cannot stamp {rec.id}: inputs not in this store: {', '.join(missing)} (kb obtain them)")
+        raise KBError(f"cannot stamp {rec.id}: inputs not in this store: {', '.join(missing)} (kb pull fetches them)")
     data = copy.deepcopy(rec.data)
     data["derived_from"] = [{"ref": ref, "digest": kb.ref_digest(ref)} for ref in rec.inputs()]
     return kb.save(Item(data, kb), "stamp")

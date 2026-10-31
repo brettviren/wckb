@@ -412,7 +412,7 @@ def bundle_text(view: dict, md: bool = False) -> str:
             out.append(", ".join(f"{len(plan[a])} {lab}" for a, lab in
                                  (("new", "new"), ("update", "changed"), ("same", "already here"), ("conflict", "conflicting"))))
             if chk.get("dangling"):
-                out.append(f"References it leaves unresolved here: {len(chk['dangling'])} (kb obtain can fetch them later)")
+                out.append(f"References it leaves unresolved here: {len(chk['dangling'])} (kb pull can fetch them later)")
         for p in chk.get("problems", []):
             out.append(f"Problem: {p['where']}: {p['message']}")
         out.append("Verdict of the checks: " + ("OK" if chk.get("ok") else "needs attention"))

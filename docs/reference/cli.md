@@ -9,70 +9,87 @@ Usage: kb [OPTIONS] COMMAND [ARGS]...
 
   kb: knowledge stores shared by people and their LLMs.
 
-  Start with: kb context SUBJECT, kb ls, kb search WORDS.  Every command has --help.  Docs:
-  docs/howto/ in the kb source.
+  Find:     kb ls, kb search WORDS, kb context SUBJECT, kb show ID
+  Capture:  kb add FILE|URL ..., kb new KIND ...
+  Correct:  kb item set ID key=value, kb item supersede ID ...
+  Share:    kb push --to NEIGHBOR ..., kb inbox list
+
+  Every command has --help.  Words: docs/glossary.md.  How-tos: docs/howto/.
 
 Options:
   -C, --kb DIRECTORY  Store directory (default: nearest with kb.sqlite, or ./kb/kb.sqlite).
   --version           Show the version and exit.
   -h, --help          Show this message and exit.
 
-Commands:
-  add          Add files or URLs as a new primary item (default kind: document).
-  asset        Assets: abstract files and file sets, their versions, and the sources that...
-  build        Build views: run their tool out of tree and write manifest.json.
-  bundle       Bundles: a knowledge set and its items in one self-checking file.
-  candidates   Items worth pushing to a neighbor, best first, with reasons and blockers.
-  check        Consistency scan: schema, kinds, stored content, tampering, access, references.
-  checkin      Apply a checkout's changes (fields within policy, changed/added/removed content...
-  checkout     Write an item (item.json) and its content files into a directory for editing.
-  config       The store's settings (held in the store).
-  content      Print an item's text content, or replace it (--file) on an editable item...
-  context      What the KB knows about a subject, an item, or some words; compact markdown for...
-  dag          The derivation and supersession graph (dot | json).
-  datapackage  Infer a Frictionless datapackage.json for a dataset's CSV/TSV files.
-  deps         Inputs of an item, or (-r) the items built on it.
-  edit         Edit an item in $EDITOR (its JSON, or --content), validated and applied within...
-  embed        Embed new or changed text for semantic search (needs [embed] configured).
-  exchange     Exchange repositories: git as transport and review for bundles.
-  export       Export items in community formats.
-  extract      Derive a text (or summary) rendition from REF's original.
-  forge        GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.
-  git          Git integration for exchange repositories (git repositories of bundle files).
-  hook         Claude Code hook entry points (they read the event JSON on stdin).
-  inbox        Received bundles awaiting review, and their reviews and decisions.
-  init         Make PATH a kb store (one SQLite file, kb.sqlite).
-  kset         Knowledge sets: selections of items, the unit of transfer.
-  lint         Advice needing judgment: stale things, overlaps, old unverified claims ...
-  log          History: what happened to an item (or the store), when, by whom, with whose...
-  ls           List items (current ones unless --all), newest first.
-  migrate      Upgrade every item to this kb's schema version (in one transaction).
-  neighbor     Neighbor stores: up (broader), peer, down (narrower).
-  new          Make a new item of KIND.
-  obtain       Fetch referenced items from the nearest reachable store that has them.
-  path         A local file with a rendition's content (ID#NAME), fetched or materialized as...
-  policy       LLM policy: named, versioned instructions, skills, hooks; selection, enactment,...
-  publish      Copy a freshly built view to the publish store as an immutable version.
-  pull         Receive knowledge from a neighbor (with no items named, the edge's pull form...
-  push         Send knowledge to a neighbor: items (a new knowledge set is made of them), a ks-...
-  reindex      Rebuild the store's query tables (search, subjects, runs, references) from the...
-  render       An item for people: facts, links, where the material is, an excerpt (sets: as a...
-  rendition    Renditions of an item.
-  retract      Withdraw REF without replacement (writes a retraction observation).
-  review       Review inbox bundles: show, note (people and LLMs), accept, reject.
-  schema       Without KIND, list kinds; with KIND, print its JSON Schema.
-  search       Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
-  secret       Secrets (tokens) from pass-like commands, 0600 files, or the environment.
-  set          Change fields of an item, within policy (key=value; key=null deletes).
-  show         Show one item.
-  snapshot     Write a consistent single-file copy of the store (to publish read-only, e.g.
-  stale        Derived renditions, topics and views whose inputs changed.
-  stamp        Pin a topic's inputs by digest after revising it.
-  supersede    Correct an item: a new one that supersedes REF (fields inherited unless given).
-  sync         Sync twins (copies of this same store): new and changed items both ways, later...
-  transfers    The transfer ledger: what this store sent and received.
-  transforms   List transforms and whether they are available here.
-  verify       Re-fetch URL originals and compare with their recorded sha256.
+Everyday:
+  init       Make PATH a kb store (one SQLite file, kb.sqlite).
+  add        Add files or URLs as a new primary item (default kind: document).
+  new        Make a new item of KIND.
+  show       One item: facts, links, where the material is, an excerpt (sets: as a tree).
+  ls         List items (current ones unless --all), newest first.
+  search     Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
+  context    What the KB knows about a subject, an item, or some words; compact markdown for LLMs.
+  log        History: what happened to an item (or the store), when, by whom, with whose approval.
+
+Keeping a store sound:
+  check      Consistency scan: schema, kinds, stored content, tampering, access, references.
+  lint       Advice needing judgment: stale things, overlaps, old unverified claims ...
+  config     The store's settings (held in the store).
+
+Moving knowledge between stores:
+  push       Send knowledge to a neighbor: items (a new knowledge set is made of them), a ks- set,
+             or --all.
+  pull       Receive knowledge from a neighbor, or fetch items referenced here from wherever they
+             are.
+  sync       Sync twins (copies of this same store): new and changed items both ways, later change
+             wins.
+
+Commands by thing (kb THING --help):
+  item       Items: change, correct, withdraw, edit, inspect derivation, schemas.
+  rendition  Renditions of an item: add, mirror, extract text, get a file, verify.
+  asset      Assets: abstract files and file sets, their versions, and the sources that supply them.
+  source     Data sources: where content and asset versions can come from.
+  kset       Knowledge sets: selections of items, the unit of transfer.
+  edge       Edges to neighbor stores (up, down, peer, twin), and what moved along them.
+  bundle     Bundles: a knowledge set and its items in one self-checking file.
+  inbox      Received bundles: review them (people and LLMs), then accept or reject.
+  view       Views: build derived presentations and publish them.
+  data       Describe and package data for use outside kb (Frictionless, RO-Crate).
+  policy     LLM policy: named, versioned instructions, skills, hooks; selection, enactment,
+             autonomy.
+  store      The store itself: snapshots, query tables, embeddings, schema migration.
+
+Integration:
+  exchange   Exchange repositories: git repositories of bundles, for transport and review.
+  forge      GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.
+  secret     Secrets (tokens) from pass-like commands, 0600 files, or the environment.
+```
+
+## kb init
+
+```
+Usage: kb init [OPTIONS] [PATH]
+
+  Make PATH a kb store (one SQLite file, kb.sqlite).
+
+    kb init ~/kb --scope home                       # your personal store
+    kb init ./kb --scope project --up ~/kb          # a project store beside the working files
+    kb init /data/kb/tpc --scope group              # a group store (one writer; shared by bundles)
+
+Options:
+  --scope [project|home|group|org|other]
+                                  What this store holds knowledge for; sets defaults for access,
+                                  policy, autonomy.  [default: other]
+  --name TEXT                     Store name (default: directory name, or the project's for ./kb).
+  --access [public|collaboration|group|private]
+                                  Who may see this store (default: private for project/home, group
+                                  for group).
+  --target TEXT                   Where policy is enacted: a directory (CLAUDE.md, .claude/) or
+                                  'user' (~/.claude).
+  --up DIRECTORY                  An existing store to link as this one's 'up' neighbor (e.g. your
+                                  home store).
+  --no-enact                      Select policy but do not enact it yet.
+  -h, --help                      Show this message and exit.
 ```
 
 ## kb add
@@ -118,1095 +135,10 @@ Options:
   --url TEXT                      Canonical URL of a single local file (e.g. Indico behind SSO).
   --no-fetch                      Record URLs without downloading (no hash).
   --supersedes TEXT               This is a new version of that item.
-  --extract                       Run kb extract afterwards.
+  --extract                       Run kb rendition extract afterwards.
   --force                         Add even if an identifier is already in this store.
   --json
   -h, --help                      Show this message and exit.
-```
-
-## kb asset
-
-```
-Usage: kb asset [OPTIONS] COMMAND [ARGS]...
-
-  Assets: abstract files and file sets, their versions, and the sources that supply them.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  add       Register a file (or a directory, for a file set) as a new version, kept in the store.
-  bind      Say that source NAME can supply asset REF, and how its versions map.
-  new       Make an asset: a stable reference to a file or a file set, wherever its bytes are.
-  resolve   One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest,...
-  scan      What each source offers, related to the asset's versions: known, new, conflict,...
-  sources   Source types assets can be bound to, and their status.
-  unbind    Remove a binding (registered versions stay).
-  versions  The asset's registered versions, and where each was seen.
-```
-
-## kb asset add
-
-```
-Usage: kb asset add [OPTIONS] REF PATH
-
-  Register a file (or a directory, for a file set) as a new version, kept in the store.
-
-Options:
-  --label TEXT  Version label (default: the next vN).
-  --note TEXT
-  -h, --help    Show this message and exit.
-```
-
-## kb asset bind
-
-```
-Usage: kb asset bind [OPTIONS] REF NAME
-
-  Say that source NAME can supply asset REF, and how its versions map.
-
-    kb asset bind as-... eos --source fs --set root=eos-group --set path=talks/2026-10-28
-    kb asset bind as-... history --source fs --set root=/data/slides --versioning pattern --pattern 'v{version}'
-    kb asset bind as-... indico --source url --set url=https://indico.example/.../slides.pdf
-
-Options:
-  --source TEXT                   Source type (kb asset sources lists them): fs, url, kb ...
-                                  [required]
-  --locator TEXT                  Source-specific identifiers as JSON, e.g. '{"root": "eos-group",
-                                  "path": "talks/x"}'.
-  --set TEXT                      Locator field key=value (repeatable), instead of --locator.
-  --versioning [none|native|pattern|map]
-                                  How the source's versions relate to the asset's.  [default: none]
-  --pattern TEXT                  With pattern versioning: where versions are, e.g. '{version}' or
-                                  'v{version}/slides.pdf'.
-  --map TEXT                      NATIVE=LABEL (repeatable): the source's version id to the asset's
-                                  label.
-  --priority INTEGER              Lower is tried first.
-  --note TEXT
-  -h, --help                      Show this message and exit.
-```
-
-## kb asset new
-
-```
-Usage: kb asset new [OPTIONS]
-
-  Make an asset: a stable reference to a file or a file set, wherever its bytes are.
-
-Options:
-  --type [file|fileset]    [required]
-  --title TEXT             [required]
-  --summary TEXT
-  --subject TEXT
-  --match [exact|content]  Versions differ by paths and content (exact), or by content only (renames
-                           are not new versions).  [default: exact]
-  -h, --help               Show this message and exit.
-```
-
-## kb asset resolve
-
-```
-Usage: kb asset resolve [OPTIONS] REF
-
-  One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest, current, digest:SHA).
-
-Options:
-  --path TEXT     One file of a file set.
-  --to DIRECTORY  Copy the files here.
-  --no-remote
-  --json
-  -h, --help      Show this message and exit.
-```
-
-## kb asset scan
-
-```
-Usage: kb asset scan [OPTIONS] REF
-
-  What each source offers, related to the asset's versions: known, new, conflict, unreachable.
-
-Options:
-  --binding TEXT        Only these bindings.
-  --no-remote           Don't contact remote sources (URLs ...).
-  --register            Register what is new.
-  --keep [auto|yes|no]  Copy registered content into the store (auto: when it came from an
-                        unversioned source).  [default: auto]
-  --json
-  -h, --help            Show this message and exit.
-```
-
-## kb asset sources
-
-```
-Usage: kb asset sources [OPTIONS]
-
-  Source types assets can be bound to, and their status.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb asset unbind
-
-```
-Usage: kb asset unbind [OPTIONS] REF NAME
-
-  Remove a binding (registered versions stay).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb asset versions
-
-```
-Usage: kb asset versions [OPTIONS] REF
-
-  The asset's registered versions, and where each was seen.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb build
-
-```
-Usage: kb build [OPTIONS] [REFS]...
-
-  Build views: run their tool out of tree and write manifest.json.
-
-Options:
-  --stale     Build every stale view, inputs first.
-  --world     Re-extract stale renditions, reindex, build stale views.
-  --publish   Publish what was built.
-  -h, --help  Show this message and exit.
-```
-
-## kb bundle
-
-```
-Usage: kb bundle [OPTIONS] COMMAND [ARGS]...
-
-  Bundles: a knowledge set and its items in one self-checking file.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  apply  Apply a bundle file directly (skipping the inbox; agents: per 'accept' autonomy).
-  check  Verify a bundle and say what applying it here would do (exit 1 if it can't be applied...
-  make   Bundle a knowledge set (ks-...), or a new set made of the named items.
-  show   Render a bundle (file or inbox entry) for review: provenance, plan, tree, items with...
-```
-
-## kb bundle apply
-
-```
-Usage: kb bundle apply [OPTIONS] FILE
-
-  Apply a bundle file directly (skipping the inbox; agents: per 'accept' autonomy).
-
-Options:
-  --access [public|collaboration|group|private]
-  --approved TEXT
-  -h, --help                      Show this message and exit.
-```
-
-## kb bundle check
-
-```
-Usage: kb bundle check [OPTIONS] WHAT
-
-  Verify a bundle and say what applying it here would do (exit 1 if it can't be applied cleanly).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb bundle make
-
-```
-Usage: kb bundle make [OPTIONS] REFS...
-
-  Bundle a knowledge set (ks-...), or a new set made of the named items.
-
-Options:
-  -o, --output PATH  File or directory to write.  [default: .]
-  --deep             When naming items: also everything they reference.
-  --note TEXT        A note for the reviewers.
-  -h, --help         Show this message and exit.
-```
-
-## kb bundle show
-
-```
-Usage: kb bundle show [OPTIONS] WHAT
-
-  Render a bundle (file or inbox entry) for review: provenance, plan, tree, items with excerpts and
-  links.
-
-Options:
-  --format [text|md|json]   [default: text]
-  --against / --no-against  Compare with this store (what accepting would do).
-  --depth INTEGER           [default: 4]
-  -h, --help                Show this message and exit.
-```
-
-## kb candidates
-
-```
-Usage: kb candidates [OPTIONS]
-
-  Items worth pushing to a neighbor, best first, with reasons and blockers.
-
-Options:
-  --to TEXT   Neighbor to promote to.  [required]
-  --all       Include items already pushed and unchanged.
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb check
-
-```
-Usage: kb check [OPTIONS] [IDS]...
-
-  Consistency scan: schema, kinds, stored content, tampering, access, references. Exit 1 on errors.
-
-  Append-only itself is enforced by the database on every write.
-
-Options:
-  --deep      Also re-hash every stored blob.
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb checkin
-
-```
-Usage: kb checkin [OPTIONS] DIRECTORY
-
-  Apply a checkout's changes (fields within policy, changed/added/removed content files).
-
-Options:
-  --dry-run   Validate only.
-  -h, --help  Show this message and exit.
-```
-
-## kb checkout
-
-```
-Usage: kb checkout [OPTIONS] REF [DIRECTORY]
-
-  Write an item (item.json) and its content files into a directory for editing.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb config
-
-```
-Usage: kb config [OPTIONS] COMMAND [ARGS]...
-
-  The store's settings (held in the store).
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  get   One setting (KEY or KEY.SUB).
-  set   Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
-  show  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
-```
-
-## kb config get
-
-```
-Usage: kb config get [OPTIONS] KEY
-
-  One setting (KEY or KEY.SUB).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb config set
-
-```
-Usage: kb config set [OPTIONS] KEY VALUE
-
-  Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
-
-    kb config set cas.default '{"path": "/eos/group/kb-cas"}'
-    kb config set views.publish_path /eos/group/www/kb
-    kb config set links.indico https://indico.example.org
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb config show
-
-```
-Usage: kb config show [OPTIONS]
-
-  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb content
-
-```
-Usage: kb content [OPTIONS] REF [NAME]
-
-  Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts).
-
-Options:
-  --file FILE  Replace the content with this file (- for stdin).
-  -h, --help   Show this message and exit.
-```
-
-## kb context
-
-```
-Usage: kb context [OPTIONS] TARGET...
-
-  What the KB knows about a subject, an item, or some words; compact markdown for LLMs.
-
-Options:
-  --runs TEXT       Only items valid for these runs: N or FIRST-LAST.
-  --budget INTEGER  Maximum characters of output.  [default: 12000]
-  --reach INTEGER   Also include neighbor stores up to this many hops away.
-  --in TEXT         Also include this neighbor store (repeatable).
-  -h, --help        Show this message and exit.
-```
-
-## kb dag
-
-```
-Usage: kb dag [OPTIONS]
-
-  The derivation and supersession graph (dot | json).
-
-Options:
-  --format [dot|json]  [default: dot]
-  -h, --help           Show this message and exit.
-```
-
-## kb datapackage
-
-```
-Usage: kb datapackage [OPTIONS] REF
-
-  Infer a Frictionless datapackage.json for a dataset's CSV/TSV files.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb deps
-
-```
-Usage: kb deps [OPTIONS] REF
-
-  Inputs of an item, or (-r) the items built on it.
-
-Options:
-  -r, --reverse     What uses REF, rather than what REF uses.
-  -t, --transitive
-  -h, --help        Show this message and exit.
-```
-
-## kb edit
-
-```
-Usage: kb edit [OPTIONS] REF
-
-  Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy.
-
-Options:
-  --content   Edit the content, not the JSON.
-  -h, --help  Show this message and exit.
-```
-
-## kb embed
-
-```
-Usage: kb embed [OPTIONS]
-
-  Embed new or changed text for semantic search (needs [embed] configured).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb exchange
-
-```
-Usage: kb exchange [OPTIONS] COMMAND [ARGS]...
-
-  Exchange repositories: git as transport and review for bundles.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  init  Create an exchange repository (git, README, hooks) for a store's incoming bundles.
-```
-
-## kb exchange init
-
-```
-Usage: kb exchange init [OPTIONS] PATH
-
-  Create an exchange repository (git, README, hooks) for a store's incoming bundles.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb export
-
-```
-Usage: kb export [OPTIONS] COMMAND [ARGS]...
-
-  Export items in community formats.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  rocrate  Write an RO-Crate 1.1 package of REFS.
-```
-
-## kb export rocrate
-
-```
-Usage: kb export rocrate [OPTIONS] REFS...
-
-  Write an RO-Crate 1.1 package of REFS.
-
-Options:
-  -o, --output DIRECTORY  [required]
-  --no-copy               Reference content by URL instead of copying files.
-  -h, --help              Show this message and exit.
-```
-
-## kb extract
-
-```
-Usage: kb extract [OPTIONS] [REF]
-
-  Derive a text (or summary) rendition from REF's original.
-
-Options:
-  --from TEXT       Source rendition (default: the first original).
-  --transform TEXT  Transform name (see kb transforms).
-  --name TEXT       Name of the derived rendition.  [default: text]
-  --force           Redo even if up to date.
-  --stale           Redo every stale derived rendition.
-  -h, --help        Show this message and exit.
-```
-
-## kb forge
-
-```
-Usage: kb forge [OPTIONS] COMMAND [ARGS]...
-
-  GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  add   Add a forge to your user config (tokens are personal; never in a store).
-  auth  Explain how to get and store a token for forge NAME, then test it.
-  list  Configured forges and where their tokens come from.
-  pr    Pull requests on the store's remote repository.
-```
-
-## kb forge add
-
-```
-Usage: kb forge add [OPTIONS] NAME
-
-  Add a forge to your user config (tokens are personal; never in a store).
-
-Options:
-  --type [github|gitea|forgejo|gogs]
-                                  [required]
-  --host TEXT                     [required]
-  --api TEXT                      API base URL (default: https://HOST/api/v1, or api.github.com).
-  --token-from TEXT               Secret spec, e.g. 'cmd:pass show kb/forge/NAME' (recommended) or
-                                  file:PATH.
-  -h, --help                      Show this message and exit.
-```
-
-## kb forge auth
-
-```
-Usage: kb forge auth [OPTIONS] NAME
-
-  Explain how to get and store a token for forge NAME, then test it.
-
-Options:
-  --token-from TEXT  Try this secret spec instead of the configured one.
-  -h, --help         Show this message and exit.
-```
-
-## kb forge list
-
-```
-Usage: kb forge list [OPTIONS]
-
-  Configured forges and where their tokens come from.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb forge pr
-
-```
-Usage: kb forge pr [OPTIONS] COMMAND [ARGS]...
-
-  Pull requests on the store's remote repository.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  close    Close a pull request without merging (agents: per 'merge' autonomy).
-  comment  Comment on a pull request.
-  create   Open a pull request.
-  list     List pull requests.
-  merge    Merge a pull request (agents: per 'merge' autonomy).
-  show     One pull request.
-```
-
-## kb forge pr close
-
-```
-Usage: kb forge pr close [OPTIONS] NUMBER
-
-  Close a pull request without merging (agents: per 'merge' autonomy).
-
-Options:
-  --approved TEXT
-  --forge TEXT     Forge name (default: matched from the git remote's host).
-  --repo TEXT      OWNER/NAME (default: from the git remote).
-  --remote TEXT    [default: origin]
-  -h, --help       Show this message and exit.
-```
-
-## kb forge pr comment
-
-```
-Usage: kb forge pr comment [OPTIONS] NUMBER
-
-  Comment on a pull request.
-
-Options:
-  --body TEXT    [required]
-  --forge TEXT   Forge name (default: matched from the git remote's host).
-  --repo TEXT    OWNER/NAME (default: from the git remote).
-  --remote TEXT  [default: origin]
-  -h, --help     Show this message and exit.
-```
-
-## kb forge pr create
-
-```
-Usage: kb forge pr create [OPTIONS]
-
-  Open a pull request.
-
-Options:
-  --head TEXT    Branch with the changes (push it first, or use kb push --land pr).  [required]
-  --base TEXT    Target branch (default: the current branch).
-  --title TEXT   [required]
-  --body TEXT
-  --forge TEXT   Forge name (default: matched from the git remote's host).
-  --repo TEXT    OWNER/NAME (default: from the git remote).
-  --remote TEXT  [default: origin]
-  -h, --help     Show this message and exit.
-```
-
-## kb forge pr list
-
-```
-Usage: kb forge pr list [OPTIONS]
-
-  List pull requests.
-
-Options:
-  --state [open|closed|all]  [default: open]
-  --json
-  --forge TEXT               Forge name (default: matched from the git remote's host).
-  --repo TEXT                OWNER/NAME (default: from the git remote).
-  --remote TEXT              [default: origin]
-  -h, --help                 Show this message and exit.
-```
-
-## kb forge pr merge
-
-```
-Usage: kb forge pr merge [OPTIONS] NUMBER
-
-  Merge a pull request (agents: per 'merge' autonomy).
-
-Options:
-  --method [merge|squash|rebase]  [default: merge]
-  --message TEXT
-  --approved TEXT                 The human's approval (agents under 'ask' merge autonomy).
-  --forge TEXT                    Forge name (default: matched from the git remote's host).
-  --repo TEXT                     OWNER/NAME (default: from the git remote).
-  --remote TEXT                   [default: origin]
-  -h, --help                      Show this message and exit.
-```
-
-## kb forge pr show
-
-```
-Usage: kb forge pr show [OPTIONS] NUMBER
-
-  One pull request.
-
-Options:
-  --forge TEXT   Forge name (default: matched from the git remote's host).
-  --repo TEXT    OWNER/NAME (default: from the git remote).
-  --remote TEXT  [default: origin]
-  -h, --help     Show this message and exit.
-```
-
-## kb git
-
-```
-Usage: kb git [OPTIONS] COMMAND [ARGS]...
-
-  Git integration for exchange repositories (git repositories of bundle files).
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  hooks  Install kb into an exchange repository's git hooks (pre-commit, pre-push, post-merge).
-```
-
-## kb git hooks
-
-```
-Usage: kb git hooks [OPTIONS] COMMAND [ARGS]...
-
-  Install kb into an exchange repository's git hooks (pre-commit, pre-push, post-merge).
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  install  Add the kb block to hook scripts (existing hooks are kept).
-  remove   Remove the kb block from hook scripts.
-  status   Which git hooks run kb.
-```
-
-## kb git hooks install
-
-```
-Usage: kb git hooks install [OPTIONS] [NAMES]...
-
-  Add the kb block to hook scripts (existing hooks are kept).
-
-Options:
-  --repo DIRECTORY  The repository.  [default: .]
-  -h, --help        Show this message and exit.
-```
-
-## kb git hooks remove
-
-```
-Usage: kb git hooks remove [OPTIONS] [NAMES]...
-
-  Remove the kb block from hook scripts.
-
-Options:
-  --repo DIRECTORY  The repository.  [default: .]
-  -h, --help        Show this message and exit.
-```
-
-## kb git hooks status
-
-```
-Usage: kb git hooks status [OPTIONS]
-
-  Which git hooks run kb.
-
-Options:
-  --repo DIRECTORY  The repository.  [default: .]
-  -h, --help        Show this message and exit.
-```
-
-## kb hook
-
-```
-Usage: kb hook [OPTIONS] COMMAND [ARGS]...
-
-  Claude Code hook entry points (they read the event JSON on stdin).
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  check           PostToolUse: validate an edit Claude made in a kb checkout; problems go back...
-  git-post-merge  git post-merge: a one-line notice about bundles to import.
-  git-pre-commit  git pre-commit: staged bundles verify; existing bundles are untouched.
-  git-pre-push    git pre-push: the same for every commit being pushed.
-  recall          UserPromptSubmit: print the few items that look relevant to the prompt.
-  session         SessionStart: one short status note about the store.
-```
-
-## kb hook check
-
-```
-Usage: kb hook check [OPTIONS]
-
-  PostToolUse: validate an edit Claude made in a kb checkout; problems go back to Claude (exit 2).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb hook git-post-merge
-
-```
-Usage: kb hook git-post-merge [OPTIONS] [ARGS]...
-
-  git post-merge: a one-line notice about bundles to import.
-
-Options:
-  --repo TEXT
-  -h, --help   Show this message and exit.
-```
-
-## kb hook git-pre-commit
-
-```
-Usage: kb hook git-pre-commit [OPTIONS]
-
-  git pre-commit: staged bundles verify; existing bundles are untouched.
-
-Options:
-  --repo TEXT
-  -h, --help   Show this message and exit.
-```
-
-## kb hook git-pre-push
-
-```
-Usage: kb hook git-pre-push [OPTIONS] [ARGS]...
-
-  git pre-push: the same for every commit being pushed.
-
-Options:
-  --repo TEXT
-  -h, --help   Show this message and exit.
-```
-
-## kb hook recall
-
-```
-Usage: kb hook recall [OPTIONS]
-
-  UserPromptSubmit: print the few items that look relevant to the prompt.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb hook session
-
-```
-Usage: kb hook session [OPTIONS]
-
-  SessionStart: one short status note about the store.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb inbox
-
-```
-Usage: kb inbox [OPTIONS] COMMAND [ARGS]...
-
-  Received bundles awaiting review, and their reviews and decisions.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  import   Receive every bundle file under DIRECTORY (e.g.
-  list     Inbox entries.
-  receive  Put bundle files into the inbox for review.
-```
-
-## kb inbox import
-
-```
-Usage: kb inbox import [OPTIONS] DIRECTORY
-
-  Receive every bundle file under DIRECTORY (e.g. a merged exchange repository).
-
-Options:
-  --accept         Accept them too (they were reviewed upstream, e.g. by PR).
-  --approved TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb inbox list
-
-```
-Usage: kb inbox list [OPTIONS]
-
-  Inbox entries.
-
-Options:
-  --status [pending|accepted|rejected|all]
-                                  [default: pending]
-  --json
-  -h, --help                      Show this message and exit.
-```
-
-## kb inbox receive
-
-```
-Usage: kb inbox receive [OPTIONS] FILES...
-
-  Put bundle files into the inbox for review.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb init
-
-```
-Usage: kb init [OPTIONS] [PATH]
-
-  Make PATH a kb store (one SQLite file, kb.sqlite).
-
-    kb init ~/kb --scope home                       # your personal store
-    kb init ./kb --scope project --up ~/kb          # a project store beside the working files
-    kb init /data/kb/tpc --scope group              # a group store (one writer; shared by bundles)
-
-Options:
-  --scope [project|home|group|org|other]
-                                  What this store holds knowledge for; sets defaults for access,
-                                  policy, autonomy.  [default: other]
-  --name TEXT                     Store name (default: directory name, or the project's for ./kb).
-  --access [public|collaboration|group|private]
-                                  Who may see this store (default: private for project/home, group
-                                  for group).
-  --target TEXT                   Where policy is enacted: a directory (CLAUDE.md, .claude/) or
-                                  'user' (~/.claude).
-  --up DIRECTORY                  An existing store to link as this one's 'up' neighbor (e.g. your
-                                  home store).
-  --no-enact                      Select policy but do not enact it yet.
-  -h, --help                      Show this message and exit.
-```
-
-## kb kset
-
-```
-Usage: kb kset [OPTIONS] COMMAND [ARGS]...
-
-  Knowledge sets: selections of items, the unit of transfer.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  expand  The items a knowledge set denotes here, and what it references that is missing.
-  new     Make a knowledge set: a selection to transfer, bundle, or read.
-```
-
-## kb kset expand
-
-```
-Usage: kb kset expand [OPTIONS] REF
-
-  The items a knowledge set denotes here, and what it references that is missing.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb kset new
-
-```
-Usage: kb kset new [OPTIONS] MEMBERS...
-
-  Make a knowledge set: a selection to transfer, bundle, or read.
-
-Options:
-  --deep                     Deep: members and everything they reference (default shallow).
-  --nested [follow|inherit]  [default: follow]
-  --title TEXT
-  --summary TEXT
-  --purpose TEXT             [default: transfer]
-  -h, --help                 Show this message and exit.
-```
-
-## kb lint
-
-```
-Usage: kb lint [OPTIONS]
-
-  Advice needing judgment: stale things, overlaps, old unverified claims ... (never fails).
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb log
-
-```
-Usage: kb log [OPTIONS] [REF]
-
-  History: what happened to an item (or the store), when, by whom, with whose approval.
-
-Options:
-  --action TEXT    Only this kind of event (create, set, transfer-in, publish, review ...).
-  --limit INTEGER  [default: 30]
-  --json
-  -h, --help       Show this message and exit.
-```
-
-## kb ls
-
-```
-Usage: kb ls [OPTIONS]
-
-  List items (current ones unless --all), newest first.
-
-Options:
-  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset|asset]
-  --subject TEXT                  Subject path or prefix.
-  --runs TEXT                     Overlapping run range: N or FIRST-LAST.
-  --status [draft|unverified|verified|disputed]
-  --since TEXT                    Created on or after (date).
-  --all                           Include superseded and retracted items.
-  --limit INTEGER
-  -l, --long                      Show summaries.
-  --subjects                      List subject paths in use, with counts.
-  --reach INTEGER                 Also list neighbor stores up to this many hops away.
-  --in TEXT                       Also list this neighbor store (repeatable).
-  --json
-  -h, --help                      Show this message and exit.
-```
-
-## kb migrate
-
-```
-Usage: kb migrate [OPTIONS]
-
-  Upgrade every item to this kb's schema version (in one transaction).
-
-Options:
-  --dry-run
-  -h, --help  Show this message and exit.
-```
-
-## kb neighbor
-
-```
-Usage: kb neighbor [OPTIONS] COMMAND [ARGS]...
-
-  Neighbor stores: up (broader), peer, down (narrower).
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  add     Link a neighbor store, and say how knowledge moves along the edge.
-  fetch   Download (or refresh) the published snapshots of URL-only neighbors, into the cache.
-  list    This store's neighborhood.
-  remove  Unlink a neighbor store.
-```
-
-## kb neighbor add
-
-```
-Usage: kb neighbor add [OPTIONS] NAME
-
-  Link a neighbor store, and say how knowledge moves along the edge.
-
-Options:
-  --relation [up|peer|down|twin]  up: broader; down: narrower; peer: sibling; twin: a copy of this
-                                  same store (kb sync).  [default: up]
-  --path TEXT                     The store's directory on this machine (needed to write to it).
-  --url TEXT                      A published read-only snapshot of it (kb neighbor fetch downloads
-                                  it).
-  --exchange DIRECTORY            Land 'pr': a git clone of the neighbor's bundle exchange
-                                  repository.
-  --shared                        Declare it in the store's settings, for everyone; default is this
-                                  machine only (.kb/local.toml).
-  --land, --mode [apply|inbox|pr]
-                                  How pushes land there: applied, into its inbox for review, or as a
-                                  pull request.  [default: apply]
-  --push [select|all|none]        What goes here -> there (default by relation: up select, down all,
-                                  peer select).
-  --pull [select|all|none]        What comes there -> here (default: up all, down select, peer
-                                  select).
-  --accept [direct|review]        Pulled items: applied, or into the inbox for review.
-  --prefer [ours|theirs|newer]    Who wins on mutable fields when the same item arrives changed
-                                  along another path.
-  --relabel [public|collaboration|group|private]
-                                  Access level that more restricted items may be relabelled to when
-                                  pushed here.
-  --description TEXT
-  -h, --help                      Show this message and exit.
-```
-
-## kb neighbor fetch
-
-```
-Usage: kb neighbor fetch [OPTIONS] [NAMES]...
-
-  Download (or refresh) the published snapshots of URL-only neighbors, into the cache.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb neighbor list
-
-```
-Usage: kb neighbor list [OPTIONS]
-
-  This store's neighborhood.
-
-Options:
-  --depth INTEGER  Follow neighbors of neighbors this far.  [default: 2]
-  --json
-  -h, --help       Show this message and exit.
-```
-
-## kb neighbor remove
-
-```
-Usage: kb neighbor remove [OPTIONS] NAME
-
-  Unlink a neighbor store.
-
-Options:
-  -h, --help  Show this message and exit.
 ```
 
 ## kb new
@@ -1253,261 +185,171 @@ Options:
   -h, --help                      Show this message and exit.
 ```
 
-## kb obtain
+## kb show
 
 ```
-Usage: kb obtain [OPTIONS] [REFS]...
+Usage: kb show [OPTIONS] REF
 
-  Fetch referenced items from the nearest reachable store that has them.
+  One item: facts, links, where the material is, an excerpt (sets: as a tree).
 
 Options:
-  --dangling       Every item referenced here but not present.
-  --deep
-  --approved TEXT
-  --dry-run
+  --format [text|md|llm|json|view]
+                                  text/md: for people; llm: compact markdown with the full content;
+                                  json: the item JSON; view: the rendered view model as JSON.
+                                  [default: text]
+  --json                          Same as --format json.
+  --depth INTEGER                 How deep to unfold nested knowledge sets.  [default: 4]
+  -h, --help                      Show this message and exit.
+```
+
+## kb ls
+
+```
+Usage: kb ls [OPTIONS]
+
+  List items (current ones unless --all), newest first.
+
+Options:
+  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset|asset]
+  --subject TEXT                  Subject path or prefix.
+  --runs TEXT                     Overlapping run range: N or FIRST-LAST.
+  --status [draft|unverified|verified|disputed]
+  --since TEXT                    Created on or after (date).
+  --all                           Include superseded and retracted items.
+  --limit INTEGER
+  -l, --long                      Show summaries.
+  --subjects                      List subject paths in use, with counts.
+  --reach INTEGER                 Also list neighbor stores up to this many hops away.
+  --in TEXT                       Also list this neighbor store (repeatable).
+  --json
+  -h, --help                      Show this message and exit.
+```
+
+## kb search
+
+```
+Usage: kb search [OPTIONS] WORDS...
+
+  Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
+
+Options:
+  -s, --semantic   Match meaning (needs kb store embed).
+  --hybrid         Fuse word and meaning matches.
+  --all            Include superseded items.
+  --limit INTEGER  [default: 20]
+  --reach INTEGER  Also search neighbor stores up to this many hops away.
+  --in TEXT        Also search this neighbor store (repeatable).
+  --json
   -h, --help       Show this message and exit.
 ```
 
-## kb path
+## kb context
 
 ```
-Usage: kb path [OPTIONS] REF
+Usage: kb context [OPTIONS] TARGET...
 
-  A local file with a rendition's content (ID#NAME), fetched or materialized as needed.
+  What the KB knows about a subject, an item, or some words; compact markdown for LLMs.
 
 Options:
-  --no-fetch  Don't download URL content.
+  --runs TEXT       Only items valid for these runs: N or FIRST-LAST.
+  --budget INTEGER  Maximum characters of output.  [default: 12000]
+  --reach INTEGER   Also include neighbor stores up to this many hops away.
+  --in TEXT         Also include this neighbor store (repeatable).
+  -h, --help        Show this message and exit.
+```
+
+## kb log
+
+```
+Usage: kb log [OPTIONS] [REF]
+
+  History: what happened to an item (or the store), when, by whom, with whose approval.
+
+Options:
+  --action TEXT    Only this kind of event (create, set, transfer-in, publish, review ...).
+  --limit INTEGER  [default: 30]
+  --json
+  -h, --help       Show this message and exit.
+```
+
+## kb check
+
+```
+Usage: kb check [OPTIONS] [IDS]...
+
+  Consistency scan: schema, kinds, stored content, tampering, access, references. Exit 1 on errors.
+
+  Append-only itself is enforced by the database on every write.
+
+Options:
+  --deep      Also re-hash every stored blob.
+  --json
   -h, --help  Show this message and exit.
 ```
 
-## kb policy
+## kb lint
 
 ```
-Usage: kb policy [OPTIONS] COMMAND [ARGS]...
+Usage: kb lint [OPTIONS]
 
-  LLM policy: named, versioned instructions, skills, hooks; selection, enactment, autonomy.
+  Advice needing judgment: stale things, overlaps, old unverified claims ... (never fails).
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb config
+
+```
+Usage: kb config [OPTIONS] COMMAND [ARGS]...
+
+  The store's settings (held in the store).
 
 Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  autonomy   Show autonomy, or set it (people only): capture=auto review=ask push=ask...
-  capture    Turn edits made to an enacted CLAUDE.md snippet or skill into a draft version here.
-  deprecate  Mark the latest released version of NAME here as deprecated.
-  diff       Enacted text vs its source version (or two versions).
-  drop       Deselect policies.
-  edit       Replace the content of this store's draft of NAME.
-  enact      Write the selected policies: CLAUDE.md block, skills, hooks; record them in...
-  list       Policies available here (this store, reachable stores, builtins); * = selected.
-  new        Create a draft policy in this store.
-  release    Freeze this store's draft of NAME as a released version.
-  revise     Start the next version as a draft here (forks builtin or neighbor policies).
-  show       A policy's metadata and content (NAME, NAME@N or NAME@draft).
-  status     What needs attention: unenacted selections, newer versions, hand edits of enacted...
-  use        Select policies (NAME follows the latest release; NAME@N pins).
+  show  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
+  get   One setting (KEY or KEY.SUB).
+  set   Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
 ```
 
-## kb policy autonomy
+## kb config show
 
 ```
-Usage: kb policy autonomy [OPTIONS] [ASSIGNMENTS]...
+Usage: kb config show [OPTIONS]
 
-  Show autonomy, or set it (people only): capture=auto review=ask push=ask push.home=auto ...
+  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
 
 Options:
   -h, --help  Show this message and exit.
 ```
 
-## kb policy capture
+## kb config get
 
 ```
-Usage: kb policy capture [OPTIONS] NAME
+Usage: kb config get [OPTIONS] KEY
 
-  Turn edits made to an enacted CLAUDE.md snippet or skill into a draft version here.
+  One setting (KEY or KEY.SUB).
 
 Options:
   -h, --help  Show this message and exit.
 ```
 
-## kb policy deprecate
+## kb config set
 
 ```
-Usage: kb policy deprecate [OPTIONS] NAME
+Usage: kb config set [OPTIONS] KEY VALUE
 
-  Mark the latest released version of NAME here as deprecated.
+  Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
 
-Options:
-  --approved TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb policy diff
-
-```
-Usage: kb policy diff [OPTIONS] NAME
-
-  Enacted text vs its source version (or two versions).
-
-Options:
-  --against TEXT  Compare with this version instead of the enacted text.
-  -h, --help      Show this message and exit.
-```
-
-## kb policy drop
-
-```
-Usage: kb policy drop [OPTIONS] NAMES...
-
-  Deselect policies. Then kb policy enact.
-
-Options:
-  --approved TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb policy edit
-
-```
-Usage: kb policy edit [OPTIONS] NAME
-
-  Replace the content of this store's draft of NAME.
-
-Options:
-  --file FILE  [required]
-  -h, --help   Show this message and exit.
-```
-
-## kb policy enact
-
-```
-Usage: kb policy enact [OPTIONS]
-
-  Write the selected policies: CLAUDE.md block, skills, hooks; record them in policy.lock.json.
-
-Options:
-  --target TEXT  Override the target: a directory, or 'user' for ~/.claude.
-  --dry-run      Show what would change.
-  -h, --help     Show this message and exit.
-```
-
-## kb policy list
-
-```
-Usage: kb policy list [OPTIONS]
-
-  Policies available here (this store, reachable stores, builtins); * = selected.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb policy new
-
-```
-Usage: kb policy new [OPTIONS] NAME
-
-  Create a draft policy in this store.
-
-Options:
-  --type [instructions|skill|hook|settings]
-                                  [required]
-  --file FILE                     [required]
-  --title TEXT
-  --summary TEXT
-  --order INTEGER                 Position of an instructions snippet (lower first).
-  --applies-to TEXT               Store scope it is meant for (repeatable).
-  -h, --help                      Show this message and exit.
-```
-
-## kb policy release
-
-```
-Usage: kb policy release [OPTIONS] NAME
-
-  Freeze this store's draft of NAME as a released version.
-
-Options:
-  --approved TEXT  The human's approval (agents under 'ask' policy autonomy).
-  -h, --help       Show this message and exit.
-```
-
-## kb policy revise
-
-```
-Usage: kb policy revise [OPTIONS] NAME
-
-  Start the next version as a draft here (forks builtin or neighbor policies).
-
-Options:
-  --file FILE  New content (default: copy current).
-  -h, --help   Show this message and exit.
-```
-
-## kb policy show
-
-```
-Usage: kb policy show [OPTIONS] SPEC
-
-  A policy's metadata and content (NAME, NAME@N or NAME@draft).
+    kb config set cas.default '{"path": "/eos/group/kb-cas"}'
+    kb config set views.publish_path /eos/group/www/kb
+    kb config set links.indico https://indico.example.org
 
 Options:
   -h, --help  Show this message and exit.
-```
-
-## kb policy status
-
-```
-Usage: kb policy status [OPTIONS]
-
-  What needs attention: unenacted selections, newer versions, hand edits of enacted files.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb policy use
-
-```
-Usage: kb policy use [OPTIONS] SPECS...
-
-  Select policies (NAME follows the latest release; NAME@N pins). Then kb policy enact.
-
-Options:
-  --approved TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb publish
-
-```
-Usage: kb publish [OPTIONS] REFS...
-
-  Copy a freshly built view to the publish store as an immutable version.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb pull
-
-```
-Usage: kb pull [OPTIONS] [REFS]...
-
-  Receive knowledge from a neighbor (with no items named, the edge's pull form decides).
-
-Options:
-  --from TEXT                Neighbor to receive from.  [required]
-  --deep                     Also take everything the items reference, recursively.
-  --nested [follow|inherit]  [default: follow]
-  --all                      Take every new or changed item (the 'all' form).
-  --land [apply|inbox]       Override how it lands here (default from the edge's accept: direct =
-                             apply, review = inbox).
-  --approved TEXT
-  -m, --message TEXT
-  --dry-run
-  -h, --help                 Show this message and exit.
 ```
 
 ## kb push
@@ -1543,231 +385,80 @@ Options:
   -h, --help                      Show this message and exit.
 ```
 
-## kb reindex
+## kb pull
 
 ```
-Usage: kb reindex [OPTIONS]
+Usage: kb pull [OPTIONS] [REFS]...
 
-  Rebuild the store's query tables (search, subjects, runs, references) from the items.
+  Receive knowledge from a neighbor, or fetch items referenced here from wherever they are.
+
+    kb pull --from group                         # what the edge's pull form says
+    kb pull --from group ks-...                  # a knowledge set
+    kb pull obs-... doc-...                      # these, from the nearest store that has them
+    kb pull --dangling                           # everything referenced here but missing
+
+Options:
+  --from TEXT                Neighbor to receive from (default: the nearest reachable store having
+                             each item).
+  --dangling                 Every item referenced here but not present (from wherever it is).
+  --deep                     Also take everything the items reference, recursively.
+  --nested [follow|inherit]  [default: follow]
+  --all                      Take every new or changed item (the 'all' form; needs --from).
+  --land [apply|inbox]       Override how it lands here (default from the edge's accept: direct =
+                             apply, review = inbox).
+  --approved TEXT            The human's approval, in their words (needed by agents under 'ask'
+                             autonomy).
+  -m, --message TEXT
+  --dry-run
+  -h, --help                 Show this message and exit.
+```
+
+## kb sync
+
+```
+Usage: kb sync [OPTIONS] [NAMES]...
+
+  Sync twins (copies of this same store): new and changed items both ways, later change wins.
 
 Options:
   -h, --help  Show this message and exit.
 ```
 
-## kb render
+## kb item
 
 ```
-Usage: kb render [OPTIONS] REF
+Usage: kb item [OPTIONS] COMMAND [ARGS]...
 
-  An item for people: facts, links, where the material is, an excerpt (sets: as a tree).
-
-Options:
-  --format [text|md|json]  [default: text]
-  --depth INTEGER          How deep to unfold nested knowledge sets.  [default: 4]
-  -h, --help               Show this message and exit.
-```
-
-## kb rendition
-
-```
-Usage: kb rendition [OPTIONS] COMMAND [ARGS]...
-
-  Renditions of an item.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  add     Register FILE as a rendition of REF (held in the store if small, else in the content...
-  locate  Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must...
-```
-
-## kb rendition add
-
-```
-Usage: kb rendition add [OPTIONS] REF FILE
-
-  Register FILE as a rendition of REF (held in the store if small, else in the content store).
-
-Options:
-  --name TEXT                     Rendition name (default: file stem).
-  --role [derived|metadata|content|original]
-                                  [default: derived]
-  --fidelity [lossless|extracted|llm]
-  --from TEXT                     Rendition it was derived from.
-  --tool TEXT                     What made it, e.g. claude-opus-5-5.
-  --media-type TEXT
-  --notes TEXT
-  -h, --help                      Show this message and exit.
-```
-
-## kb rendition locate
-
-```
-Usage: kb rendition locate [OPTIONS] REF
-
-  Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must match its hash.
-
-Options:
-  --cas TEXT   Copy into this content store (the default one if neither option is given).
-  --url TEXT   Add this URL as a mirror (fetched and hash-checked).
-  --file FILE  Local copy to store, when the content is not reachable otherwise.
-  -h, --help   Show this message and exit.
-```
-
-## kb retract
-
-```
-Usage: kb retract [OPTIONS] REF
-
-  Withdraw REF without replacement (writes a retraction observation).
-
-Options:
-  --reason TEXT    Why it is withdrawn.  [required]
-  --by TEXT        Who withdraws it.
-  --evidence TEXT
-  --via TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb review
-
-```
-Usage: kb review [OPTIONS] COMMAND [ARGS]...
-
-  Review inbox bundles: show, note (people and LLMs), accept, reject.
+  Items: change, correct, withdraw, edit, inspect derivation, schemas.
 
 Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  accept  Accept: apply the bundle to this store in one transaction.
-  note    Record a review.
-  reject  Reject, saying why (kept with the inbox entry and in the store's history).
-  show    The bundle rendered against this store, followed by the reviews so far.
+  set        Change fields of an item, within policy (key=value; key=null deletes).
+  edit       Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy.
+  supersede  Correct an item: a new one that supersedes REF (fields inherited unless given).
+  retract    Withdraw REF without replacement (writes a retraction observation).
+  content    Print an item's text content, or replace it (--file) on an editable item (topics,
+             views, drafts).
+  checkout   Write an item (item.json) and its content files into a directory for editing.
+  checkin    Apply a checkout's changes (fields within policy, changed/added/removed content files).
+  deps       Inputs of an item, or (-r) the items built on it.
+  graph      The derivation and supersession graph (dot | json).
+  stale      Derived renditions, topics and views whose inputs changed.
+  stamp      Pin a topic's inputs by digest after revising it.
+  schema     Without KIND, list kinds; with KIND, print its JSON Schema.
 ```
 
-## kb review accept
+## kb item set
 
 ```
-Usage: kb review accept [OPTIONS] REF
-
-  Accept: apply the bundle to this store in one transaction.
-
-Options:
-  --note TEXT
-  --access [public|collaboration|group|private]
-                                  Relabel more restricted items to this level (a deliberate
-                                  decision).
-  --approved TEXT                 The human's approval (agents under 'ask' accept autonomy).
-  -h, --help                      Show this message and exit.
-```
-
-## kb review note
-
-```
-Usage: kb review note [OPTIONS] REF
-
-  Record a review. An LLM's verdict is advice; deciding follows the 'accept' autonomy.
-
-Options:
-  --verdict [accept|reject|changes|comment]
-                                  [required]
-  --text TEXT                     Your reasoning, for the person who decides.  [required]
-  --reviewer TEXT                 Who (default: you, or 'claude' when run by an agent).
-  -h, --help                      Show this message and exit.
-```
-
-## kb review reject
-
-```
-Usage: kb review reject [OPTIONS] REF
-
-  Reject, saying why (kept with the inbox entry and in the store's history).
-
-Options:
-  --reason TEXT    [required]
-  --approved TEXT
-  -h, --help       Show this message and exit.
-```
-
-## kb review show
-
-```
-Usage: kb review show [OPTIONS] REF
-
-  The bundle rendered against this store, followed by the reviews so far.
-
-Options:
-  --format [text|md|json]  [default: text]
-  -h, --help               Show this message and exit.
-```
-
-## kb schema
-
-```
-Usage: kb schema [OPTIONS] [KIND]
-
-  Without KIND, list kinds; with KIND, print its JSON Schema.
-
-Options:
-  --markdown  The whole reference as markdown.
-  -h, --help  Show this message and exit.
-```
-
-## kb search
-
-```
-Usage: kb search [OPTIONS] WORDS...
-
-  Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
-
-Options:
-  -s, --semantic   Match meaning (needs kb embed).
-  --hybrid         Fuse word and meaning matches.
-  --all            Include superseded items.
-  --limit INTEGER  [default: 20]
-  --reach INTEGER  Also search neighbor stores up to this many hops away.
-  --in TEXT        Also search this neighbor store (repeatable).
-  --json
-  -h, --help       Show this message and exit.
-```
-
-## kb secret
-
-```
-Usage: kb secret [OPTIONS] COMMAND [ARGS]...
-
-  Secrets (tokens) from pass-like commands, 0600 files, or the environment.
-
-Options:
-  -h, --help  Show this message and exit.
-
-Commands:
-  test  Resolve SPEC and show where it came from, masked: cmd:pass show NAME | file:PATH |...
-```
-
-## kb secret test
-
-```
-Usage: kb secret test [OPTIONS] SPEC
-
-  Resolve SPEC and show where it came from, masked: cmd:pass show NAME | file:PATH | env:VAR |
-  value:...
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb set
-
-```
-Usage: kb set [OPTIONS] REF [ASSIGNMENTS]...
+Usage: kb item set [OPTIONS] REF [ASSIGNMENTS]...
 
   Change fields of an item, within policy (key=value; key=null deletes).
 
   On primary items only status, subject, tags, summary, evidence, related, identifiers and license
-  may change; the rest needs kb supersede.
+  may change; the rest needs kb item supersede.
 
 Options:
   --add TEXT          Append to a list field: key=value.
@@ -1776,57 +467,22 @@ Options:
   -h, --help          Show this message and exit.
 ```
 
-## kb show
+## kb item edit
 
 ```
-Usage: kb show [OPTIONS] REF
+Usage: kb item edit [OPTIONS] REF
 
-  Show one item.
+  Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy.
 
 Options:
-  --json      The item JSON.
+  --content   Edit the content, not the JSON.
   -h, --help  Show this message and exit.
 ```
 
-## kb snapshot
+## kb item supersede
 
 ```
-Usage: kb snapshot [OPTIONS] DEST
-
-  Write a consistent single-file copy of the store (to publish read-only, e.g. on EOS or the web, or
-  as a backup).
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb stale
-
-```
-Usage: kb stale [OPTIONS]
-
-  Derived renditions, topics and views whose inputs changed.
-
-Options:
-  --json
-  -h, --help  Show this message and exit.
-```
-
-## kb stamp
-
-```
-Usage: kb stamp [OPTIONS] REFS...
-
-  Pin a topic's inputs by digest after revising it.
-
-Options:
-  -h, --help  Show this message and exit.
-```
-
-## kb supersede
-
-```
-Usage: kb supersede [OPTIONS] REF
+Usage: kb item supersede [OPTIONS] REF
 
   Correct an item: a new one that supersedes REF (fields inherited unless given).
 
@@ -1858,21 +514,533 @@ Options:
   -h, --help                      Show this message and exit.
 ```
 
-## kb sync
+## kb item retract
 
 ```
-Usage: kb sync [OPTIONS] [NAMES]...
+Usage: kb item retract [OPTIONS] REF
 
-  Sync twins (copies of this same store): new and changed items both ways, later change wins.
+  Withdraw REF without replacement (writes a retraction observation).
+
+Options:
+  --reason TEXT    Why it is withdrawn.  [required]
+  --by TEXT        Who withdraws it.
+  --evidence TEXT
+  --via TEXT
+  -h, --help       Show this message and exit.
+```
+
+## kb item content
+
+```
+Usage: kb item content [OPTIONS] REF [NAME]
+
+  Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts).
+
+Options:
+  --file FILE  Replace the content with this file (- for stdin).
+  -h, --help   Show this message and exit.
+```
+
+## kb item checkout
+
+```
+Usage: kb item checkout [OPTIONS] REF [DIRECTORY]
+
+  Write an item (item.json) and its content files into a directory for editing.
 
 Options:
   -h, --help  Show this message and exit.
 ```
 
-## kb transfers
+## kb item checkin
 
 ```
-Usage: kb transfers [OPTIONS]
+Usage: kb item checkin [OPTIONS] DIRECTORY
+
+  Apply a checkout's changes (fields within policy, changed/added/removed content files).
+
+Options:
+  --dry-run   Validate only.
+  -h, --help  Show this message and exit.
+```
+
+## kb item deps
+
+```
+Usage: kb item deps [OPTIONS] REF
+
+  Inputs of an item, or (-r) the items built on it.
+
+Options:
+  -r, --reverse     What uses REF, rather than what REF uses.
+  -t, --transitive
+  -h, --help        Show this message and exit.
+```
+
+## kb item graph
+
+```
+Usage: kb item graph [OPTIONS]
+
+  The derivation and supersession graph (dot | json).
+
+Options:
+  --format [dot|json]  [default: dot]
+  -h, --help           Show this message and exit.
+```
+
+## kb item stale
+
+```
+Usage: kb item stale [OPTIONS]
+
+  Derived renditions, topics and views whose inputs changed.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb item stamp
+
+```
+Usage: kb item stamp [OPTIONS] REFS...
+
+  Pin a topic's inputs by digest after revising it.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb item schema
+
+```
+Usage: kb item schema [OPTIONS] [KIND]
+
+  Without KIND, list kinds; with KIND, print its JSON Schema.
+
+Options:
+  --markdown  The whole reference as markdown.
+  -h, --help  Show this message and exit.
+```
+
+## kb rendition
+
+```
+Usage: kb rendition [OPTIONS] COMMAND [ARGS]...
+
+  Renditions of an item: add, mirror, extract text, get a file, verify.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  path        A local file with a rendition's content (ID#NAME), fetched or materialized as needed.
+  add         Register FILE as a rendition of REF (held in the store if small, else in the content
+              store).
+  extract     Derive a text (or summary) rendition from REF's original.
+  transforms  List transforms and whether they are available here.
+  locate      Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must
+              match its hash.
+  verify      Re-fetch URL originals and compare with their recorded sha256.
+```
+
+## kb rendition path
+
+```
+Usage: kb rendition path [OPTIONS] REF
+
+  A local file with a rendition's content (ID#NAME), fetched or materialized as needed.
+
+Options:
+  --no-fetch  Don't download URL content.
+  -h, --help  Show this message and exit.
+```
+
+## kb rendition add
+
+```
+Usage: kb rendition add [OPTIONS] REF FILE
+
+  Register FILE as a rendition of REF (held in the store if small, else in the content store).
+
+Options:
+  --name TEXT                     Rendition name (default: file stem).
+  --role [derived|metadata|content|original]
+                                  [default: derived]
+  --fidelity [lossless|extracted|llm]
+  --from TEXT                     Rendition it was derived from.
+  --tool TEXT                     What made it, e.g. claude-opus-5-5.
+  --media-type TEXT
+  --notes TEXT
+  -h, --help                      Show this message and exit.
+```
+
+## kb rendition extract
+
+```
+Usage: kb rendition extract [OPTIONS] [REF]
+
+  Derive a text (or summary) rendition from REF's original.
+
+Options:
+  --from TEXT       Source rendition (default: the first original).
+  --transform TEXT  Transform name (see kb rendition transforms).
+  --name TEXT       Name of the derived rendition.  [default: text]
+  --force           Redo even if up to date.
+  --stale           Redo every stale derived rendition.
+  -h, --help        Show this message and exit.
+```
+
+## kb rendition transforms
+
+```
+Usage: kb rendition transforms [OPTIONS]
+
+  List transforms and whether they are available here.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb rendition locate
+
+```
+Usage: kb rendition locate [OPTIONS] REF
+
+  Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must match its hash.
+
+Options:
+  --cas TEXT   Copy into this content store (the default one if neither option is given).
+  --url TEXT   Add this URL as a mirror (fetched and hash-checked).
+  --file FILE  Local copy to store, when the content is not reachable otherwise.
+  -h, --help   Show this message and exit.
+```
+
+## kb rendition verify
+
+```
+Usage: kb rendition verify [OPTIONS] [REFS]...
+
+  Re-fetch URL originals and compare with their recorded sha256.
+
+Options:
+  --record    Store hashes for URL renditions that have none.
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb asset
+
+```
+Usage: kb asset [OPTIONS] COMMAND [ARGS]...
+
+  Assets: abstract files and file sets, their versions, and the sources that supply them.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  new       Make an asset: a stable reference to a file or a file set, wherever its bytes are.
+  bind      Say that source NAME can supply asset REF, and how its versions map.
+  unbind    Remove a binding (registered versions stay).
+  scan      What each source offers, related to the asset's versions: known, new, conflict,
+            unreachable.
+  add       Register a file (or a directory, for a file set) as a new version, kept in the store.
+  versions  The asset's registered versions, and where each was seen.
+  resolve   One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest, current,
+            digest:SHA).
+```
+
+## kb asset new
+
+```
+Usage: kb asset new [OPTIONS]
+
+  Make an asset: a stable reference to a file or a file set, wherever its bytes are.
+
+Options:
+  --type [file|fileset]    [required]
+  --title TEXT             [required]
+  --summary TEXT
+  --subject TEXT
+  --match [exact|content]  Versions differ by paths and content (exact), or by content only (renames
+                           are not new versions).  [default: exact]
+  -h, --help               Show this message and exit.
+```
+
+## kb asset bind
+
+```
+Usage: kb asset bind [OPTIONS] REF NAME
+
+  Say that source NAME can supply asset REF, and how its versions map.
+
+    kb asset bind as-... eos --source fs --set root=eos-group --set path=talks/2026-10-28
+    kb asset bind as-... history --source fs --set root=/data/slides --versioning pattern --pattern 'v{version}'
+    kb asset bind as-... indico --source url --set url=https://indico.example/.../slides.pdf
+
+Options:
+  --source TEXT                   Source type (kb source list lists them): fs, url, kb ...
+                                  [required]
+  --locator TEXT                  Source-specific identifiers as JSON, e.g. '{"root": "eos-group",
+                                  "path": "talks/x"}'.
+  --set TEXT                      Locator field key=value (repeatable), instead of --locator.
+  --versioning [none|native|pattern|map]
+                                  How the source's versions relate to the asset's.  [default: none]
+  --pattern TEXT                  With pattern versioning: where versions are, e.g. '{version}' or
+                                  'v{version}/slides.pdf'.
+  --map TEXT                      NATIVE=LABEL (repeatable): the source's version id to the asset's
+                                  label.
+  --priority INTEGER              Lower is tried first.
+  --note TEXT
+  -h, --help                      Show this message and exit.
+```
+
+## kb asset unbind
+
+```
+Usage: kb asset unbind [OPTIONS] REF NAME
+
+  Remove a binding (registered versions stay).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb asset scan
+
+```
+Usage: kb asset scan [OPTIONS] REF
+
+  What each source offers, related to the asset's versions: known, new, conflict, unreachable.
+
+Options:
+  --binding TEXT        Only these bindings.
+  --no-remote           Don't contact remote sources (URLs ...).
+  --register            Register what is new.
+  --keep [auto|yes|no]  Copy registered content into the store (auto: when it came from an
+                        unversioned source).  [default: auto]
+  --json
+  -h, --help            Show this message and exit.
+```
+
+## kb asset add
+
+```
+Usage: kb asset add [OPTIONS] REF PATH
+
+  Register a file (or a directory, for a file set) as a new version, kept in the store.
+
+Options:
+  --label TEXT  Version label (default: the next vN).
+  --note TEXT
+  -h, --help    Show this message and exit.
+```
+
+## kb asset versions
+
+```
+Usage: kb asset versions [OPTIONS] REF
+
+  The asset's registered versions, and where each was seen.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb asset resolve
+
+```
+Usage: kb asset resolve [OPTIONS] REF
+
+  One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest, current, digest:SHA).
+
+Options:
+  --path TEXT     One file of a file set.
+  --to DIRECTORY  Copy the files here.
+  --no-remote
+  --json
+  -h, --help      Show this message and exit.
+```
+
+## kb source
+
+```
+Usage: kb source [OPTIONS] COMMAND [ARGS]...
+
+  Data sources: where content and asset versions can come from.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  list  Data source types: location sources (where a rendition's bytes are) and asset sources (what
+        bindings use).
+```
+
+## kb source list
+
+```
+Usage: kb source list [OPTIONS]
+
+  Data source types: location sources (where a rendition's bytes are) and asset sources (what
+  bindings use).
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb kset
+
+```
+Usage: kb kset [OPTIONS] COMMAND [ARGS]...
+
+  Knowledge sets: selections of items, the unit of transfer.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  new     Make a knowledge set: a selection to transfer, bundle, or read.
+  expand  The items a knowledge set denotes here, and what it references that is missing.
+```
+
+## kb kset new
+
+```
+Usage: kb kset new [OPTIONS] MEMBERS...
+
+  Make a knowledge set: a selection to transfer, bundle, or read.
+
+Options:
+  --deep                     Deep: members and everything they reference (default shallow).
+  --nested [follow|inherit]  [default: follow]
+  --title TEXT
+  --summary TEXT
+  --purpose TEXT             [default: transfer]
+  -h, --help                 Show this message and exit.
+```
+
+## kb kset expand
+
+```
+Usage: kb kset expand [OPTIONS] REF
+
+  The items a knowledge set denotes here, and what it references that is missing.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb edge
+
+```
+Usage: kb edge [OPTIONS] COMMAND [ARGS]...
+
+  Edges to neighbor stores (up, down, peer, twin), and what moved along them.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  list        This store's neighborhood.
+  add         Link a neighbor store, and say how knowledge moves along the edge.
+  remove      Unlink a neighbor store.
+  fetch       Download (or refresh) the published snapshots of URL-only neighbors, into the cache.
+  candidates  Items worth pushing to neighbor TARGET, best first, with reasons and blockers.
+  ledger      The transfer ledger: what this store sent and received.
+```
+
+## kb edge list
+
+```
+Usage: kb edge list [OPTIONS]
+
+  This store's neighborhood.
+
+Options:
+  --depth INTEGER  Follow neighbors of neighbors this far.  [default: 2]
+  --json
+  -h, --help       Show this message and exit.
+```
+
+## kb edge add
+
+```
+Usage: kb edge add [OPTIONS] NAME
+
+  Link a neighbor store, and say how knowledge moves along the edge.
+
+Options:
+  --relation [up|peer|down|twin]  up: broader; down: narrower; peer: sibling; twin: a copy of this
+                                  same store (kb sync).  [default: up]
+  --path TEXT                     The store's directory on this machine (needed to write to it).
+  --url TEXT                      A published read-only snapshot of it (kb edge fetch downloads it).
+  --exchange DIRECTORY            Land 'pr': a git clone of the neighbor's bundle exchange
+                                  repository.
+  --shared                        Declare it in the store's settings, for everyone; default is this
+                                  machine only (.kb/local.toml).
+  --land, --mode [apply|inbox|pr]
+                                  How pushes land there: applied, into its inbox for review, or as a
+                                  pull request.  [default: apply]
+  --push [select|all|none]        What goes here -> there (default by relation: up select, down all,
+                                  peer select).
+  --pull [select|all|none]        What comes there -> here (default: up all, down select, peer
+                                  select).
+  --accept [direct|review]        Pulled items: applied, or into the inbox for review.
+  --prefer [ours|theirs|newer]    Who wins on mutable fields when the same item arrives changed
+                                  along another path.
+  --relabel [public|collaboration|group|private]
+                                  Access level that more restricted items may be relabelled to when
+                                  pushed here.
+  --description TEXT
+  -h, --help                      Show this message and exit.
+```
+
+## kb edge remove
+
+```
+Usage: kb edge remove [OPTIONS] NAME
+
+  Unlink a neighbor store.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb edge fetch
+
+```
+Usage: kb edge fetch [OPTIONS] [NAMES]...
+
+  Download (or refresh) the published snapshots of URL-only neighbors, into the cache.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb edge candidates
+
+```
+Usage: kb edge candidates [OPTIONS] TARGET
+
+  Items worth pushing to neighbor TARGET, best first, with reasons and blockers.
+
+Options:
+  --all       Include items already pushed and unchanged.
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb edge ledger
+
+```
+Usage: kb edge ledger [OPTIONS]
 
   The transfer ledger: what this store sent and received.
 
@@ -1882,27 +1050,899 @@ Options:
   -h, --help       Show this message and exit.
 ```
 
-## kb transforms
+## kb bundle
 
 ```
-Usage: kb transforms [OPTIONS]
+Usage: kb bundle [OPTIONS] COMMAND [ARGS]...
 
-  List transforms and whether they are available here.
+  Bundles: a knowledge set and its items in one self-checking file.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  make   Bundle a knowledge set (ks-...), or a new set made of the named items.
+  show   Render a bundle (file or inbox entry) for review: provenance, plan, tree, items with
+         excerpts and links.
+  check  Verify a bundle and say what applying it here would do (exit 1 if it can't be applied
+         cleanly).
+  apply  Apply a bundle file directly (skipping the inbox; agents: per 'accept' autonomy).
+```
+
+## kb bundle make
+
+```
+Usage: kb bundle make [OPTIONS] REFS...
+
+  Bundle a knowledge set (ks-...), or a new set made of the named items.
+
+Options:
+  -o, --output PATH  File or directory to write.  [default: .]
+  --deep             When naming items: also everything they reference.
+  --note TEXT        A note for the reviewers.
+  -h, --help         Show this message and exit.
+```
+
+## kb bundle show
+
+```
+Usage: kb bundle show [OPTIONS] WHAT
+
+  Render a bundle (file or inbox entry) for review: provenance, plan, tree, items with excerpts and
+  links.
+
+Options:
+  --format [text|md|json]   [default: text]
+  --against / --no-against  Compare with this store (what accepting would do).
+  --depth INTEGER           [default: 4]
+  -h, --help                Show this message and exit.
+```
+
+## kb bundle check
+
+```
+Usage: kb bundle check [OPTIONS] WHAT
+
+  Verify a bundle and say what applying it here would do (exit 1 if it can't be applied cleanly).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb bundle apply
+
+```
+Usage: kb bundle apply [OPTIONS] FILE
+
+  Apply a bundle file directly (skipping the inbox; agents: per 'accept' autonomy).
+
+Options:
+  --access [public|collaboration|group|private]
+  --approved TEXT
+  -h, --help                      Show this message and exit.
+```
+
+## kb inbox
+
+```
+Usage: kb inbox [OPTIONS] COMMAND [ARGS]...
+
+  Received bundles: review them (people and LLMs), then accept or reject.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  list     Inbox entries (pending ones unless --status says otherwise).
+  receive  Put bundle files into the inbox for review; for a directory, every bundle under it.
+  show     An inbox entry: the bundle rendered against this store, then the reviews so far.
+  review   Record a review (people and LLMs).
+  accept   Accept an entry: apply its bundle to this store in one transaction.
+  reject   Reject an entry, saying why (kept with the entry and in the store's history).
+```
+
+## kb inbox list
+
+```
+Usage: kb inbox list [OPTIONS]
+
+  Inbox entries (pending ones unless --status says otherwise).
+
+Options:
+  --status [pending|accepted|rejected|all]
+                                  [default: pending]
+  --json
+  -h, --help                      Show this message and exit.
+```
+
+## kb inbox receive
+
+```
+Usage: kb inbox receive [OPTIONS] PATHS...
+
+  Put bundle files into the inbox for review; for a directory, every bundle under it.
+
+  A directory is typically a clone of an exchange repository after merges.
+
+Options:
+  --accept         Accept them too (they were reviewed elsewhere, e.g. by a merged pull request).
+  --approved TEXT  The human's approval (agents under 'ask' accept autonomy).
+  -h, --help       Show this message and exit.
+```
+
+## kb inbox show
+
+```
+Usage: kb inbox show [OPTIONS] REF
+
+  An inbox entry: the bundle rendered against this store, then the reviews so far.
+
+Options:
+  --format [text|md|json]  [default: text]
+  -h, --help               Show this message and exit.
+```
+
+## kb inbox review
+
+```
+Usage: kb inbox review [OPTIONS] REF
+
+  Record a review (people and LLMs). An LLM's verdict is advice; deciding follows the 'accept'
+  autonomy.
+
+Options:
+  --verdict [accept|reject|changes|comment]
+                                  [required]
+  --text TEXT                     Your reasoning, for the person who decides.  [required]
+  --reviewer TEXT                 Who (default: you, or 'claude' when run by an agent).
+  -h, --help                      Show this message and exit.
+```
+
+## kb inbox accept
+
+```
+Usage: kb inbox accept [OPTIONS] REF
+
+  Accept an entry: apply its bundle to this store in one transaction.
+
+Options:
+  --note TEXT
+  --access [public|collaboration|group|private]
+                                  Relabel more restricted items to this level (a deliberate
+                                  decision).
+  --approved TEXT                 The human's approval (agents under 'ask' accept autonomy).
+  -h, --help                      Show this message and exit.
+```
+
+## kb inbox reject
+
+```
+Usage: kb inbox reject [OPTIONS] REF
+
+  Reject an entry, saying why (kept with the entry and in the store's history).
+
+Options:
+  --reason TEXT    [required]
+  --approved TEXT
+  -h, --help       Show this message and exit.
+```
+
+## kb view
+
+```
+Usage: kb view [OPTIONS] COMMAND [ARGS]...
+
+  Views: build derived presentations and publish them.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  build    Build views: run their tool out of tree and write manifest.json.
+  publish  Copy a freshly built view to the publish store as an immutable version.
+```
+
+## kb view build
+
+```
+Usage: kb view build [OPTIONS] [REFS]...
+
+  Build views: run their tool out of tree and write manifest.json.
+
+Options:
+  --stale     Build every stale view, inputs first.
+  --world     Re-extract stale renditions, reindex, build stale views.
+  --publish   Publish what was built.
+  -h, --help  Show this message and exit.
+```
+
+## kb view publish
+
+```
+Usage: kb view publish [OPTIONS] REFS...
+
+  Copy a freshly built view to the publish store as an immutable version.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb data
+
+```
+Usage: kb data [OPTIONS] COMMAND [ARGS]...
+
+  Describe and package data for use outside kb (Frictionless, RO-Crate).
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  describe  Describe tabular data (CSV/TSV): a dataset item (the description is kept as its
+            'datapackage' metadata rendition) or files (printed only).
+  export    Package items and their content for use outside kb.
+```
+
+## kb data describe
+
+```
+Usage: kb data describe [OPTIONS] TARGETS...
+
+  Describe tabular data (CSV/TSV): a dataset item (the description is kept as its 'datapackage'
+  metadata rendition) or files (printed only).
+
+    kb data describe dat-...
+    kb data describe noise.csv gains.tsv
+
+Options:
+  --schema [frictionless]  Description standard: frictionless = a Data Package (datapackage.json).
+                           [default: frictionless]
+  -h, --help               Show this message and exit.
+```
+
+## kb data export
+
+```
+Usage: kb data export [OPTIONS] REFS...
+
+  Package items and their content for use outside kb.
+
+Options:
+  --format [ro-crate]     Package format: ro-crate = RO-Crate 1.1.  [default: ro-crate]
+  -o, --output DIRECTORY  [required]
+  --no-copy               Reference content by URL instead of copying files.
+  -h, --help              Show this message and exit.
+```
+
+## kb policy
+
+```
+Usage: kb policy [OPTIONS] COMMAND [ARGS]...
+
+  LLM policy: named, versioned instructions, skills, hooks; selection, enactment, autonomy.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  list       Policies available here (this store, reachable stores, builtins); * = selected.
+  show       A policy's metadata and content (NAME, NAME@N or NAME@draft).
+  new        Create a draft policy in this store.
+  edit       Replace the content of this store's draft of NAME.
+  revise     Start the next version as a draft here (forks builtin or neighbor policies).
+  release    Freeze this store's draft of NAME as a released version.
+  deprecate  Mark the latest released version of NAME here as deprecated.
+  use        Select policies (NAME follows the latest release; NAME@N pins).
+  drop       Deselect policies.
+  enact      Write the selected policies: CLAUDE.md block, skills, hooks; record them in
+             policy.lock.json.
+  status     What needs attention: unenacted selections, newer versions, hand edits of enacted
+             files.
+  diff       Enacted text vs its source version (or two versions).
+  capture    Turn edits made to an enacted CLAUDE.md snippet or skill into a draft version here.
+  autonomy   Show autonomy, or set it (people only): capture=auto review=ask push=ask push.home=auto
+             ...
+```
+
+## kb policy list
+
+```
+Usage: kb policy list [OPTIONS]
+
+  Policies available here (this store, reachable stores, builtins); * = selected.
 
 Options:
   --json
   -h, --help  Show this message and exit.
 ```
 
-## kb verify
+## kb policy show
 
 ```
-Usage: kb verify [OPTIONS] [REFS]...
+Usage: kb policy show [OPTIONS] SPEC
 
-  Re-fetch URL originals and compare with their recorded sha256.
+  A policy's metadata and content (NAME, NAME@N or NAME@draft).
 
 Options:
-  --record    Store hashes for URL renditions that have none.
+  -h, --help  Show this message and exit.
+```
+
+## kb policy new
+
+```
+Usage: kb policy new [OPTIONS] NAME
+
+  Create a draft policy in this store.
+
+Options:
+  --type [instructions|skill|hook|settings]
+                                  [required]
+  --file FILE                     [required]
+  --title TEXT
+  --summary TEXT
+  --order INTEGER                 Position of an instructions snippet (lower first).
+  --applies-to TEXT               Store scope it is meant for (repeatable).
+  -h, --help                      Show this message and exit.
+```
+
+## kb policy edit
+
+```
+Usage: kb policy edit [OPTIONS] NAME
+
+  Replace the content of this store's draft of NAME.
+
+Options:
+  --file FILE  [required]
+  -h, --help   Show this message and exit.
+```
+
+## kb policy revise
+
+```
+Usage: kb policy revise [OPTIONS] NAME
+
+  Start the next version as a draft here (forks builtin or neighbor policies).
+
+Options:
+  --file FILE  New content (default: copy current).
+  -h, --help   Show this message and exit.
+```
+
+## kb policy release
+
+```
+Usage: kb policy release [OPTIONS] NAME
+
+  Freeze this store's draft of NAME as a released version.
+
+Options:
+  --approved TEXT  The human's approval (agents under 'ask' policy autonomy).
+  -h, --help       Show this message and exit.
+```
+
+## kb policy deprecate
+
+```
+Usage: kb policy deprecate [OPTIONS] NAME
+
+  Mark the latest released version of NAME here as deprecated.
+
+Options:
+  --approved TEXT
+  -h, --help       Show this message and exit.
+```
+
+## kb policy use
+
+```
+Usage: kb policy use [OPTIONS] SPECS...
+
+  Select policies (NAME follows the latest release; NAME@N pins). Then kb policy enact.
+
+Options:
+  --approved TEXT
+  -h, --help       Show this message and exit.
+```
+
+## kb policy drop
+
+```
+Usage: kb policy drop [OPTIONS] NAMES...
+
+  Deselect policies. Then kb policy enact.
+
+Options:
+  --approved TEXT
+  -h, --help       Show this message and exit.
+```
+
+## kb policy enact
+
+```
+Usage: kb policy enact [OPTIONS]
+
+  Write the selected policies: CLAUDE.md block, skills, hooks; record them in policy.lock.json.
+
+Options:
+  --target TEXT  Override the target: a directory, or 'user' for ~/.claude.
+  --dry-run      Show what would change.
+  -h, --help     Show this message and exit.
+```
+
+## kb policy status
+
+```
+Usage: kb policy status [OPTIONS]
+
+  What needs attention: unenacted selections, newer versions, hand edits of enacted files.
+
+Options:
   --json
   -h, --help  Show this message and exit.
+```
+
+## kb policy diff
+
+```
+Usage: kb policy diff [OPTIONS] NAME
+
+  Enacted text vs its source version (or two versions).
+
+Options:
+  --against TEXT  Compare with this version instead of the enacted text.
+  -h, --help      Show this message and exit.
+```
+
+## kb policy capture
+
+```
+Usage: kb policy capture [OPTIONS] NAME
+
+  Turn edits made to an enacted CLAUDE.md snippet or skill into a draft version here.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb policy autonomy
+
+```
+Usage: kb policy autonomy [OPTIONS] [ASSIGNMENTS]...
+
+  Show autonomy, or set it (people only): capture=auto review=ask push=ask push.home=auto ...
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb store
+
+```
+Usage: kb store [OPTIONS] COMMAND [ARGS]...
+
+  The store itself: snapshots, query tables, embeddings, schema migration.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  snapshot  Write a consistent single-file copy of the store, to publish read-only or as a backup.
+  reindex   Rebuild the store's query tables (search, subjects, runs, references) from the items.
+  embed     Embed new or changed text for semantic search (needs [embed] configured).
+  migrate   Upgrade every item to this kb's schema version (in one transaction).
+```
+
+## kb store snapshot
+
+```
+Usage: kb store snapshot [OPTIONS] DEST
+
+  Write a consistent single-file copy of the store, to publish read-only or as a backup.
+
+  A neighbor added with --url reads such a copy (kb edge fetch downloads it).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb store reindex
+
+```
+Usage: kb store reindex [OPTIONS]
+
+  Rebuild the store's query tables (search, subjects, runs, references) from the items.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb store embed
+
+```
+Usage: kb store embed [OPTIONS]
+
+  Embed new or changed text for semantic search (needs [embed] configured).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb store migrate
+
+```
+Usage: kb store migrate [OPTIONS]
+
+  Upgrade every item to this kb's schema version (in one transaction).
+
+Options:
+  --dry-run
+  -h, --help  Show this message and exit.
+```
+
+## kb exchange
+
+```
+Usage: kb exchange [OPTIONS] COMMAND [ARGS]...
+
+  Exchange repositories: git repositories of bundles, for transport and review.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  init   Create an exchange repository (git, README, hooks) for a store's incoming bundles.
+  hooks  Install or remove kb's checks in a repository's git hooks (pre-commit, pre-push, post-
+         merge).
+```
+
+## kb exchange init
+
+```
+Usage: kb exchange init [OPTIONS] PATH
+
+  Create an exchange repository (git, README, hooks) for a store's incoming bundles.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb exchange hooks
+
+```
+Usage: kb exchange hooks [OPTIONS] COMMAND [ARGS]...
+
+  Install or remove kb's checks in a repository's git hooks (pre-commit, pre-push, post-merge).
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  install  Add the kb block to hook scripts (existing hooks are kept).
+  remove   Remove the kb block from hook scripts.
+  status   Which git hooks run kb.
+```
+
+## kb exchange hooks install
+
+```
+Usage: kb exchange hooks install [OPTIONS] [NAMES]...
+
+  Add the kb block to hook scripts (existing hooks are kept).
+
+Options:
+  --repo DIRECTORY  The repository.  [default: .]
+  -h, --help        Show this message and exit.
+```
+
+## kb exchange hooks remove
+
+```
+Usage: kb exchange hooks remove [OPTIONS] [NAMES]...
+
+  Remove the kb block from hook scripts.
+
+Options:
+  --repo DIRECTORY  The repository.  [default: .]
+  -h, --help        Show this message and exit.
+```
+
+## kb exchange hooks status
+
+```
+Usage: kb exchange hooks status [OPTIONS]
+
+  Which git hooks run kb.
+
+Options:
+  --repo DIRECTORY  The repository.  [default: .]
+  -h, --help        Show this message and exit.
+```
+
+## kb forge
+
+```
+Usage: kb forge [OPTIONS] COMMAND [ARGS]...
+
+  GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  pr    Pull requests on a forge repository.
+  list  Configured forges and where their tokens come from.
+  add   Add a forge to your user config (tokens are personal; never in a store).
+  auth  Explain how to get and store a token for forge NAME, then test it.
+```
+
+## kb forge pr
+
+```
+Usage: kb forge pr [OPTIONS] COMMAND [ARGS]...
+
+  Pull requests on a forge repository.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  create   Open a pull request.
+  list     List pull requests.
+  show     One pull request.
+  merge    Merge a pull request (agents: per 'merge' autonomy).
+  close    Close a pull request without merging (agents: per 'merge' autonomy).
+  comment  Comment on a pull request.
+```
+
+## kb forge pr create
+
+```
+Usage: kb forge pr create [OPTIONS]
+
+  Open a pull request.
+
+Options:
+  --head TEXT    Branch with the changes (push it first, or use kb push --land pr).  [required]
+  --base TEXT    Target branch (default: the current branch).
+  --title TEXT   [required]
+  --body TEXT
+  --forge TEXT   Forge name (default: matched from the git remote's host).
+  --repo TEXT    OWNER/NAME (default: from the git remote).
+  --remote TEXT  [default: origin]
+  -h, --help     Show this message and exit.
+```
+
+## kb forge pr list
+
+```
+Usage: kb forge pr list [OPTIONS]
+
+  List pull requests.
+
+Options:
+  --state [open|closed|all]  [default: open]
+  --json
+  --forge TEXT               Forge name (default: matched from the git remote's host).
+  --repo TEXT                OWNER/NAME (default: from the git remote).
+  --remote TEXT              [default: origin]
+  -h, --help                 Show this message and exit.
+```
+
+## kb forge pr show
+
+```
+Usage: kb forge pr show [OPTIONS] NUMBER
+
+  One pull request.
+
+Options:
+  --forge TEXT   Forge name (default: matched from the git remote's host).
+  --repo TEXT    OWNER/NAME (default: from the git remote).
+  --remote TEXT  [default: origin]
+  -h, --help     Show this message and exit.
+```
+
+## kb forge pr merge
+
+```
+Usage: kb forge pr merge [OPTIONS] NUMBER
+
+  Merge a pull request (agents: per 'merge' autonomy).
+
+Options:
+  --method [merge|squash|rebase]  [default: merge]
+  --message TEXT
+  --approved TEXT                 The human's approval (agents under 'ask' merge autonomy).
+  --forge TEXT                    Forge name (default: matched from the git remote's host).
+  --repo TEXT                     OWNER/NAME (default: from the git remote).
+  --remote TEXT                   [default: origin]
+  -h, --help                      Show this message and exit.
+```
+
+## kb forge pr close
+
+```
+Usage: kb forge pr close [OPTIONS] NUMBER
+
+  Close a pull request without merging (agents: per 'merge' autonomy).
+
+Options:
+  --approved TEXT
+  --forge TEXT     Forge name (default: matched from the git remote's host).
+  --repo TEXT      OWNER/NAME (default: from the git remote).
+  --remote TEXT    [default: origin]
+  -h, --help       Show this message and exit.
+```
+
+## kb forge pr comment
+
+```
+Usage: kb forge pr comment [OPTIONS] NUMBER
+
+  Comment on a pull request.
+
+Options:
+  --body TEXT    [required]
+  --forge TEXT   Forge name (default: matched from the git remote's host).
+  --repo TEXT    OWNER/NAME (default: from the git remote).
+  --remote TEXT  [default: origin]
+  -h, --help     Show this message and exit.
+```
+
+## kb forge list
+
+```
+Usage: kb forge list [OPTIONS]
+
+  Configured forges and where their tokens come from.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb forge add
+
+```
+Usage: kb forge add [OPTIONS] NAME
+
+  Add a forge to your user config (tokens are personal; never in a store).
+
+Options:
+  --type [github|gitea|forgejo|gogs]
+                                  [required]
+  --host TEXT                     [required]
+  --api TEXT                      API base URL (default: https://HOST/api/v1, or api.github.com).
+  --token-from TEXT               Secret spec, e.g. 'cmd:pass show kb/forge/NAME' (recommended) or
+                                  file:PATH.
+  -h, --help                      Show this message and exit.
+```
+
+## kb forge auth
+
+```
+Usage: kb forge auth [OPTIONS] NAME
+
+  Explain how to get and store a token for forge NAME, then test it.
+
+Options:
+  --token-from TEXT  Try this secret spec instead of the configured one.
+  -h, --help         Show this message and exit.
+```
+
+## kb secret
+
+```
+Usage: kb secret [OPTIONS] COMMAND [ARGS]...
+
+  Secrets (tokens) from pass-like commands, 0600 files, or the environment.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  test  Resolve SPEC and show where it came from, masked: cmd:pass show NAME | file:PATH | env:VAR |
+        value:...
+```
+
+## kb secret test
+
+```
+Usage: kb secret test [OPTIONS] SPEC
+
+  Resolve SPEC and show where it came from, masked: cmd:pass show NAME | file:PATH | env:VAR |
+  value:...
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb hook
+
+```
+Usage: kb hook [OPTIONS] COMMAND [ARGS]...
+
+  Entry points for Claude Code and git hooks (they read the event on stdin).
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  check           PostToolUse: validate an edit Claude made in a kb item checkout; problems go back
+                  to Claude (exit 2).
+  recall          UserPromptSubmit: print the few items that look relevant to the prompt.
+  session         SessionStart: one short status note about the store.
+  git-pre-commit  git pre-commit: staged bundles verify; existing bundles are untouched.
+  git-pre-push    git pre-push: the same for every commit being pushed.
+  git-post-merge  git post-merge: a one-line notice about bundles to import.
+```
+
+## kb hook check
+
+```
+Usage: kb hook check [OPTIONS]
+
+  PostToolUse: validate an edit Claude made in a kb item checkout; problems go back to Claude (exit
+  2).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb hook recall
+
+```
+Usage: kb hook recall [OPTIONS]
+
+  UserPromptSubmit: print the few items that look relevant to the prompt.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb hook session
+
+```
+Usage: kb hook session [OPTIONS]
+
+  SessionStart: one short status note about the store.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb hook git-pre-commit
+
+```
+Usage: kb hook git-pre-commit [OPTIONS]
+
+  git pre-commit: staged bundles verify; existing bundles are untouched.
+
+Options:
+  --repo TEXT
+  -h, --help   Show this message and exit.
+```
+
+## kb hook git-pre-push
+
+```
+Usage: kb hook git-pre-push [OPTIONS] [ARGS]...
+
+  git pre-push: the same for every commit being pushed.
+
+Options:
+  --repo TEXT
+  -h, --help   Show this message and exit.
+```
+
+## kb hook git-post-merge
+
+```
+Usage: kb hook git-post-merge [OPTIONS] [ARGS]...
+
+  git post-merge: a one-line notice about bundles to import.
+
+Options:
+  --repo TEXT
+  -h, --help   Show this message and exit.
 ```

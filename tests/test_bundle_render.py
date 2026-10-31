@@ -128,12 +128,12 @@ def test_cli_bundle_and_review(kb, material, tmp_path):
     listing = run(group.root, "inbox", "list").output
     assert "pending" in listing and material["outer"].id in listing
     ref = listing.split()[0]
-    run(group.root, "review", "note", ref, "--verdict", "accept", "--text", "Looks right.")
-    shown = run(group.root, "review", "show", ref).output
+    run(group.root, "inbox", "review", ref, "--verdict", "accept", "--text", "Looks right.")
+    shown = run(group.root, "inbox", "show", ref).output
     assert "Looks right." in shown and "What accepting it would do" in shown
-    assert run(group.root, "review", "accept", ref).exit_code == 0
+    assert run(group.root, "inbox", "accept", ref).exit_code == 0
     assert "accepted" in run(group.root, "inbox", "list", "--status", "all").output
-    rendered = run(kb.root, "render", material["outer"].id).output
+    rendered = run(kb.root, "show", material["outer"].id).output
     assert "The observations" in rendered and "└─" in rendered
     assert "transfer-in" in run(group.root, "log", material["o1"].id).output
 

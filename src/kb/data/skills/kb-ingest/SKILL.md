@@ -21,7 +21,7 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
 
    - If the URL needs SSO and the user has the file: `kb add FILE --url URL ...`.
    - For papers, add `--identifier arxiv=... --identifier doi=...`.
-   - Datasets: `--kind dataset --set format=csv`, then `kb datapackage ID`.
+   - Datasets: `--kind dataset --set format=csv`, then `kb data describe ID`.
    - Snapshots from the conditions DB, elog etc.:
      `--kind snapshot --set system=... --set query="..." --set retrieved=<datetime>`.
    - **Material that has versions or lives in several places** (a talk's
@@ -31,8 +31,8 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
      `kb asset scan --register`. Point the document's rendition at it with
      the location `{"type": "asset", "asset": ID, "version": LABEL, "path": FILE}`.
      See `kb asset --help`.
-3. **Extract text:** `kb extract ID` (`kb transforms` lists what's
-   available). Check the result with `kb content ID text`. For slides, text
+3. **Extract text:** `kb rendition extract ID` (`kb rendition transforms` lists what's
+   available). Check the result with `kb item content ID text`. For slides, text
    extraction loses the plots. If the figures matter, read the slides (or
    ask the user) and write a digest:
 
@@ -42,12 +42,12 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    ```
 4. **Write a summary that helps the next LLM.** Say what the material
    establishes, with key numbers. If it doesn't, update it with
-   `kb set ID summary="..."`.
+   `kb item set ID summary="..."`.
 5. **Fold it into topics.** Run `kb ls --kind topic --subject <subject>`.
-   - If a topic exists: get its page (`kb content TOPIC > page.md`), add
+   - If a topic exists: get its page (`kb item content TOPIC > page.md`), add
      what's new citing `[ID]` for each statement, and put it back
-     (`kb content TOPIC --file page.md`). Add the ID to `derived_from`
-     (`kb set TOPIC --add derived_from=<new-id>`), then `kb stamp TOPIC`.
+     (`kb item content TOPIC --file page.md`). Add the ID to `derived_from`
+     (`kb item set TOPIC --add derived_from=<new-id>`), then `kb item stamp TOPIC`.
    - If none exists and the material plus related items deserve one, make
      it with `kb new topic --title ... --subject ... --derived-from ID ...
      --text-file page.md`.
@@ -56,4 +56,4 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    observation items, citing the document as evidence
    (`--evidence DOC-ID#text`).
 7. Run `kb check` and `kb lint`, and show the user the result
-   (`kb render ID` for the new items).
+   (`kb show ID` for the new items).

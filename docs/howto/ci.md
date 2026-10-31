@@ -10,8 +10,8 @@ jobs:
 
 | where | command | catches |
 |---|---|---|
-| Claude Code hook | `kb hook check` (policy `kb-check-hook`) | bad edits in a `kb checkout` directory, while Claude writes |
-| exchange repository git hooks | `kb git hooks install` | corrupt or edited bundles, before commit or push |
+| Claude Code hook | `kb hook check` (policy `kb-check-hook`) | bad edits in a `kb item checkout` directory, while Claude writes |
+| exchange repository git hooks | `kb exchange hooks install` | corrupt or edited bundles, before commit or push |
 | CI on pull requests to the exchange repository | `kb bundle check FILE` against a snapshot of the store | bundles that would not apply cleanly. **The gate for pull requests** |
 | the store, on every write | database triggers | any change to what a source asserts |
 | the store, on a schedule | `kb check --deep` | tampering outside kb, missing or corrupted content |
@@ -22,7 +22,7 @@ pipeline and one approval.
 ## Checking bundle pull requests (GitLab CI)
 
 The job needs a read-only copy of the store. The store's maintainer
-publishes one with `kb snapshot`. CI downloads it and checks each new
+publishes one with `kb store snapshot`. CI downloads it and checks each new
 bundle against it.
 
 ```yaml
@@ -97,6 +97,6 @@ kb -C $STORE snapshot /backup/kb/tpc-$(date +%F).sqlite
   newer schema rather than misreporting.
 - The scheduled job needs the content and publish stores mounted, and
   credentials for any URLs it must fetch. URLs behind SSO need a service
-  account; otherwise run `kb verify` from members' machines.
+  account; otherwise run `kb rendition verify` from members' machines.
 - `kb check --json` and `kb bundle check` give machine-readable output for
   bots that comment on pull requests.

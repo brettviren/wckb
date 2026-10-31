@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.kb.invalid/v1/topic.json",
   "title": "Topic",
-  "description": "Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites an item by ID and every cited item is listed in derived_from. A derived item: edit freely (kb content), then kb stamp.",
+  "description": "Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites an item by ID and every cited item is listed in derived_from. A derived item: edit freely (kb item content), then kb item stamp.",
   "type": "object",
   "allOf": [
     {

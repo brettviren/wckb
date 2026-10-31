@@ -4,7 +4,7 @@ Layers, last one wins:
 
 1. The store's ``settings`` table (in ``kb.sqlite``): id, name, scope, access,
    limits, content stores (cas), neighbors, policy, autonomy ... (``kb config``,
-   ``kb neighbor``, ``kb policy`` write it).
+   ``kb edge``, ``kb policy`` write it).
 2. The user's ``config.toml`` (``$KB_CONFIG``, else ``$XDG_CONFIG_HOME/kb/``).
    Neighbors declared here apply to every store, which is how a personal
    "home" store becomes the parent of every project store; forges live here.

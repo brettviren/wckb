@@ -1,14 +1,14 @@
 # Item schema reference
 
 Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.3) by
-`kb schema --markdown`; a test keeps this file in sync. `kb schema KIND` prints
+`kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
 ## Fields common to every item
 
 | field | required | type | description |
 |---|---|---|---|
-| `schema_version` | yes | `1` | Major schema version; kb migrate upgrades. |
+| `schema_version` | yes | `1` | Major schema version; kb store migrate upgrades. |
 | `id` | yes | id | Assigned by kb: kind prefix and random suffix. |
 | `kind` | yes | string | Item kind; selects the kind schema. |
 | `title` | yes | string | Short title. |
@@ -117,7 +117,7 @@ A code repository at a version, referenced for provenance of datasets, configs a
 
 ID prefix `top-`; not a source (editable).
 
-Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites an item by ID and every cited item is listed in derived_from. A derived item: edit freely (kb content), then kb stamp.
+Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites an item by ID and every cited item is listed in derived_from. A derived item: edit freely (kb item content), then kb item stamp.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -129,7 +129,7 @@ Also required here: `renditions`, `subject`.
 
 ID prefix `view-`; not a source (editable).
 
-Recipe for a human-facing product (HTML site, PDF note, slides). Its source files are renditions with role source; kb build runs the build tool and stores a manifest; kb publish copies the output.
+Recipe for a human-facing product (HTML site, PDF note, slides). Its source files are renditions with role source; kb view build runs the build tool and stores a manifest; kb view publish copies the output.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -264,7 +264,7 @@ A ref string, or `{ref, digest}` once stamped.
 
 ### origin
 
-Where an item copied from another store came from; set by kb transfers (push, pull, obtain).
+Where an item copied from another store came from; set by transfers (push, pull).
 
 | field | required | type | description |
 |---|---|---|---|

@@ -6,7 +6,7 @@ and uniquely named, branches and pull requests over it never conflict.  A
 sender proposes a bundle by pull request (``kb push --land pr``); reviewers
 read the rendered summary in the PR description (``kb bundle show
 --format md``); once merged, the receiving store imports it
-(``kb inbox import EXCHANGE_DIR --accept``).
+(``kb inbox receive EXCHANGE_DIR --accept``).
 """
 
 import shutil
@@ -37,7 +37,7 @@ def propose(kb, nb, b: dict, message: str | None = None, against=None) -> dict:
     repo = nb.exchange
     if repo is None or not (repo / ".git").exists():
         raise KBError(f"neighbor {nb.name} has no exchange repository clone here "
-                      "(kb neighbor add ... --exchange PATH, a git clone of its bundle repository)")
+                      "(kb edge add ... --exchange PATH, a git clone of its bundle repository)")
     branch = f"kb/{b['set']['id']}-{b['id'][:8]}"
     base = gitutil.current_branch(repo)
     wt = Path(tempfile.mkdtemp(prefix="kb-ex-"))

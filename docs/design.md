@@ -47,7 +47,7 @@ Non-goals for now:
 ```
   project store ──push (select)──►  home store  ──push (inbox / pr)──►  group store
   ./kb/kb.sqlite  ◄──pull (all)───  ~/kb/kb.sqlite                     (one writer)
-                                                                           │ kb snapshot
+                                                                           │ kb store snapshot
         each store: one SQLite file                                        ▼
         ┌───────────────────────────────────────────┐            read-only snapshot
         │ settings │ items (JSON + guards) │ blobs   │            (EOS / web) ◄── neighbors read it
@@ -105,7 +105,7 @@ Tables in `kb.sqlite`:
 
 Configuration is layered, last one wins:
 
-1. the store's settings (`kb config`, `kb neighbor`, `kb policy`);
+1. the store's settings (`kb config`, `kb edge`, `kb policy`);
 2. the user's `~/.config/kb/config.toml` (forges, user-wide neighbors);
 3. `.kb/local.toml` (this machine's paths);
 4. `KB_*` environment variables.
@@ -190,18 +190,18 @@ Further triggers forbid deleting frozen items, and changing or deleting
 blobs and events. Changes made outside kb, with raw SQL, are found by
 `kb check` (`tamper`: the guard columns disagree with the JSON).
 
-Correction is by new items: `kb supersede` replaces, and `kb retract`
+Correction is by new items: `kb item supersede` replaces, and `kb item retract`
 withdraws. Superseded and retracted items stop being *current*, and
 anything derived from them goes stale. What may change on a frozen item is
 our relationship to it: `status`, `subject`, `tags`, `summary`, `evidence`,
 `related`, `identifiers` and `license`, plus added derived renditions and
-mirrors (`kb set`, `kb rendition add|locate`).
+mirrors (`kb item set`, `kb rendition add|locate`).
 
 ### 4.5 Schema evolution
 
 - Additive changes bump the schema *revision*, and items don't change.
 - Breaking changes bump the major version, with a migration (`dict ->
-  dict`). `kb migrate` rewrites all items in one transaction, lifting the
+  dict`). `kb store migrate` rewrites all items in one transaction, lifting the
   core guard inside that transaction only.
 - The database layout has its own version (`PRAGMA user_version`), checked
   on open.
@@ -247,13 +247,13 @@ source) register a `Source` subclass. Nothing else changes.
 the content store, or records them as local when there is none. URLs are
 fetched to hash them, unless `--no-fetch`. `kb add --url URL FILE`
 records a local copy with its canonical URL (for SSO-protected material).
-Identifiers deduplicate. `kb verify` re-fetches URLs and reports changed
+Identifiers deduplicate. `kb rendition verify` re-fetches URLs and reports changed
 content upstream: a new version is a new item that supersedes the old one.
 
-**Working with files.** `kb path ID#NAME` gives a local file with the
-content, with its real file name. `kb content ID [NAME] [--file F]`
-reads or replaces text on editable items. `kb checkout ID DIR` and
-`kb checkin DIR` round-trip an item and its files through a directory.
+**Working with files.** `kb rendition path ID#NAME` gives a local file with the
+content, with its real file name. `kb item content ID [NAME] [--file F]`
+reads or replaces text on editable items. `kb item checkout ID DIR` and
+`kb item checkin DIR` round-trip an item and its files through a directory.
 Fields change within policy, files are added or removed, and the check
 hook validates edits made there.
 
@@ -282,9 +282,9 @@ an asset version and still pin its bytes. See
 ## 6. Transforms
 
 A transform turns one rendition into another, recording its name, version
-and input hash. `kb extract ID` picks one by media type and stores the
+and input hash. `kb rendition extract ID` picks one by media type and stores the
 result as a derived rendition (in the store if small, otherwise the content
-store). `kb transforms` lists what is available here.
+store). `kb rendition transforms` lists what is available here.
 
 | from | to | fidelity | tool | status |
 |---|---|---|---|---|
@@ -294,8 +294,8 @@ store). `kb transforms` lists what is available here.
 | PPTX | markdown | extracted | python-pptx: titles, text, tables, notes | built in (extra `pptx`) |
 | DOCX, ODT, HTML, LaTeX, org, RST | markdown | lossless/extracted | pandoc | built in |
 | ROOT | JSON structure summary | extracted | uproot (TTree and RNTuple, histograms) | built in (extra `root`) |
-| CSV/TSV | `datapackage.json` | metadata | `kb datapackage` | built in |
-| items | RO-Crate | metadata | `kb export rocrate` | built in |
+| CSV/TSV | `datapackage.json` | metadata | `kb data describe` | built in |
+| items | RO-Crate | metadata | `kb data export` | built in |
 | PDF pages | thumbnails | lossless | `pdftoppm` | planned (rendering.md) |
 | arXiv | LaTeX source | original | arXiv e-print API | planned |
 | HDF5, Jupyter | summary, markdown | extracted | h5py, nbconvert | planned |
@@ -314,11 +314,11 @@ never evidence.
 
 **Topics.** A topic is an LLM-maintained page whose every factual sentence
 cites an item, and whose cited items are all in `derived_from`. Its text
-changes with `kb content TOPIC --file page.md`. `kb stamp` pins the inputs
+changes with `kb item content TOPIC --file page.md`. `kb item stamp` pins the inputs
 by digest. A topic goes stale when an input changes or stops being current,
 and is then revised by an LLM, never silently.
 
-**Views.** A view's files are `source` renditions. `kb build VIEW`:
+**Views.** A view's files are `source` renditions. `kb view build VIEW`:
 
 1. materializes them in `.kb/build/<id>/work`;
 2. writes the inputs to `inputs.json`;
@@ -327,13 +327,13 @@ and is then revised by an LLM, never silently.
 4. stores a manifest (input digests, source hashes, outputs, tool version)
    as a metadata rendition.
 
-`kb publish` copies the output to the publish store under a version named
+`kb view publish` copies the output to the publish store under a version named
 by the manifest hash, and logs a `publish` event. Published versions are
 never overwritten.
 
-**Staleness and the world.** `kb stale` lists derived renditions whose
+**Staleness and the world.** `kb item stale` lists derived renditions whose
 source changed, topics with changed or superseded inputs, and views whose
-manifest no longer matches. `kb build --world` re-extracts, then rebuilds
+manifest no longer matches. `kb view build --world` re-extracts, then rebuilds
 stale views in dependency order.
 
 **Build systems.**
@@ -360,7 +360,7 @@ Views should pin their environment (`pixi.lock`, `uv.lock`,
   (§15.3).
 
 The query tables live in the store and are kept in step on every write.
-`kb reindex` rebuilds them after a repair. Datasette can be pointed at
+`kb store reindex` rebuilds them after a repair. Datasette can be pointed at
 `kb.sqlite`, or better at a snapshot of it.
 
 ## 9. FAIR
@@ -400,7 +400,7 @@ a more open store unless it is relabeled deliberately.
 - `kb context` gathers in one call what would otherwise take many;
 - `kb new`, `kb add` and `kb new --from-json -` write the plumbing, so the
   model supplies meaning;
-- `kb render --format md|json` shows items as people see them;
+- `kb show --format md|json` shows items as people see them;
 - `kb log` shows what happened.
 
 Skills: `kb-consult`, `kb-capture`, `kb-ingest`, `kb-correct`, `kb-view`,
@@ -414,14 +414,14 @@ pull requests).
    prompt). It files what gets established as it works, per `capture`
    autonomy, and marks items for a wider audience (`tags=promote`).
 2. **Promotion.** At a milestone, or when asked, `kb-promote` ranks
-   candidates (`kb candidates --to home`), shows a short list, and pushes
+   candidates (`kb edge candidates home`), shows a short list, and pushes
    what the human approves. From home to a group, the push lands in the
    group's inbox or as a pull request.
 3. **Review.** In the receiving store, `kb-review` renders each bundle,
    judges it item by item, records a review, and leaves the decision to
    the human (or accepts, per `accept` autonomy).
 4. **Consulting** from anywhere: `kb context ... --reach 2`.
-5. **Correcting:** supersede or retract, then follow `kb stale`. A
+5. **Correcting:** supersede or retract, then follow `kb item stale`. A
    correction of something already pushed becomes the top promotion
    candidate.
 6. **Views:** create one, check out and add its sources, build, publish.
@@ -481,7 +481,7 @@ neighbor:
 - `pr`: a bundle proposed by pull request in its exchange repository.
 
 A neighbor is found by `path` (its store directory here, needed for
-writing) or `url` (a published snapshot, downloaded by `kb neighbor
+writing) or `url` (a published snapshot, downloaded by `kb edge
 fetch`). Shared declarations go in the store's settings, and machine paths
 in `.kb/local.toml`. `[neighbors.*]` in the user's config applies to
 every store, which is how `~/kb` becomes every project's `up`.
@@ -495,7 +495,7 @@ scratch files in the user cache.
 
 ### 15.4 References and obtaining
 
-References are global IDs and may dangle: `kb check` warns, and `kb obtain
+References are global IDs and may dangle: `kb check` warns, and `kb pull
 ID…|--dangling` pulls them from the nearest reachable store that has them.
 `kb new` still refuses a reference found nowhere (a likely typo) unless
 `--allow-dangling` is given.
@@ -511,16 +511,16 @@ A `kset` has members, a `depth`, a `nested` rule and a `follow` list:
 - `follow`: the reference fields a deep descent takes.
 
 Sets are frozen and take the access of their most restricted member.
-`kb kset new`, `kb kset expand` and `kb render KSET` (a tree).
+`kb kset new`, `kb kset expand` and `kb show KSET` (a tree).
 
 ### 15.6 Transfers
 
-`kb push`, `kb pull` and `kb obtain` expand a set and apply it to the
+`kb push` and `kb pull` expand a set and apply it to the
 receiver in **one transaction**. The receiver's checks must pass, or
 nothing changes. Copies keep their ID and get an `origin`: the last
 sender, the `path` of store IDs travelled, the set, when, by whom, and who
 approved. Both stores log `transfer-out` and `transfer-in` events
-(`kb transfers`).
+(`kb edge ledger`).
 
 ### 15.7 Arrival along several paths
 
@@ -536,7 +536,7 @@ approved. Both stores log `transfer-out` and `transfer-in` events
 
 ### 15.8 Promotion
 
-`kb candidates --to N` ranks corrections of items already sent, items
+`kb edge candidates N` ranks corrections of items already sent, items
 marked `promote`, verified and well-described items, and items changed
 since they were sent. It shows blockers (drafts, local-only content, access
 more restricted than the target) and leaves out `no-promote`, items that
@@ -545,7 +545,7 @@ came from the target, and sets.
 ### 15.9 Shared stores, snapshots and twins
 
 A group store has one writer: a maintainer, or a job applying accepted
-bundles. Members read a **snapshot** (`kb snapshot DEST`, a consistent
+bundles. Members read a **snapshot** (`kb store snapshot DEST`, a consistent
 `VACUUM INTO` copy) published on EOS or the web, and reach it by URL.
 Copying `kb.sqlite` itself is not safe while it is in use.
 
@@ -613,8 +613,8 @@ people they mention, in one self-checking JSON file named by its hash
 
 The **inbox** holds received bundles (`kb inbox list|receive|import`).
 Reviews from people and LLMs are recorded with the reviewer's kind
-(`kb review note`). `kb review accept` applies a bundle in one transaction,
-and `kb review reject` records why not.
+(`kb inbox review`). `kb inbox accept` applies a bundle in one transaction,
+and `kb inbox reject` records why not.
 
 **Rendering** turns items, sets and bundles into a view model for people,
 with three formatters (text, markdown, JSON):
@@ -637,9 +637,9 @@ Planned: a TUI, a web view and slide thumbnails. See
   (`kb exchange init`). `kb push --land pr` commits a bundle on a branch
   (through a temporary worktree), pushes it, and opens a pull request whose
   description is the bundle rendered against the receiver. After the
-  merge, `kb inbox import EXCHANGE --accept` brings it in. Bundles never
+  merge, `kb inbox receive EXCHANGE --accept` brings it in. Bundles never
   conflict, so this use of git never merges content.
-- **Git hooks** (`kb git hooks install`) guard exchange repositories:
+- **Git hooks** (`kb exchange hooks install`) guard exchange repositories:
   added bundles must verify, and existing bundles are immutable (enforced
   on pre-commit and pre-push).
 - **Forges:** `kb forge pr create|list|show|comment|merge|close` speaks to

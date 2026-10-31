@@ -24,7 +24,7 @@ kb add https://arxiv.org/pdf/2601.01234 --set doctype=preprint \
 
 **A public URL you don't want to download now:**
 `--no-fetch` records the URL without a hash. `kb lint` will remind you, and
-`kb verify --record ID` fills the hash in later.
+`kb rendition verify --record ID` fills the hash in later.
 
 ## Where does the file go?
 
@@ -53,10 +53,10 @@ a genuinely different document that happens to share it.
 ## Text extraction
 
 ```
-kb transforms                 # what's available on this machine
-kb extract doc-3vq8r2m1kd     # picks a transform by media type, writes the 'text' rendition
-kb content doc-3vq8r2m1kd text    # read it
-kb path doc-3vq8r2m1kd#text       # or get it as a file, for other tools
+kb rendition transforms                 # what's available on this machine
+kb rendition extract doc-3vq8r2m1kd     # picks a transform by media type, writes the 'text' rendition
+kb item content doc-3vq8r2m1kd text    # read it
+kb rendition path doc-3vq8r2m1kd#text       # or get it as a file, for other tools
 ```
 
 Built-in transforms:

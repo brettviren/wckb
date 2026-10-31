@@ -1,10 +1,10 @@
 """Changing existing items within policy.
 
-``set_fields`` (``kb set``), renditions (``kb rendition add|locate``),
-content (``kb content``), and a generic file round trip for the few cases
-where files are the natural way to work: ``kb checkout`` writes an item and
-its content into a directory, ``kb checkin`` reads the directory back,
-validates, and applies what changed (``kb edit`` does both around $EDITOR).
+``set_fields`` (``kb item set``), renditions (``kb rendition add|locate``),
+content (``kb item content``), and a generic file round trip for the few cases
+where files are the natural way to work: ``kb item checkout`` writes an item and
+its content into a directory, ``kb item checkin`` reads the directory back,
+validates, and applies what changed (``kb item edit`` does both around $EDITOR).
 
 On frozen items (sources, released policies) only the fields describing our
 relationship to the assertion may change; the database refuses the rest.
@@ -64,12 +64,12 @@ def set_fields(kb: Store, ident: str, sets=(), add=(), remove=(), replace_ref=()
                 data[k] = [new if _ref_of(x) == old else x for x in data[k]]
     bad = touched & NEVER
     if bad:
-        raise KBError(f"cannot set {', '.join(sorted(bad))} (renditions: kb rendition / kb content)")
+        raise KBError(f"cannot set {', '.join(sorted(bad))} (renditions: kb rendition / kb item content)")
     if rec.frozen:
         frozen = touched & set(IMMUTABLE)
         if frozen:
             raise KBError(f"{', '.join(sorted(frozen))} of {rec.id} cannot change (it is frozen); "
-                          f"use kb supersede {rec.id}")
+                          f"use kb item supersede {rec.id}")
     new = deep_merge(data, changes)
     new = {k: v for k, v in new.items() if v is not None}  # key=null deletes
     errors = schema.validate(new)
@@ -157,7 +157,7 @@ def rendition_path(kb: Store, ref: str, fetch: bool = True) -> Path:
     ident, name = parse_ref(ref)
     rec = kb.get(ident)
     if name is None:
-        raise KBError("name the rendition: ID#NAME (kb checkout ID writes a whole item to a directory)")
+        raise KBError("name the rendition: ID#NAME (kb item checkout ID writes a whole item to a directory)")
     p = content.resolve(kb, rec, rec.rendition(name), fetch_urls=fetch)
     if p is None:
         raise KBError(f"{ref} is not reachable from here")
@@ -176,7 +176,7 @@ def set_content(kb: Store, ident: str, text: str, name: str | None = None) -> It
     rec = kb.get(ident)
     name = name or content_name(rec)
     if rec.frozen:
-        raise KBError(f"{rec.id} is frozen: its content cannot change; kb supersede {rec.id}")
+        raise KBError(f"{rec.id} is frozen: its content cannot change; kb item supersede {rec.id}")
     data = copy.deepcopy(rec.data)
     with kb.tx():
         try:
@@ -240,7 +240,7 @@ def checkin(kb: Store, directory: Path, dry_run: bool = False) -> dict:
     d = directory.resolve()
     mark_p = d / CHECKOUT_MARK
     if not mark_p.exists():
-        raise KBError(f"{d} is not a kb checkout (no {CHECKOUT_MARK})")
+        raise KBError(f"{d} is not a kb item checkout (no {CHECKOUT_MARK})")
     mark = json.loads(mark_p.read_text())
     rec = kb.get(mark["id"])
     if rec.updated_at != mark.get("updated_at"):
@@ -256,7 +256,7 @@ def checkin(kb: Store, directory: Path, dry_run: bool = False) -> dict:
     if is_frozen(old):
         changed = [k for k in IMMUTABLE if new.get(k) != old.get(k)]
         if changed:
-            raise KBError(f"{', '.join(changed)} of {rec.id} cannot change (frozen); kb supersede {rec.id}")
+            raise KBError(f"{', '.join(changed)} of {rec.id} cannot change (frozen); kb item supersede {rec.id}")
     report = {"id": rec.id, "fields": sorted(k for k in set(new) | set(old)
                                              if k != "renditions" and new.get(k) != old.get(k)),
               "content": [], "added": [], "removed": []}
@@ -273,7 +273,7 @@ def checkin(kb: Store, directory: Path, dry_run: bool = False) -> dict:
         import hashlib
         if hashlib.sha256(data).hexdigest() != r.get("sha256"):
             if is_frozen(old) and r.get("role") in ("original", "content"):
-                raise KBError(f"{fn}: content of frozen {rec.id} cannot change; kb supersede {rec.id}")
+                raise KBError(f"{fn}: content of frozen {rec.id} cannot change; kb item supersede {rec.id}")
             staged.append((r, data, fn))
             report["content"].append(fn)
     for fn in sorted(present - set(by_file)):

@@ -22,7 +22,7 @@ Deliverables:
 | Transform registry with built-in transforms | `src/kb/transforms.py` | done |
 | Dependency graph, staleness, stamping | `src/kb/graph.py` | done |
 | View build, manifest, publish | `src/kb/build.py` | done |
-| Editing within policy: `kb set`, `kb rendition add\|locate` | `src/kb/edit.py` | done |
+| Editing within policy: `kb item set`, `kb rendition add\|locate` | `src/kb/edit.py` | done |
 | LLM context packs (`kb context`) | `src/kb/context.py` | done |
 | Migrations framework | `src/kb/migrate.py` | done |
 | FAIR export: RO-Crate, datapackage inference | `src/kb/fair.py` | done |
@@ -61,7 +61,7 @@ Steps:
 1. Create the group store with `kb init --scope group` on its writer's local
    disk. Configure a content store (`cas`) and a publish store on shared
    storage, an exchange repository for pull requests (`kb exchange init`)
-   with CI (`docs/howto/ci.md`), and a nightly `kb snapshot` for members.
+   with CI (`docs/howto/ci.md`), and a nightly `kb store snapshot` for members.
 2. Each pilot user installs `kb` with `uv tool install`, creates a home store
    (`kb init ~/kb --scope home`), links the group store as its `up`
    neighbor (its published snapshot, plus the exchange repository), adds `[neighbors.home]` to their user config so every project
@@ -137,8 +137,8 @@ Planned, in rough priority order. Open design questions are tracked in
 |---|---|
 | The KB fills with low-value captures | Promotion goes through review (the receiver's inbox or a pull request), the `kb-capture` skill is told to be selective, and `kb-curate` reviews old unverified claims. |
 | Schema friction stops people contributing | `kb new`/`kb add` write the plumbing; the hook explains errors; `x` is the escape hatch; schema revisions are cheap. |
-| Topics drift from their sources | Stamping with digests, `kb stale` in CI, and corrections travel with the topic revisions they caused. |
-| External URLs rot or change | Hashes, `kb verify`, blob-store snapshots of important originals. |
+| Topics drift from their sources | Stamping with digests, `kb item stale` in CI, and corrections travel with the topic revisions they caused. |
+| External URLs rot or change | Hashes, `kb rendition verify`, blob-store snapshots of important originals. |
 | Python start-up cost in tight LLM loops | Lazy imports; `kb context` gathers in one call what would otherwise be many calls; a compiled reader later if needed. |
 | Over-engineering | Phase gates; nothing in Phase 2 starts without a pilot user asking for it. |
 

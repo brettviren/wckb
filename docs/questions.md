@@ -42,7 +42,7 @@ Status:
   store? `kb check --deep` cost grows with blob volume.
 
 **S7. Snapshot publishing.** *(open)*
-- Who publishes a group store's read-only snapshot (`kb snapshot`), where
+- Who publishes a group store's read-only snapshot (`kb store snapshot`), where
   (EOS, a web server), and how often (on every accepted bundle, nightly)?
 
 ## V. Files, versions and sources (see decisions/0002)
@@ -128,7 +128,7 @@ Status:
 - Affects CI (it must mount them) and laptops.
 
 **A2. Does CI get an SSO service account?** *(open)*
-- Indico and the elog sit behind SSO. Without an account, `kb verify` and
+- Indico and the elog sit behind SSO. Without an account, `kb rendition verify` and
   nightly world builds that fetch URLs only work on members' machines.
 
 **A3. Person registry, or free-text names?** *(open)*
@@ -191,7 +191,7 @@ Status:
 
 **B10. Garbage and divergence.** *(open)*
 - Pushed copies in a parent can be curated, superseded or retracted there.
-  Should the source learn about that, for example a `kb neighbor news`
+  Should the source learn about that, for example a `kb edge news`
   that reads what happened upstream to records it pushed?
 
 **B11. Did we read "a down edge accepts all" the right way?** *(open)*
@@ -229,7 +229,7 @@ Status:
   the same sender as before, or when the edge prefers theirs; otherwise
   ours is kept and the difference noted.
 - There is no notion of "newer". A per-item revision counter bumped by
-  `kb set` would give a partial order, but concurrent edits remain genuine
+  `kb item set` would give a partial order, but concurrent edits remain genuine
   conflicts.
 
 **B16. Knowledge-set proliferation.** *(open)*
@@ -243,7 +243,7 @@ Status:
 - A deep expansion stops at records the sender doesn't have, which are then
   reported as dangling at the receiver. Should one transfer be able to pull
   missing pieces from third stores (a multi-source deep transfer), or is
-  `kb obtain` afterwards enough?
+  `kb pull` afterwards enough?
 
 **B18. Scale of "all".** *(open)*
 - `all` compares every current item of both stores. That's fine for
@@ -306,7 +306,7 @@ Status:
 
 **C8. Should git hooks be policy elements?** *(open)*
 - Agent hooks are policy (named, versioned, enacted). Git hooks now guard
-  exchange repositories and are installed by `kb git hooks` or
+  exchange repositories and are installed by `kb exchange hooks` or
   `kb exchange init`. They are not versioned with policy. Unify?
 
 ## D. LLM behavior and autonomy
@@ -353,7 +353,7 @@ Status:
 **E2. Topics across scopes.** *(open)*
 - A home-level topic synthesizing several projects cites records that live
   in project stores. Since B6, references needn't resolve locally. Is a
-  shallow transfer plus `kb obtain` on demand the right pattern, or should
+  shallow transfer plus `kb pull` on demand the right pattern, or should
   such topics travel deep?
 
 **E3. Making `kb` recognize that an item is used.** *(open)*
@@ -458,8 +458,8 @@ Status:
   only as transport (exchange repositories). See decisions/0001 §13.
 
 **B20. Reviewing pulled knowledge.** *(resolved 2026-10-31)*
-- Pulled items with `accept = review` go into the inbox: `kb review show`,
-  `kb review note`, `kb review accept` or `kb review reject`. No branches.
+- Pulled items with `accept = review` go into the inbox: `kb inbox show`,
+  `kb inbox review`, `kb inbox accept` or `kb inbox reject`. No branches.
 
 **G1, G7.** *(obsolete 2026-10-31)*
 - Both were about stores as git repositories (pre-commit on the index, a
@@ -478,7 +478,7 @@ Status:
 - Items can always reference other items, store-independently, by
   global ID.
 - Obtaining a referenced item is a separate step, as with a content-addressed
-  store: `kb obtain` fetches from reachable stores, and transfers are
+  store: `kb pull` fetches from reachable stores, and transfers are
   shallow or deep through knowledge sets.
 - `kb check` reports unresolved references as `dangling` warnings.
 - Follow-ups: B14, B15 and B17.

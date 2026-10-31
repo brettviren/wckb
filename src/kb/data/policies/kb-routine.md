@@ -19,8 +19,8 @@ human doesn't have to remind you.
   Prefer few, specific, attributed items over many vague ones, and don't
   file what is already there (`kb search` first).
 - **When something you find contradicts the KB**, say so and offer
-  `kb supersede` (see kb-correct). Don't silently work around it.
-- **Mark what deserves a wider audience** with `kb set ID --add tags=promote`.
+  `kb item supersede` (see kb-correct). Don't silently work around it.
+- **Mark what deserves a wider audience** with `kb item set ID --add tags=promote`.
   Promotion itself is a separate review (kb-promote).
 - Keep it light: a lookup or a filing is one command. Don't narrate KB
   mechanics at length.

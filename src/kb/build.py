@@ -6,7 +6,7 @@ under ``.kb/build/<id>/``, resolves the inputs into ``inputs.json``, runs the
 declared tool with ``KB_*`` variables set, and records a manifest (a
 ``metadata`` rendition of the view) that lets anyone tell when the view is
 stale.  ``publish`` copies the output to the publish store and logs a
-``publish`` event.  Edit sources with ``kb checkout VIEW DIR`` / ``kb checkin DIR``.
+``publish`` event.  Edit sources with ``kb item checkout VIEW DIR`` / ``kb item checkin DIR``.
 """
 
 import copy
@@ -207,7 +207,7 @@ def publish(kb: Store, ident: str) -> dict:
         raise KBError(f"{rec.id} has never been built")
     reasons = view_staleness(kb, rec)
     if reasons:
-        raise KBError(f"{rec.id} is stale ({'; '.join(reasons)}); kb build it first")
+        raise KBError(f"{rec.id} is stale ({'; '.join(reasons)}); kb view build it first")
     out = kb.cfg.build_dir / rec.id / "out"
     for rel, meta in man["outputs"].items():
         p = out / rel

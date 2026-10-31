@@ -1,9 +1,9 @@
 # Views: HTML and PDF products
 
 A view is a recipe. Its sources (a document, scripts, a build file) are
-held in the store as the view's `source` renditions. `kb build`
+held in the store as the view's `source` renditions. `kb view build`
 materializes them into a work area (`.kb/build/<id>/work`) and runs the
-tool there. `kb publish` copies the result to the publish store as an
+tool there. `kb view publish` copies the result to the publish store as an
 immutable version.
 
 ## Make one
@@ -14,13 +14,13 @@ kb new view --title "TPC noise, Q4 summary" \
   --subject detector/tpc/noise \
   --derived-from top-e6mv1m318t --derived-from dat-4h2k9m3qpz#original \
   --set build.tool=quarto --set build.target=index.qmd --set 'build.formats=["html","pdf"]'
-kb checkout view-... ~/work/noise-view        # item.json plus the current sources
+kb item checkout view-... ~/work/noise-view        # item.json plus the current sources
 # ... write index.qmd, scripts/plot_noise.py, pixi.toml ... in ~/work/noise-view
-kb checkin ~/work/noise-view                  # new and changed files become the view's sources
+kb item checkin ~/work/noise-view                  # new and changed files become the view's sources
 ```
 
 Edit sources the same way later: check out, edit, check in. Files you add
-become sources, and files you delete are dropped. `kb checkin --dry-run`
+become sources, and files you delete are dropped. `kb item checkin --dry-run`
 validates without applying. Scripts find their inputs through the environment.
 They never hard-code paths:
 
@@ -66,8 +66,8 @@ marks the view stale.
 ## Build
 
 ```
-kb build view-...                    # output in .kb/build/view-.../out/, log in build.log
-kb stale                             # empty for this view now
+kb view build view-...                    # output in .kb/build/view-.../out/, log in build.log
+kb item stale                             # empty for this view now
 ```
 
 The build records a manifest as a rendition of the view: the digest of
@@ -78,7 +78,7 @@ the view pushed elsewhere, can tell when the view is stale.
 ## Publish
 
 ```
-kb publish view-...
+kb view publish view-...
 ```
 
 This copies `out/` to `<publish_path>/<view-id>/<version>/`, where the
@@ -90,10 +90,10 @@ view.
 ## Build the world
 
 ```
-kb build --stale            # every stale view, in dependency order (views may use other views)
-kb build --world            # re-extract stale renditions, reindex, then build stale views
-kb build --world --publish  # ... and publish them (e.g. nightly in CI)
-kb dag --format dot | dot -Tsvg > kb.svg   # see the graph
+kb view build --stale            # every stale view, in dependency order (views may use other views)
+kb view build --world            # re-extract stale renditions, reindex, then build stale views
+kb view build --world --publish  # ... and publish them (e.g. nightly in CI)
+kb item graph --format dot | dot -Tsvg > kb.svg   # see the graph
 ```
 
 `kb` owns the graph *between* items (content hashes, topological order).

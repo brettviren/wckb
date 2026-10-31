@@ -64,7 +64,7 @@ You may change our *relationship* to it: status, subject, tags, summary,
 evidence and related items:
 
 ```
-kb set obs-7k2m9q4xha status=verified --add evidence=https://elog.example/5521
+kb item set obs-7k2m9q4xha status=verified --add evidence=https://elog.example/5521
 ```
 
 What it *says* can't change: the store refuses it. Write a correction

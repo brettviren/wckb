@@ -255,7 +255,7 @@ def plan(sender, dst: Store, kset: dict, *, prefer: str = "ours", access: str | 
     exp = expand(kset, lookup)
     if exp.missing_members:
         raise KBError("set members not held by the sender: " + ", ".join(f"{i} (from {f})" for f, i in exp.missing_members)
-                      + "; obtain them first (kb obtain) or leave them out")
+                      + "; fetch them first (kb pull ID ...) or leave them out")
     items, relabeled = [], []
     for ident in exp.items:
         if ident not in sender.items:

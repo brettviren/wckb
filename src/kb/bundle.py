@@ -248,7 +248,7 @@ def _guard(kb: Store, approved: str | None) -> str:
     level = kb.cfg.autonomy_for("accept")
     if level == "never":
         raise KBError("autonomy: accepting bundles into this store is reserved for the human; record your "
-                      "assessment with kb review note, and leave the decision to them")
+                      "assessment with kb inbox review, and leave the decision to them")
     if level == "ask" and not approved:
         raise KBError("autonomy: accepting needs the human's approval; ask, then pass --approved \"<their words>\"")
     return f"human: {approved}" if approved else "autonomy:auto"

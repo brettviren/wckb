@@ -8,7 +8,7 @@ everything built on it becomes stale.
 ## Correct an item
 
 ```
-kb supersede obs-7k2m9q4xha \
+kb item supersede obs-7k2m9q4xha \
   --title "Elevated coherent noise was in run 1243" \
   --summary "Correction: the noisy run was 1243 (elog 5521); 1234 was a transcription error." \
   --runs 1243 --by elog --how "elog entry 5521" --evidence https://elog.example/5521 \
@@ -23,7 +23,7 @@ under "Superseded".
 ## Withdraw an item
 
 ```
-kb retract obs-7k2m9q4xha --reason "Duplicate of obs-9x...; recorded twice."
+kb item retract obs-7k2m9q4xha --reason "Duplicate of obs-9x...; recorded twice."
 ```
 
 This writes a retraction observation. Nothing replaces the withdrawn
@@ -32,14 +32,14 @@ item.
 ## When only our confidence changes
 
 ```
-kb set obs-7k2m9q4xha status=disputed
-kb set obs-7k2m9q4xha status=verified --add evidence=snp-...
+kb item set obs-7k2m9q4xha status=disputed
+kb item set obs-7k2m9q4xha status=verified --add evidence=snp-...
 ```
 
 ## When upstream content changed
 
 ```
-kb verify                  # re-fetch every URL original; 'changed' means the hash differs
+kb rendition verify                  # re-fetch every URL original; 'changed' means the hash differs
 kb add <url> --supersedes doc-3vq8r2m1kd --set doctype=presentation ... --extract
 ```
 
@@ -49,27 +49,27 @@ new version, so you add it and it supersedes the old one.
 ## Propagate
 
 ```
-kb stale
+kb item stale
 ```
 
 It lists three kinds of stale item:
 
 | kind | meaning | fix |
 |---|---|---|
-| `rendition` | a derived rendition's source changed | `kb extract ID --name NAME --force`, or `kb extract --stale` |
-| `topic` | an input was superseded, retracted or changed | an LLM revises the page (`kb content TOPIC --file page.md`); swap the ref (`kb set TOPIC --replace-ref OLD=NEW`); `kb stamp TOPIC` |
-| `view` | inputs or sources changed since the last build | update inputs as for topics, then `kb build VIEW` |
+| `rendition` | a derived rendition's source changed | `kb rendition extract ID --name NAME --force`, or `kb rendition extract --stale` |
+| `topic` | an input was superseded, retracted or changed | an LLM revises the page (`kb item content TOPIC --file page.md`); swap the ref (`kb item set TOPIC --replace-ref OLD=NEW`); `kb item stamp TOPIC` |
+| `view` | inputs or sources changed since the last build | update inputs as for topics, then `kb view build VIEW` |
 
 Topics are never rewritten automatically. Revising prose needs judgment, so
 it's done by Claude (the `kb-correct` skill) and reviewed by a person.
 Views are rebuilt mechanically.
 
 Published views are not changed. `kb lint` lists views whose latest
-publication used superseded inputs, and `kb publish` after a rebuild adds a
+publication used superseded inputs, and `kb view publish` after a rebuild adds a
 new version next to the old one.
 
 If the corrected item had been pushed to other stores, the correction is
-now a top promotion candidate (`kb candidates --to NEIGHBOR`). Send it, so
+now a top promotion candidate (`kb edge candidates NEIGHBOR`). Send it, so
 the correction reaches them too.
 
 ## Why not just edit?

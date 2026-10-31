@@ -10,17 +10,17 @@ kb add noise_by_run.csv make_noise_table.py --kind dataset --set format=csv \
   --title "Coherent noise RMS by run, 1200-1300" \
   --summary "Per-run, per-plane coherent noise RMS in ADC for runs 1200-1300, from the nightly noise job." \
   --subject detector/tpc/noise --runs 1200-1300 --license collaboration-internal
-kb datapackage dat-...        # Frictionless datapackage.json: column names and inferred types
+kb data describe dat-...        # Frictionless datapackage.json: column names and inferred types
 ```
 
-`kb datapackage` adds a `metadata` rendition describing each CSV/TSV, so
+`kb data describe` adds a `metadata` rendition describing each CSV/TSV, so
 any tool (or LLM) knows the columns without reading the data. Edit
 `datapackage.json` to add units and descriptions, then
-`kb set ID summary=...` if needed. Variables can also be listed on the
+`kb item set ID summary=...` if needed. Variables can also be listed on the
 item:
 
 ```
-kb set dat-... 'variables=[{"name":"rms","unit":"ADC","description":"coherent noise RMS"}]'
+kb item set dat-... 'variables=[{"name":"rms","unit":"ADC","description":"coherent noise RMS"}]'
 ```
 
 Describing the data (`variables`, `produced_by`, `summary`) is allowed on a
@@ -43,7 +43,7 @@ ROOT files get a structure summary, so the KB knows what is inside without
 opening them:
 
 ```
-kb extract dat-... --name structure    # trees/RNTuples with branches and entries, histograms with contents
+kb rendition extract dat-... --name structure    # trees/RNTuples with branches and entries, histograms with contents
 ```
 
 ## Many small items, or one dataset?
@@ -73,5 +73,5 @@ Point datasets at the code and configuration that made them:
 ```
 kb new software --set repository=https://gitlab.example/group/noise-job --set commit=3f2a9c1 \
   --title "Nightly noise job" --summary "Computes per-run coherent noise RMS from raw data."
-kb set dat-... 'produced_by={"software": "sw-...", "command": "noise-job --runs 1200-1300"}'
+kb item set dat-... 'produced_by={"software": "sw-...", "command": "noise-job --runs 1200-1300"}'
 ```

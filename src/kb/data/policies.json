@@ -2,7 +2,7 @@
   {
     "name": "kb-core",
     "type": "instructions",
-    "version": 2,
+    "version": 3,
     "file": "policies/kb-core.md",
     "order": 10,
     "title": "KB core rules",
@@ -11,7 +11,7 @@
   {
     "name": "kb-routine",
     "type": "instructions",
-    "version": 1,
+    "version": 2,
     "file": "policies/kb-routine.md",
     "order": 20,
     "applies_to": [
@@ -24,7 +24,7 @@
   {
     "name": "kb-federation",
     "type": "instructions",
-    "version": 3,
+    "version": 4,
     "file": "policies/kb-federation.md",
     "order": 30,
     "title": "Neighbor stores and promotion",
@@ -33,7 +33,7 @@
   {
     "name": "kb-consult",
     "type": "skill",
-    "version": 2,
+    "version": 3,
     "file": "skills/kb-consult/SKILL.md",
     "title": "kb-consult",
     "description": "Answer from the KB."
@@ -41,7 +41,7 @@
   {
     "name": "kb-capture",
     "type": "skill",
-    "version": 2,
+    "version": 3,
     "file": "skills/kb-capture/SKILL.md",
     "title": "kb-capture",
     "description": "Capture a session into the KB."
@@ -49,7 +49,7 @@
   {
     "name": "kb-ingest",
     "type": "skill",
-    "version": 3,
+    "version": 4,
     "file": "skills/kb-ingest/SKILL.md",
     "title": "kb-ingest",
     "description": "Add documents, datasets, configs, snapshots."
@@ -57,7 +57,7 @@
   {
     "name": "kb-correct",
     "type": "skill",
-    "version": 2,
+    "version": 3,
     "file": "skills/kb-correct/SKILL.md",
     "title": "kb-correct",
     "description": "Correct and propagate."
@@ -65,7 +65,7 @@
   {
     "name": "kb-view",
     "type": "skill",
-    "version": 2,
+    "version": 3,
     "file": "skills/kb-view/SKILL.md",
     "title": "kb-view",
     "description": "Build human-facing views."
@@ -73,7 +73,7 @@
   {
     "name": "kb-curate",
     "type": "skill",
-    "version": 2,
+    "version": 3,
     "file": "skills/kb-curate/SKILL.md",
     "title": "kb-curate",
     "description": "Semantic review of the store."
@@ -81,7 +81,7 @@
   {
     "name": "kb-promote",
     "type": "skill",
-    "version": 3,
+    "version": 4,
     "file": "skills/kb-promote/SKILL.md",
     "title": "kb-promote",
     "description": "Review and push items to a neighbor store."
@@ -89,7 +89,7 @@
   {
     "name": "kb-review",
     "type": "skill",
-    "version": 1,
+    "version": 2,
     "file": "skills/kb-review/SKILL.md",
     "title": "kb-review",
     "description": "Review inbox bundles: render, judge, record a review, accept or reject per autonomy."
@@ -108,7 +108,7 @@
     "version": 1,
     "file": "policies/kb-check-hook.json",
     "title": "Check on edit",
-    "description": "PostToolUse: validates edits Claude makes in a kb checkout; problems go back to Claude."
+    "description": "PostToolUse: validates edits Claude makes in a kb item checkout; problems go back to Claude."
   },
   {
     "name": "kb-recall-hook",

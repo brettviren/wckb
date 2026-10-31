@@ -39,7 +39,7 @@ Goal: a few high-value, well-attributed items, not a session dump.
 3. **Check.** `kb check` must pass. Then run `kb lint`. An `overlap`
    warning means another item covers the same subject and runs: tell the
    user whether yours agrees, adds detail or contradicts it.
-4. **Report** the items you filed (`kb render ID` shows each as a person
+4. **Report** the items you filed (`kb show ID` shows each as a person
    reads it). Mark the ones that deserve a wider audience with
-   `kb set ID --add tags=promote`. Promotion is a separate review
+   `kb item set ID --add tags=promote`. Promotion is a separate review
    (kb-promote).

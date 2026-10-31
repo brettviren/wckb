@@ -12,19 +12,19 @@ to.
   dataset, all behind one data-source interface. Every rendition carries a
   SHA-256.
 - Sources are append-only, enforced by the database. Corrections supersede.
-  Every change and transfer is an event (`kb log`), and `kb stale` shows what
+  Every change and transfer is an event (`kb log`), and `kb item stale` shows what
   needs revising or rebuilding.
 - Stores at every scope (project, home, group) are linked as `up`, `down`,
   `peer` or `twin` neighbors. LLMs read across them. Knowledge moves as
-  knowledge sets with `kb push`, `kb pull` and `kb obtain`: applied
+  knowledge sets with `kb push` and `kb pull`: applied
   atomically, or as **bundles** reviewed in the receiver's inbox by people
   and LLMs, or as pull requests in an exchange repository.
 - **Assets** stand for files and file sets independently of where they
   live. Versions are identified by content, sources (directory trees, URLs,
   the store; DataLad, Indico and DocDB planned) are bound with their own
   versioning, and resolution yields one verified file set.
-- Items, sets and bundles render for people (`kb render`,
-  `kb bundle show`, `kb review show`): names, dates, links, excerpts and
+- Items, sets and bundles render for people (`kb show`,
+  `kb bundle show`, `kb inbox show`): names, dates, links, excerpts and
   trees, with no hashes.
 - Policy (CLAUDE.md instructions, skills and hooks) is named, versioned and
   enacted by `kb policy`. Autonomy (push, pull, accept, merge ...) is

@@ -1,7 +1,7 @@
 """Git hooks for exchange repositories (git repositories of bundle files).
 
 Stores themselves are SQLite files, not git repositories; git carries
-bundles.  ``kb git hooks install`` puts a marked block into the repository's
+bundles.  ``kb exchange hooks install`` puts a marked block into the repository's
 hook scripts (respecting ``core.hooksPath``), so hooks the user already has
 keep working.  The block calls ``kb hook git-<name> --repo <toplevel>``.
 
@@ -20,7 +20,7 @@ from .errors import KBError
 
 HOOKS = ("pre-commit", "pre-push", "post-merge")
 DEFAULT = ("pre-commit", "pre-push", "post-merge")
-BEGIN = "# >>> kb >>> (managed by kb git hooks; edit outside this block)"
+BEGIN = "# >>> kb >>> (managed by kb exchange hooks; edit outside this block)"
 END = "# <<< kb <<<"
 ZERO = "0" * 40
 
@@ -178,7 +178,7 @@ def init_exchange(path: Path) -> list[str]:
     if not readme.exists():
         readme.write_text("# Knowledge exchange\n\nBundles of knowledge items proposed to a kb store, one file each "
                           "under `bundles/`. Bundles are immutable: review the rendered summary in each pull request, "
-                          "merge to accept, then import into the store with `kb inbox import <this repo> --accept`.\n")
+                          "merge to accept, then import into the store with `kb inbox receive <this repo> --accept`.\n")
         made.append(str(readme))
     (path / "bundles").mkdir(exist_ok=True)
     (path / "bundles" / ".gitkeep").touch()

@@ -286,7 +286,7 @@ def pull(kb: Store, source: str, refs: list[str], *, deep: bool = False, nested:
         raise KBError(f"{source} is a twin: use kb sync")
     if src_kb is None:
         if not nb.available:
-            raise KBError(f"neighbor {source} is not available here (kb neighbor fetch {source}, or add a path)")
+            raise KBError(f"neighbor {source} is not available here (kb edge fetch {source}, or add a path)")
         src_kb = open_store(nb.location)
     form = "all" if all_items else ("select" if refs else nb.pull)
     if form == "none":

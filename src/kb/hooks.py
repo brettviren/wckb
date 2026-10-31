@@ -31,7 +31,7 @@ def _open(event: dict, root: Path | None) -> Store | None:
 
 
 def check(event: dict, root: Path | None = None) -> tuple[int, str]:
-    """After Claude edits a file inside a kb checkout, validate the checkout (nothing is applied)."""
+    """After Claude edits a file inside a kb item checkout, validate the checkout (nothing is applied)."""
     from .edit import CHECKOUT_MARK, checkin
     path = (event.get("tool_input") or {}).get("file_path")
     if not path:
@@ -49,7 +49,7 @@ def check(event: dict, root: Path | None = None) -> tuple[int, str]:
         checkin(kb, d, dry_run=True)
     except KBError as exc:
         return 2, (f"kb: the checkout {d} would not check in:\n  {exc}\n"
-                   f"Fix it, then run kb checkin {d} to apply.")
+                   f"Fix it, then run kb item checkin {d} to apply.")
     except Exception:  # noqa: BLE001 - a hook must never break the session
         return 0, ""
     return 0, ""
@@ -123,11 +123,11 @@ def session(event: dict, root: Path | None = None) -> str:
             marked = sum(any("marked" in r or "corrects" in r for r in c.reasons) for c in cs)
             if marked:
                 parts.append(f"{marked} item(s) marked or correcting pushed ones await promotion to {n.name} "
-                             f"(kb candidates --to {n.name}).")
+                             f"(kb edge candidates {n.name}).")
     try:
         st = graph.stale(kb)
         if st:
-            parts.append(f"{len(st)} stale item(s) (kb stale).")
+            parts.append(f"{len(st)} stale item(s) (kb item stale).")
         ps = policy.status(kb)
         if ps:
             parts.append(f"Policy: {len(ps)} item(s) need attention (kb policy status).")

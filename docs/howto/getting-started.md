@@ -21,6 +21,24 @@ uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
 
 `kb` also uses `pdftotext` (poppler) and `pandoc` when they're installed.
 
+## How the commands are organized
+
+`kb --help` lists two kinds of command:
+
+- **Everyday verbs**, at the top: `kb init`, `kb add`, `kb new`, `kb show`,
+  `kb ls`, `kb search`, `kb context`, `kb log`, `kb check`, `kb lint`,
+  `kb config`, `kb push`, `kb pull`, `kb sync`.
+- **One family per thing**, named by a word from the
+  [glossary](../glossary.md): `kb item` (change, correct, withdraw, edit),
+  `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge` (links to
+  other stores), `kb bundle`, `kb inbox` (review), `kb view`, `kb data`,
+  `kb policy`, `kb store`, and `kb exchange`, `kb forge`, `kb secret` for
+  git hosting.
+
+A family run without a subcommand lists its commands (`kb item`). Every
+command has `--help`. The full reference is
+[reference/cli.md](../reference/cli.md).
+
 ## What a store is
 
 A store is one SQLite file, `kb.sqlite`, in a directory. Next to it, `.kb/`
@@ -41,7 +59,7 @@ Most people end up with three kinds of store:
 ```
 kb init ~/kb --scope home                                  # yours, private
 cd ~/work/myproject && kb init kb --scope project --up ~/kb  # one per project, as needed
-cd ~/kb && kb neighbor add tpc --relation up --path /data/kb/tpc   # the group's store, if it's on this machine
+cd ~/kb && kb edge add tpc --relation up --path /data/kb/tpc   # the group's store, if it's on this machine
 ```
 
 `kb` finds a store from wherever you are: `./kb.sqlite`, else `./kb/kb.sqlite`,
@@ -105,7 +123,7 @@ kb new observation \
   --subject detector/tpc/noise --runs 1234 \
   --by "A. Colleague" --how "verbal, collab meeting" --when 2026-10-28 \
   --text "Coherent noise was elevated on all planes during run 1234."
-kb render obs-...       # as a person reads it
+kb show obs-...       # as a person reads it
 kb log obs-...          # its history
 kb check
 ```
