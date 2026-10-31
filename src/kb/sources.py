@@ -11,6 +11,8 @@ nothing else in kb needs to change.
     cas    a content-addressed directory store (EOS, NFS ...), by sha256
     url    a web resource; fetched into the cache and checked by hash
     local  a file on one host only
+    asset  a file of an asset (an abstract file or file set) at a version; the
+           asset's own bindings say which sources supply it (kb.assets)
     annex  a file in a DataLad dataset (experimental; see decisions/0001, spike S3)
 """
 
@@ -159,10 +161,39 @@ class AnnexSource(Source):
             ("" if root else " (no local clone mapped)")
 
 
+class AssetLocation(Source):
+    """A rendition supplied by an asset (an abstract file or file set) at a version: see kb.assets."""
+    type, label = "asset", "an asset"
+
+    def resolve(self, kb, rec, rendition, loc, fetch):
+        from .assets import resolve as resolve_asset
+        if loc["asset"] not in kb.records:
+            return None
+        try:
+            res = resolve_asset(kb, loc["asset"], loc["version"], loc.get("path"), remote=fetch)
+        except KBError:
+            return None
+        p = next(iter(res.files.values()))
+        sha = rendition.get("sha256")
+        if sha:
+            from .store import sha256_file
+            if sha256_file(p)[0] != sha:
+                return None          # the asset's file is not the bytes this rendition recorded
+        return p
+
+    def available(self, kb, rendition, loc):
+        return loc["asset"] in kb.records
+
+    def describe(self, kb, loc):
+        rec = kb.records.get(loc["asset"])
+        what = f"asset {loc['asset']}" + (f" ({rec.data.get('title')})" if rec else " (not in this store)")
+        return f"{what}, version {loc['version']}" + (f", {loc['path']}" if loc.get("path") else "")
+
+
 REGISTRY: dict[str, Source] = {}
 
 # Resolution order: cheapest and most local first; URLs (network) last.
-ORDER = ["db", "cas", "local", "annex", "url"]
+ORDER = ["db", "cas", "local", "asset", "annex", "url"]
 
 
 def register(source: Source, position: int | None = None) -> None:
@@ -171,7 +202,7 @@ def register(source: Source, position: int | None = None) -> None:
         ORDER.insert(len(ORDER) - 1 if position is None else position, source.type)
 
 
-for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AnnexSource()):
+for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), AnnexSource()):
     register(_s)
 
 

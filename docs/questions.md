@@ -45,6 +45,81 @@ Status:
 - Who publishes a group store's read-only snapshot (`kb snapshot`), where
   (EOS, a web server), and how often (on every accepted bundle, nightly)?
 
+## V. Files, versions and sources (see decisions/0002)
+
+**V1. Does Indico version attachments?** *(open; to verify)*
+- Believed: Indico keeps earlier files of an attachment internally when one
+  is replaced, but neither the UI nor the HTTP API exposes them.
+- To check against our Indico instance and its source. If the history is
+  reachable, an `indico` source could offer `native` versions; if not, it
+  is `none`, and `keep = auto` is what preserves history.
+- Also: is a "material" a folder (a file set) or one attachment (a file)?
+
+**V2. DocDB access.** *(open)*
+- DocDB documents have versions, each with its own file set
+  (`ShowDocument?docid=N&version=V`). Which interface is reachable from our
+  machines (XML export, HTML scraping), and with what authentication (kb
+  secrets)?
+- Versioning there would be `native`, with labels the DocDB version
+  numbers.
+
+**V3. What is "latest"?** *(exploring)*
+- Today: the last version *registered*. With labels from several sources
+  (DocDB 7, a directory `2026-10-28`, Indico observed later), registration
+  order may not be the real order.
+- Options: an explicit order field; dates per version (`date`); per-asset
+  ordering rules.
+
+**V4. More generous matching.** *(open)*
+- Today: content only (exact paths or content multiset).
+- Some sources can list names and sizes cheaply, but content only by
+  download (Indico, DocDB, large remote files). Should a scan accept
+  "probably the same" (names and sizes match) as a provisional sighting,
+  confirmed by hash later?
+
+**V5. Partial file sets.** *(open)*
+- A source may hold only some files of a version (Indico has the PDF; the
+  directory also has the PPTX source).
+- Should resolution assemble a version from several sources file by file
+  (every file verified against the manifest)? That is natural with
+  manifests, but the procedure gets more complex.
+
+**V6. Hashing cost.** *(exploring)*
+- Today: a per-user cache keyed by (path, size, mtime) means each file is
+  hashed once.
+- Large trees on EOS still mean a first full read. DataLad's annex keys
+  carry hashes for free; for plain trees, should kb trust size and mtime for
+  "known" status between full checks?
+
+**V7. Label collisions across sources.** *(open)*
+- Two versioned sources may both call different content `v2`. Today the
+  first registered wins; the other is reported as a conflict.
+- Should bindings namespace their labels (`docdb:7`), with explicit
+  aliases?
+
+**V8. Citing one file of a set.** *(leaning)*
+- Today: a rendition location names an asset, a version and a path within
+  the set. Should observations and topics be able to cite an asset version
+  directly as evidence (`as-…@v2`), rather than going through a document
+  item?
+
+**V9. DataLad mapping.** *(deferred: spike S3)*
+- Commits, tags or branch heads as native versions?
+- Should `annex` scans use `git annex find` / `datalad status` to get keys
+  without fetching?
+- A dataset per asset, or many assets per dataset (S4)?
+
+**V10. Kept content.** *(open)*
+- `keep = auto` copies versions from unversioned sources into the store (or
+  its content store). Over time that is a store of old slides. Is there a
+  retention rule (keep only versions some item cites)? Blobs are never
+  deleted today (S6).
+
+**V11. Version granularity.** *(open)*
+- A version is the whole file set. DocDB and Indico change individual
+  files. Is a per-file history inside a set (file-level versions) worth
+  having, or is set-level enough, with manifests showing what changed?
+
 ## A. Group setup and infrastructure
 
 **A1. Where do the blob store and the publish store live?** *(open)*
@@ -345,6 +420,15 @@ Status:
 - Textual-based tree and item panes. Worth it alongside a web view?
 
 ## DS. Data sources (see decisions/0001 §13)
+
+**DS0. Two source interfaces.** *(exploring)*
+- Rendition locations (`kb.sources`: db, cas, url, local, annex, asset)
+  resolve one file by hash.
+- Asset sources (`kb.assets`: kb, fs, url; planned annex, indico, docdb)
+  enumerate versions of files and file sets.
+- New concrete sources should eventually be asset sources only, reached
+  from renditions through the `asset` location. Retire `annex` as a
+  location type when DataLad becomes an asset source?
 
 **DS1. DataLad as a source.** *(deferred: spike S3)*
 - The `annex` location type exists, experimentally. Questions to settle

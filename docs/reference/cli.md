@@ -19,6 +19,7 @@ Options:
 
 Commands:
   add          Add files or URLs as a new source record (default kind: document).
+  asset        Assets: abstract files and file sets, their versions, and the sources that...
   build        Build views: run their tool out of tree and write manifest.json.
   bundle       Bundles: a knowledge set and its items in one self-checking file.
   candidates   Records worth pushing to a neighbor, best first, with reasons and blockers.
@@ -121,6 +122,152 @@ Options:
   --force                         Add even if an identifier is already in the KB.
   --json
   -h, --help                      Show this message and exit.
+```
+
+## kb asset
+
+```
+Usage: kb asset [OPTIONS] COMMAND [ARGS]...
+
+  Assets: abstract files and file sets, their versions, and the sources that supply them.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  add       Register a file (or a directory, for a file set) as a new version, kept in the store.
+  bind      Say that source NAME can supply asset REF, and how its versions map.
+  new       Make an asset: a stable reference to a file or a file set, wherever its bytes are.
+  resolve   One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest,...
+  scan      What each source offers, related to the asset's versions: known, new, conflict,...
+  sources   Source types assets can be bound to, and their status.
+  unbind    Remove a binding (registered versions stay).
+  versions  The asset's registered versions, and where each was seen.
+```
+
+## kb asset add
+
+```
+Usage: kb asset add [OPTIONS] REF PATH
+
+  Register a file (or a directory, for a file set) as a new version, kept in the store.
+
+Options:
+  --label TEXT  Version label (default: the next vN).
+  --note TEXT
+  -h, --help    Show this message and exit.
+```
+
+## kb asset bind
+
+```
+Usage: kb asset bind [OPTIONS] REF NAME
+
+  Say that source NAME can supply asset REF, and how its versions map.
+
+    kb asset bind as-... eos --source fs --set root=eos-group --set path=talks/2026-10-28
+    kb asset bind as-... history --source fs --set root=/data/slides --versioning pattern --pattern 'v{version}'
+    kb asset bind as-... indico --source url --set url=https://indico.example/.../slides.pdf
+
+Options:
+  --source TEXT                   Source type (kb asset sources lists them): fs, url, kb ...
+                                  [required]
+  --locator TEXT                  Source-specific identifiers as JSON, e.g. '{"root": "eos-group",
+                                  "path": "talks/x"}'.
+  --set TEXT                      Locator field key=value (repeatable), instead of --locator.
+  --versioning [none|native|pattern|map]
+                                  How the source's versions relate to the asset's.  [default: none]
+  --pattern TEXT                  With pattern versioning: where versions are, e.g. '{version}' or
+                                  'v{version}/slides.pdf'.
+  --map TEXT                      NATIVE=LABEL (repeatable): the source's version id to the asset's
+                                  label.
+  --priority INTEGER              Lower is tried first.
+  --note TEXT
+  -h, --help                      Show this message and exit.
+```
+
+## kb asset new
+
+```
+Usage: kb asset new [OPTIONS]
+
+  Make an asset: a stable reference to a file or a file set, wherever its bytes are.
+
+Options:
+  --type [file|fileset]    [required]
+  --title TEXT             [required]
+  --summary TEXT
+  --subject TEXT
+  --match [exact|content]  Versions differ by paths and content (exact), or by content only (renames
+                           are not new versions).  [default: exact]
+  -h, --help               Show this message and exit.
+```
+
+## kb asset resolve
+
+```
+Usage: kb asset resolve [OPTIONS] REF
+
+  One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest, current, digest:SHA).
+
+Options:
+  --path TEXT     One file of a file set.
+  --to DIRECTORY  Copy the files here.
+  --no-remote
+  --json
+  -h, --help      Show this message and exit.
+```
+
+## kb asset scan
+
+```
+Usage: kb asset scan [OPTIONS] REF
+
+  What each source offers, related to the asset's versions: known, new, conflict, unreachable.
+
+Options:
+  --binding TEXT        Only these bindings.
+  --no-remote           Don't contact remote sources (URLs ...).
+  --register            Register what is new.
+  --keep [auto|yes|no]  Copy registered content into the store (auto: when it came from an
+                        unversioned source).  [default: auto]
+  --json
+  -h, --help            Show this message and exit.
+```
+
+## kb asset sources
+
+```
+Usage: kb asset sources [OPTIONS]
+
+  Source types assets can be bound to, and their status.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb asset unbind
+
+```
+Usage: kb asset unbind [OPTIONS] REF NAME
+
+  Remove a binding (registered versions stay).
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb asset versions
+
+```
+Usage: kb asset versions [OPTIONS] REF
+
+  The asset's registered versions, and where each was seen.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
 ```
 
 ## kb build
@@ -949,7 +1096,7 @@ Usage: kb ls [OPTIONS]
   List records (current ones unless --all), newest first.
 
 Options:
-  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset]
+  --kind [observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset|asset]
   --subject TEXT                  Subject path or prefix.
   --runs TEXT                     Overlapping run range: N or FIRST-LAST.
   --status [draft|unverified|verified|disputed]
@@ -1065,8 +1212,8 @@ Options:
 ## kb new
 
 ```
-Usage: kb new [OPTIONS]
-              {observation|document|dataset|config|snapshot|software|topic|view|person|policy|kset}
+Usage: kb new [OPTIONS] {observation|document|dataset|config|snapshot|software|topic|view|person|pol
+              icy|kset|asset}
 
   Make a new record of KIND.
 

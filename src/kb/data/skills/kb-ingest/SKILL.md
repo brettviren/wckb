@@ -24,6 +24,13 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    - Datasets: `--kind dataset --set format=csv`, then `kb datapackage ID`.
    - Snapshots from the conditions DB, elog etc.:
      `--kind snapshot --set system=... --set query="..." --set retrieved=<datetime>`.
+   - **Material that has versions or lives in several places** (a talk's
+     materials re-uploaded on Indico, copies on EOS as `v1/`, `v2/`, a
+     DataLad dataset): make an **asset** (`kb asset new --type fileset`),
+     bind its sources (`kb asset bind ... --source fs|url ...`), then run
+     `kb asset scan --register`. Point the document's rendition at it with
+     the location `{"type": "asset", "asset": ID, "version": LABEL, "path": FILE}`.
+     See `kb asset --help`.
 3. **Extract text:** `kb extract ID` (`kb transforms` lists what's
    available). Check the result with `kb content ID text`. For slides, text
    extraction loses the plots. If the figures matter, read the slides (or

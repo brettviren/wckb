@@ -20,7 +20,7 @@ from .ids import SOURCE_KINDS, parse_ref
 # Fields of a frozen item (source, released policy) that never change: what it asserts.
 IMMUTABLE = ("id", "kind", "created", "asserted_by", "creators", "date", "valid", "doctype",
              "system", "query", "retrieved", "parameters", "repository", "commit",
-             "members", "depth", "nested", "follow")
+             "members", "depth", "nested", "follow", "asset_type", "match")
 POLICY_FROZEN = ("name", "version", "policy_type")
 FIXED_ROLES = ("original", "content")
 
@@ -31,6 +31,7 @@ _ORDER = [
     "parameters", "repository", "commit", "language", "format", "variables",
     "produced_by", "name", "policy_type", "stage", "applies_to", "order", "based_on", "affiliation",
     "email", "handles", "build", "audience", "members", "depth", "nested", "follow", "purpose",
+    "asset_type", "match", "versions", "bindings",
     "identifiers", "license", "supersedes", "retracts", "derived_from", "evidence",
     "related", "origin", "renditions", "x",
 ]
@@ -70,24 +71,31 @@ def digest(data: dict) -> str:
 
 
 def is_frozen(data: dict) -> bool:
-    return data.get("kind") in SOURCE_KINDS or (
+    return data.get("kind") in SOURCE_KINDS or data.get("kind") == "asset" or (
         data.get("kind") == "policy" and data.get("stage") in ("released", "deprecated"))
 
 
 def core(data: dict) -> dict:
     """What a frozen item asserts: never changes once written (hashes are in ``fixed``)."""
     c = {k: data.get(k) for k in IMMUTABLE + POLICY_FROZEN}
-    c["_fixed"] = sorted(fixed(data))
+    if data.get("kind") != "asset":      # an asset may gain versions; their digests are guarded via fixed
+        c["_fixed"] = sorted(fixed(data))
     return c
 
 
 def fixed(data: dict) -> dict[str, str | None]:
-    """Hashes of the original and content renditions; a recorded one never changes."""
-    return {r["name"]: r.get("sha256") for r in data.get("renditions", []) if r.get("role") in FIXED_ROLES}
+    """Hashes that never change once recorded: of original and content renditions, and, for an
+    asset, of each registered version (keyed "version:LABEL")."""
+    out = {r["name"]: r.get("sha256") for r in data.get("renditions", []) if r.get("role") in FIXED_ROLES}
+    for v in data.get("versions", []) if data.get("kind") == "asset" else []:
+        out[f"version:{v['label']}"] = v.get("digest")
+    return out
 
 
 def fixed_compatible(a: dict, b: dict) -> bool:
     fa, fb = fixed(a), fixed(b)
+    if a.get("kind") == "asset":     # either side may know more versions; shared ones must agree
+        return all(fa[k] is None or fb[k] is None or fa[k] == fb[k] for k in fa.keys() & fb.keys())
     return fa.keys() == fb.keys() and all(fa[k] is None or fb[k] is None or fa[k] == fb[k] for k in fa)
 
 
@@ -152,6 +160,16 @@ class Record:
 
     def __repr__(self):
         return f"Record({self.id})"
+
+
+def blob_shas(data: dict) -> list[str]:
+    """Hashes of content an item keeps in the store's database: its db renditions,
+    and the files of asset versions kept in the store."""
+    out = [r["sha256"] for r in data.get("renditions", [])
+           if r.get("sha256") and any(l["type"] == "db" for l in r.get("locations", []))]
+    if data.get("kind") == "asset":
+        out += [f["sha256"] for v in data.get("versions", []) for f in v.get("files", [])]
+    return list(dict.fromkeys(out))
 
 
 def text_of(kb: "KB", rec: Record) -> str:

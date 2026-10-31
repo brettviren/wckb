@@ -343,11 +343,11 @@ def _bundle_from(src: KB, ks_rec: Record, note, who) -> dict:
             continue
         rec = src.records[ident]
         items.append({"data": rec.data, "updated_at": rec.updated_at})
-        for r in rec.renditions:
-            if r.get("sha256") and any(l["type"] == "db" for l in r.get("locations", [])):
-                data = src.blob(r["sha256"])
-                if data is not None:
-                    blobs[r["sha256"]] = base64.b64encode(data).decode()
+        from .records import blob_shas
+        for sha in blob_shas(rec.data):
+            data = src.blob(sha)
+            if data is not None:
+                blobs[sha] = base64.b64encode(data).decode()
     b = {"kb_bundle": bundles.FORMAT, "created": {"at": now(), "by": ks_rec.data["created"]["by"]},
          "from": {"store": src.cfg.id, "name": src.cfg.name, "scope": src.cfg.scope},
          "set": ks_rec.data, "set_updated_at": None, "items": items, "blobs": blobs,

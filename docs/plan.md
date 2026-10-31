@@ -39,6 +39,7 @@ Deliverables:
 | Rendering for people: view model; text, markdown, JSON | `src/kb/render.py` | done |
 | Checkout/checkin/edit, content, snapshots, history (`kb log`) | `src/kb/edit.py`, `records.py` | done |
 | Exchange repositories: bundle pull requests; git hooks guarding bundles | `src/kb/exchange.py`, `githooks.py` | done |
+| Assets: abstract files/file sets, content-identified versions, bindings (kb, fs, url), scan/register/resolve, the `asset` rendition location | `src/kb/assets.py` | done |
 | Forges: GitHub, Gitea, Forgejo (Gogs: no PR API) pull requests | `src/kb/forge.py` | done |
 | Secrets: command (pass), 0600 file, env, value | `src/kb/secrets.py` | done |
 | CLI | `src/kb/cli.py` | done |
@@ -91,7 +92,10 @@ Steps:
 ## Phase 2: hardening, informed by the pilot
 
 Rendering next steps (TUI, web, thumbnails) are in [rendering.md](rendering.md),
-and data sources (DataLad, Indico) in questions DS1–DS4.
+and data sources (DataLad, Indico) in questions DS1–DS4. The next sources
+are asset sources ([decision 0002](decisions/0002-assets-and-versions.md)):
+DataLad (`annex`, after spike S3), then Indico and DocDB once questions V1
+and V2 are answered.
 
 Planned, in rough priority order. Open design questions are tracked in
 [questions.md](questions.md):

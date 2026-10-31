@@ -19,6 +19,10 @@ to.
   knowledge sets with `kb push`, `kb pull` and `kb obtain`: applied
   atomically, or as **bundles** reviewed in the receiver's inbox by people
   and LLMs, or as pull requests in an exchange repository.
+- **Assets** stand for files and file sets independently of where they
+  live. Versions are identified by content, sources (directory trees, URLs,
+  the store; DataLad, Indico and DocDB planned) are bound with their own
+  versioning, and resolution yields one verified file set.
 - Items, sets and bundles render for people (`kb render`,
   `kb bundle show`, `kb review show`): names, dates, links, excerpts and
   trees, with no hashes.
@@ -43,7 +47,7 @@ kb context detector/tpc              # what the KB knows, compactly
 - [docs/questions.md](docs/questions.md): open questions, with today's
   defaults.
 - [docs/decisions/](docs/decisions/): decision records (0001: the SQLite
-  store).
+  store; 0002: assets, versions and sources).
 - [docs/rendering.md](docs/rendering.md): rendering for review, now and
   planned (TUI, web).
 - [docs/howto/](docs/howto/): task guides. Start with

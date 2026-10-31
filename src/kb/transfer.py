@@ -28,7 +28,7 @@ from . import store
 from .config import access_rank
 from .errors import KBError
 from .ids import parse_ref
-from .records import KB, Record, canonical, core, fixed_compatible, is_frozen, now
+from .records import KB, Record, blob_shas, canonical, core, fixed_compatible, is_frozen, now
 REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "related")
 MUTABLE_LISTS = ("subject", "tags", "evidence", "related")
 MUTABLE_SCALARS = ("status", "summary", "license")
@@ -125,7 +125,7 @@ class Item:
 def _core_differs(a: dict, b: dict) -> list[str]:
     ca, cb = core(a), core(b)
     diff = sorted(k for k in ca if k != "_fixed" and ca[k] != cb.get(k))
-    if ca["_fixed"] != cb["_fixed"] or not fixed_compatible(a, b):
+    if ca.get("_fixed") != cb.get("_fixed") or not fixed_compatible(a, b):
         diff.append("content")
     return diff
 
@@ -171,6 +171,8 @@ def classify(incoming: dict, src: Record, existing: Record | None, sender_id: st
                 merged.setdefault("renditions", []).append(r)
             elif have[r["name"]].get("sha256") is None and r.get("sha256"):
                 have[r["name"]].update(sha256=r["sha256"], size=r.get("size"))
+        if mine.get("kind") == "asset":
+            _merge_asset(merged, incoming)
         if theirs and "origin" in incoming:
             merged["origin"] = incoming["origin"]
         if canonical(_strip(merged)) == canonical(_strip(mine)):
@@ -183,6 +185,23 @@ def classify(incoming: dict, src: Record, existing: Record | None, sender_id: st
         return Item(src.id, "update", incoming, src)
     return Item(src.id, "conflict", incoming, src,
                 ["an editable item that diverged along different paths; keep ours, or transfer with prefer=theirs"])
+
+
+def _merge_asset(merged: dict, incoming: dict) -> None:
+    """Versions are united by label (shared labels agree on digest, checked as core); bindings by name."""
+    have = {v["label"]: v for v in merged.setdefault("versions", [])}
+    for v in incoming.get("versions", []):
+        mine = have.get(v["label"])
+        if mine is None:
+            merged["versions"].append(copy.deepcopy(v))
+            continue
+        if not mine.get("digest") and v.get("digest"):
+            mine.update(digest=v["digest"], files=v.get("files", []))
+        for e in v.get("seen", []):
+            if e not in mine.setdefault("seen", []):
+                mine["seen"].append(e)
+    names = {b["name"] for b in merged.setdefault("bindings", [])}
+    merged["bindings"] += [copy.deepcopy(b) for b in incoming.get("bindings", []) if b["name"] not in names]
 
 
 # -- the transfer -----------------------------------------------------------------
@@ -266,16 +285,17 @@ def plan(sender, dst: KB, kset: dict, *, prefer: str = "ours", access: str | Non
 def _copy_content(sender, rec: Record, dst: KB, data: dict) -> list[str]:
     """Bring the bytes of the item's renditions into *dst* where the receiver keeps them."""
     warnings = []
+    for sha in blob_shas(data):
+        if not dst.has_blob(sha):
+            b = sender.blob(sha)
+            if b is not None:
+                dst.put_blob(b)
+            elif data.get("kind") != "asset":     # asset files may legitimately live only in a content store
+                warnings.append(f"{rec.id}: content {sha[:12]}… not available from the sender")
     for r in data.get("renditions", []):
         sha = r.get("sha256")
         for loc in r.get("locations", []):
-            if loc["type"] == "db" and sha and not dst.has_blob(sha):
-                b = sender.blob(sha)
-                if b is None:
-                    warnings.append(f"{rec.id}#{r['name']}: content not available from the sender")
-                else:
-                    dst.put_blob(b)
-            elif loc["type"] == "cas" and sha:
+            if loc["type"] == "cas" and sha:
                 name = loc["store"] if dst.cfg.stores.get(loc["store"]) else store.default_store(dst)
                 if name is not None and store.blob_path(dst.cfg.stores[name], sha).exists():
                     loc["store"] = name

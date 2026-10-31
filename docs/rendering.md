@@ -51,6 +51,7 @@ Rendering has two stages, so that every front end shows the same thing:
 | kset | members as a tree, nested sets unfolded to a chosen depth | collapsible tree (TUI/web); per-node badges (new, changed, conflict, missing); filter by kind |
 | policy | name, version, type, stage | rendered text; a diff against the previous version |
 | person | name, affiliation | what they asserted, recently |
+| asset | file or file set, versions (files, size, when registered, where seen), sources described | a per-version file list with sizes, and a diff between versions; per-source status from the last scan (known, new, conflict) |
 
 ## Navigating hierarchy
 

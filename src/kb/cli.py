@@ -1134,6 +1134,171 @@ def log_cmd(c, ref, action, limit, json_out):
         click.echo(f"{e['at'][:19]}  {e['action']:<13} {e['item'] or '':<16} {e['actor']}{appr}  {brief}")
 
 
+# -- assets: abstract files and file sets ------------------------------------------------
+
+@main.group("asset")
+def asset_grp():
+    """Assets: abstract files and file sets, their versions, and the sources that supply them."""
+
+
+def _split_ref(ref: str) -> tuple[str, str]:
+    a, _, v = ref.partition("@")
+    return a, v or "latest"
+
+
+@command(asset_grp, "new", no_args_is_help=True)
+@click.option("--type", "asset_type", required=True, type=click.Choice(["file", "fileset"]))
+@click.option("--title", required=True)
+@click.option("--summary")
+@click.option("--subject", multiple=True)
+@click.option("--match", default="exact", type=click.Choice(["exact", "content"]), show_default=True,
+              help="Versions differ by paths and content (exact), or by content only (renames are not new versions).")
+@pass_ctx
+def asset_new_cmd(c, asset_type, title, summary, subject, match):
+    """Make an asset: a stable reference to a file or a file set, wherever its bytes are."""
+    from . import assets
+    fields = {"title": title, "summary": summary or title}
+    if subject:
+        fields["subject"] = list(subject)
+    click.echo(assets.new(c.kb, asset_type, fields, match).id)
+
+
+@command(asset_grp, "bind", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("name")
+@click.option("--source", "source_type", required=True, help="Source type (kb asset sources lists them): fs, url, kb ...")
+@click.option("--locator", help="Source-specific identifiers as JSON, e.g. '{\"root\": \"eos-group\", \"path\": \"talks/x\"}'.")
+@click.option("--set", "sets", multiple=True, help="Locator field key=value (repeatable), instead of --locator.")
+@click.option("--versioning", default="none", type=click.Choice(["none", "native", "pattern", "map"]), show_default=True,
+              help="How the source's versions relate to the asset's.")
+@click.option("--pattern", help="With pattern versioning: where versions are, e.g. '{version}' or 'v{version}/slides.pdf'.")
+@click.option("--map", "maps", multiple=True, help="NATIVE=LABEL (repeatable): the source's version id to the asset's label.")
+@click.option("--priority", type=int, help="Lower is tried first.")
+@click.option("--note")
+@pass_ctx
+def asset_bind_cmd(c, ref, name, source_type, locator, sets, versioning, pattern, maps, priority, note):
+    """Say that source NAME can supply asset REF, and how its versions map.
+
+    \b
+      kb asset bind as-... eos --source fs --set root=eos-group --set path=talks/2026-10-28
+      kb asset bind as-... history --source fs --set root=/data/slides --versioning pattern --pattern 'v{version}'
+      kb asset bind as-... indico --source url --set url=https://indico.example/.../slides.pdf
+    """
+    from . import assets
+    from .authoring import parse_set
+    loc = json.loads(locator) if locator else {}
+    loc.update(parse_set(sets))
+    mapping = dict(m.split("=", 1) for m in maps) if maps else None
+    rec = assets.bind(c.kb, ref, name, source_type, loc, versioning, pattern, mapping, priority, note)
+    click.echo(f"{rec.id}: bound {name}")
+
+
+@command(asset_grp, "unbind", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("name")
+@pass_ctx
+def asset_unbind_cmd(c, ref, name):
+    """Remove a binding (registered versions stay)."""
+    from . import assets
+    click.echo(assets.unbind(c.kb, ref, name).id)
+
+
+@command(asset_grp, "scan", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--binding", "only", multiple=True, help="Only these bindings.")
+@click.option("--no-remote", is_flag=True, help="Don't contact remote sources (URLs ...).")
+@click.option("--register", "do_register", is_flag=True, help="Register what is new.")
+@click.option("--keep", default="auto", type=click.Choice(["auto", "yes", "no"]), show_default=True,
+              help="Copy registered content into the store (auto: when it came from an unversioned source).")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def asset_scan_cmd(c, ref, only, no_remote, do_register, keep, json_out):
+    """What each source offers, related to the asset's versions: known, new, conflict, unreachable."""
+    from . import assets
+    kb = c.kb
+    seen = assets.scan(kb, ref, list(only) or None, remote=not no_remote)
+    rows = [s.as_dict() for s in seen]
+    done = assets.register(kb, ref, seen, keep=keep) if do_register else None
+    if json_out:
+        return ui.emit_json({"seen": rows, "registered": done})
+    for r in rows:
+        ver = f" = {r['version']}" if r["version"] else ""
+        nat = f" [{r['native']}]" if r["native"] else ""
+        click.echo(f"{r['binding']:<12} {r['status']:<11}{ver:<8} {r['files']:>4} file(s){nat}  {r['where']}")
+        if r["detail"]:
+            click.echo(f"{'':<14}{r['detail']}")
+    if done:
+        for d in done:
+            click.echo(f"registered {d['label']} ({d['files']} file(s) from {d['from']}" + (", kept in the store" if d.get("kept") else "") + ")")
+
+
+@command(asset_grp, "add", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option("--label", help="Version label (default: the next vN).")
+@click.option("--note")
+@pass_ctx
+def asset_add_cmd(c, ref, path, label, note):
+    """Register a file (or a directory, for a file set) as a new version, kept in the store."""
+    from . import assets
+    d = assets.add_version(c.kb, ref, path, label, note)
+    click.echo(f"{d['label']}: {d['files']} file(s)")
+
+
+@command(asset_grp, "versions", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def asset_versions_cmd(c, ref, json_out):
+    """The asset's registered versions, and where each was seen."""
+    from . import assets
+    from .render import size, when
+    a = assets.get_asset(c.kb, ref)
+    vs = a.data.get("versions", [])
+    if json_out:
+        return ui.emit_json(vs)
+    for v in vs:
+        total = sum(f.get("size") or 0 for f in v.get("files", []))
+        seen = ", ".join(sorted({s["binding"] + (f"[{s['native']}]" if s.get("native") else "") for s in v.get("seen", [])}))
+        click.echo(f"{v['label']:<10} {len(v.get('files', [])):>4} file(s) {size(total):>10}  "
+                   f"{when(v.get('registered')):<22} seen in: {seen or '-'}")
+
+
+@command(asset_grp, "resolve", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--path", "member", help="One file of a file set.")
+@click.option("--to", "dest", type=click.Path(file_okay=False, path_type=Path), help="Copy the files here.")
+@click.option("--no-remote", is_flag=True)
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def asset_resolve_cmd(c, ref, member, dest, no_remote, json_out):
+    """One well-defined, verified version: REF[@VERSION] (VERSION: a label, latest, current, digest:SHA)."""
+    from . import assets
+    a, v = _split_ref(ref)
+    res = assets.resolve(c.kb, a, v, member, remote=not no_remote)
+    if dest:
+        assets.materialize(res, dest)
+    if json_out:
+        return ui.emit_json(res.as_dict())
+    click.echo(f"{res.asset} {res.version or '(unregistered)'} from {res.binding} ({res.where})")
+    for rel, p in res.files.items():
+        click.echo(f"  {rel}  ->  {dest / rel if dest else p}")
+    for n in res.notes:
+        click.echo(f"  note: {n}")
+
+
+@command(asset_grp, "sources")
+@click.option("--json", "json_out", is_flag=True)
+def asset_sources_cmd(json_out):
+    """Source types assets can be bound to, and their status."""
+    from .assets import sources_table
+    rows = sources_table()
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        click.echo(f"{r['type']:<8} {r['status']:<12} {r['what']}" + (f"  locator {r['locator']}" if r["locator"] else ""))
+
+
 # -- bundles, inbox, review ----------------------------------------------------------
 
 @main.group("bundle")

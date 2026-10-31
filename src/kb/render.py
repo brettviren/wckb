@@ -201,6 +201,18 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
     if kind == "kset":
         f.append(("selects", f"{len(d.get('members', []))} item(s), {d.get('depth')}"
                   + (f", nested sets: {d['nested']}" if d.get("nested") else "")))
+    if kind == "asset":
+        vs = d.get("versions", [])
+        f.append(("asset", f"{'one file' if d.get('asset_type') == 'file' else 'a file set'}, "
+                           f"{len(vs)} version(s)" + (f", latest {vs[-1]['label']}" if vs else "")))
+        for v in vs[-5:]:
+            total = sum(x.get("size") or 0 for x in v.get("files", []))
+            f.append((f"  {v['label']}", ", ".join(x for x in (
+                f"{len(v.get('files', []))} file(s)", size(total), when(v.get("registered")),
+                "seen in " + ", ".join(sorted({s["binding"] for s in v.get("seen", [])})) if v.get("seen") else "",
+                v.get("note", "")) if x)))
+        for b in d.get("bindings", []):
+            f.append((f"  source {b['name']}", _binding_text(b)))
     if d.get("subject"):
         f.append(("subjects", ", ".join(d["subject"])))
     if d.get("license"):
@@ -211,6 +223,20 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
                   + (f", approved by {o['approved']}" if o.get("approved") else "")))
     f.append(("recorded", f"{when(d['created']['at'])} by {look.name(d['created']['by'])}"))
     return [(k, v) for k, v in f if v]
+
+
+def _binding_text(b: dict) -> str:
+    loc = b.get("locator", {})
+    if b["type"] == "fs":
+        where = f"directory {loc.get('root')}:{loc.get('path', '')}"
+    elif b["type"] == "url":
+        where = loc.get("url") or f"{len(loc.get('urls', {}))} URLs"
+    elif b["type"] == "kb":
+        where = "kept in the store"
+    else:
+        where = f"{b['type']} " + ", ".join(f"{k}={v}" for k, v in loc.items())
+    v = b.get("versioning", "none")
+    return where + ("" if v == "none" else f" (versions: {b.get('pattern') or v})")
 
 
 def _relations(d: dict, look: Lookup) -> list[tuple[str, str, str]]:

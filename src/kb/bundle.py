@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import KBError
-from .records import KB, Record, canonical, now
+from .records import KB, Record, blob_shas, canonical, now
 
 FORMAT = 1
 SUFFIX = ".kbundle.json"
@@ -76,11 +76,10 @@ def make(kb: KB, kset_ref: str, note: str | None = None, approved: str | None = 
             continue
         rec = kb.records[ident]
         items.append({"data": rec.data, "updated_at": rec.updated_at})
-        for r in rec.renditions:
-            if any(l["type"] == "db" for l in r.get("locations", [])) and r.get("sha256"):
-                data = kb.blob(r["sha256"])
-                if data is not None:
-                    blobs[r["sha256"]] = base64.b64encode(data).decode()
+        for sha in blob_shas(rec.data):
+            data = kb.blob(sha)
+            if data is not None:
+                blobs[sha] = base64.b64encode(data).decode()
     for r in ks.renditions:
         if r.get("sha256") and kb.blob(r["sha256"]) is not None:
             blobs[r["sha256"]] = base64.b64encode(kb.blob(r["sha256"])).decode()

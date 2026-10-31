@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.kb.invalid/v1/asset.json",
+  "title": "Asset",
+  "description": "An abstract file or file set: a stable reference independent of where the bytes are. Versions are labelled and identified by a digest of their content; bindings say which sources (a filesystem tree, a URL, the store itself, DataLad, Indico, DocDB ...) can supply them and how each source's own versions map to the asset's. Registered versions are frozen; versions and bindings may be added.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "record.json"
+    }
+  ],
+  "properties": {
+    "kind": {
+      "const": "asset"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^as-"
+    },
+    "asset_type": {
+      "description": "file: one file; fileset: a set of files with relative paths.",
+      "enum": [
+        "file",
+        "fileset"
+      ]
+    },
+    "match": {
+      "description": "How a concrete file set is matched to a version: exact (paths and content) or content (content only; renames don't make a new version).",
+      "enum": [
+        "exact",
+        "content"
+      ]
+    },
+    "versions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/version"
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/binding"
+      }
+    }
+  },
+  "required": [
+    "asset_type"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "label": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    },
+    "file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[^/][^\\0]*$"
+        },
+        "sha256": {
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "media_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "version": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "digest": {
+          "description": "Digest of the version's manifest (for a file asset: the file's sha256). Once recorded, never changes.",
+          "$ref": "common.json#/$defs/sha256"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "date": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "registered": {
+          "$ref": "common.json#/$defs/datetime"
+        },
+        "note": {
+          "type": "string"
+        },
+        "seen": {
+          "description": "Where and as what this version was observed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string"
+              },
+              "native": {
+                "type": "string"
+              },
+              "at": {
+                "$ref": "common.json#/$defs/datetime"
+              }
+            },
+            "required": [
+              "binding",
+              "at"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "type": {
+          "description": "Source type: kb, fs, url, annex, indico, docdb ... (kb asset sources lists them).",
+          "type": "string"
+        },
+        "locator": {
+          "description": "Source-specific concrete identifiers (a path under a named root, a URL, an event and attachment id ...).",
+          "type": "object"
+        },
+        "versioning": {
+          "description": "none: the source only has its current content; native: its version ids are the asset's labels; pattern: versions are found by a path pattern with {version}; map: explicit native-to-label mapping.",
+          "enum": [
+            "none",
+            "native",
+            "pattern",
+            "map"
+          ]
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/label"
+          }
+        },
+        "priority": {
+          "description": "Lower is tried first (default by source type: kb, fs, annex, docdb, url, indico).",
+          "type": "integer"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "locator"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -11,7 +11,9 @@ Related documents:
 - [howto/](howto/): task guides;
 - [questions.md](questions.md): open questions;
 - [decisions/](decisions/): decisions, including
-  [0001](decisions/0001-knowledge-store.md), the choice of a SQLite store;
+  [0001](decisions/0001-knowledge-store.md), the choice of a SQLite store,
+  and [0002](decisions/0002-assets-and-versions.md), abstract files,
+  versions and sources;
 - [rendering.md](rendering.md): rendering for review and reading.
 
 ## 1. Goals and non-goals
@@ -139,6 +141,7 @@ items move between stores. Person IDs may be readable (`per-bviren`).
 | `view` | `view` | no | recipe for HTML/PDF: sources, inputs, build, manifest |
 | `person` | `per` | no | identity, for attribution |
 | `policy` | `pol` | once released | a named, versioned piece of LLM policy (§16) |
+| `asset` | `as` | versions frozen | an abstract file or file set, its versions and the sources that supply them (§5.1) |
 
 A **reference** is an ID, optionally with a rendition name
 (`doc-3vq8r2m1kd#text`). References are **store-independent**: an item may
@@ -252,6 +255,28 @@ reads or replaces text on editable items. `kb checkout ID DIR` and
 `kb checkin DIR` round-trip an item and its files through a directory.
 Fields change within policy, files are added or removed, and the check
 hook validates edits made there.
+
+### 5.1 Assets: abstract files and file sets
+
+When material has versions or several sources (a talk's materials on
+Indico, on EOS as `v1/`, `v2/`, in a DataLad dataset, in DocDB), items
+point to an **asset** rather than to locations. An asset has three parts:
+
+- **Versions**, each with a label and a digest of its content manifest.
+  The digest is the version's identity and never changes.
+- **Bindings** to sources (`kb`, `fs`, `url` today; `annex`, `indico` and
+  `docdb` planned). Each binding has a locator and a versioning mode:
+  `none`, `native`, `pattern` or `map`.
+- **Resolution.** For a version, the first source in priority order whose
+  content has the version's digest. Divergent copies are noted and never
+  used.
+
+`kb asset scan` classes each source's offers as known, new, conflict or
+unreachable, and `--register` records new versions. Content from
+unversioned sources is kept in the store by default. A rendition location
+`{"type": "asset", "asset": …, "version": …, "path": …}` lets any item cite
+an asset version and still pin its bytes. See
+[decision 0002](decisions/0002-assets-and-versions.md).
 
 ## 6. Transforms
 

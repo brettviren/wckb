@@ -1,6 +1,6 @@
 # Record schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.2) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.3) by
 `kb schema --markdown`; a test keeps this file in sync. `kb schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -182,6 +182,19 @@ A selection of records, itself a record: the unit of knowledge transfer between 
 | `follow` |  | list of `members` \| `supersedes` \| `retracts` \| `derived_from` \| `evidence` \| `related` | Reference fields a deep descent follows (default: all of them). |
 | `purpose` |  | string | What the set is for: transfer, reading-list, release ... |
 
+## asset
+
+ID prefix `as-`; not a source (editable).
+
+An abstract file or file set: a stable reference independent of where the bytes are. Versions are labelled and identified by a digest of their content; bindings say which sources (a filesystem tree, a URL, the store itself, DataLad, Indico, DocDB ...) can supply them and how each source's own versions map to the asset's. Registered versions are frozen; versions and bindings may be added.
+
+| field | required | type | description |
+|---|---|---|---|
+| `asset_type` | yes | `file` \| `fileset` | file: one file; fileset: a set of files with relative paths. |
+| `match` |  | `exact` \| `content` | How a concrete file set is matched to a version: exact (paths and content) or content (content only; renames don't make a new version). |
+| `versions` |  | list of version |  |
+| `bindings` |  | list of binding |  |
+
 ## Shared definitions
 
 ### rendition
@@ -209,6 +222,7 @@ Where a rendition's bytes are. Each type is served by a data source (kb.sources)
 - `url`: `url`, `retrieved`, `auth`
 - `local`: `host`, `path`
 - `annex`: `dataset`, `path`, `key`
+- `asset`: `asset`, `version`, `path`
 
 ### valid
 
