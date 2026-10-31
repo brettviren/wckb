@@ -6,7 +6,7 @@ import pytest
 
 from kb import authoring, checks, edit, lint
 from kb.errors import KBError
-from kb.records import KB, Record
+from kb.items import Store, Item
 
 from conftest import observation
 
@@ -27,8 +27,8 @@ def test_frozen_items_cannot_change_what_they_assert(kb):
     data = copy.deepcopy(rec.data)
     data["valid"] = {"runs": [[1243, 1243]]}
     with pytest.raises(KBError, match="append-only"):
-        kb.save(Record(data, kb))
-    assert KB.open(kb.root).get(rec.id).data["valid"] == {"runs": [[1234, 1234]]}
+        kb.save(Item(data, kb))
+    assert Store.open(kb.root).get(rec.id).data["valid"] == {"runs": [[1234, 1234]]}
 
 
 def test_frozen_content_cannot_change(kb):
@@ -37,7 +37,7 @@ def test_frozen_content_cannot_change(kb):
     data = copy.deepcopy(rec.data)
     data["renditions"][0].update(sha256=sha, size=size)
     with pytest.raises(KBError, match="append-only"):
-        kb.save(Record(data, kb))
+        kb.save(Item(data, kb))
 
 
 def test_frozen_items_cannot_be_deleted_even_with_raw_sql(kb):
@@ -55,7 +55,7 @@ def test_frozen_items_cannot_be_deleted_even_with_raw_sql(kb):
 def test_relationship_fields_may_change(kb):
     rec = observation(kb)
     edit.set_fields(kb, rec.id, ["summary=Better summary.", "status=disputed"], add=["subject=detector/daq"])
-    got = KB.open(kb.root).get(rec.id).data
+    got = Store.open(kb.root).get(rec.id).data
     assert got["status"] == "disputed" and "detector/daq" in got["subject"]
     assert [e["action"] for e in kb.events(rec.id)] == ["create", "set"]
 
@@ -66,10 +66,10 @@ def test_recording_a_missing_hash_is_allowed_once(kb):
                         fetch=False)
     data = copy.deepcopy(rec.data)
     data["renditions"][0].update(sha256="a" * 64, size=3)
-    kb.save(Record(data, kb), "verify")                              # first sight is recorded
+    kb.save(Item(data, kb), "verify")                              # first sight is recorded
     data["renditions"][0].update(sha256="b" * 64)
     with pytest.raises(KBError, match="append-only"):
-        kb.save(Record(data, kb), "verify")                          # but never changed afterwards
+        kb.save(Item(data, kb), "verify")                          # but never changed afterwards
 
 
 def test_set_refuses_frozen_fields(kb):
@@ -87,7 +87,7 @@ def test_editable_items_change_freely(kb):
     t = authoring.new(kb, "topic", {"title": "T", "summary": "S", "subject": ["a"], "derived_from": [o.id]},
                       text=f"Page [{o.id}]")
     edit.set_content(kb, t.id, "Revised page.\n")
-    assert KB.open(kb.root).get(t.id).text("page") == "Revised page.\n"
+    assert Store.open(kb.root).get(t.id).text("page") == "Revised page.\n"
     with pytest.raises(KBError, match="frozen"):
         edit.set_content(kb, o.id, "Rewritten observation.\n")
 
@@ -97,7 +97,7 @@ def test_transactions_roll_back_together(kb):
         with kb.tx():
             observation(kb, title="First")
             raise RuntimeError("boom")
-    assert KB.open(kb.root).records == {}
+    assert Store.open(kb.root).items == {}
 
 
 def test_network_filesystem_refused(tmp_path, monkeypatch):
@@ -117,7 +117,7 @@ def test_network_filesystem_refused(tmp_path, monkeypatch):
 def test_tampering_outside_kb_is_found(kb):
     rec = observation(kb)
     kb.conn.execute("UPDATE items SET json = replace(json, '1234', '999') WHERE id = ?", (rec.id,))
-    assert codes(checks.check(KB.open(kb.root))) == ["tamper"]
+    assert codes(checks.check(Store.open(kb.root))) == ["tamper"]
 
 
 def test_missing_content(kb):
@@ -126,7 +126,7 @@ def test_missing_content(kb):
     data["renditions"].append({"name": "extra", "role": "derived", "media_type": "text/plain", "sha256": "c" * 64,
                                "size": 1, "locations": [{"type": "db"}], "derived_from": "note",
                                "fidelity": "extracted", "transform": {"name": "x"}})
-    kb.save(Record(data, kb))
+    kb.save(Item(data, kb))
     assert codes(checks.check(kb)) == ["missing"]
 
 
@@ -149,10 +149,10 @@ def test_verified_needs_real_evidence(kb, tmp_path):
     digest.write_text("An LLM read the plots.")
     edit.add_rendition(kb, doc.id, digest, "digest", "derived", "llm", "original", "claude")
     edit.set_fields(kb, rec.id, ["status=verified"], add=[f"evidence={doc.id}#digest"])
-    probs = checks.check(KB.open(kb.root))
+    probs = checks.check(Store.open(kb.root))
     assert codes(probs) == ["evidence"] and "not evidence" in probs[0].hint
     edit.set_fields(kb, rec.id, remove=[f"evidence={doc.id}#digest"], add=[f"evidence={doc.id}#original"])
-    assert checks.check(KB.open(kb.root)) == []
+    assert checks.check(Store.open(kb.root)) == []
 
 
 def test_dangling_references_are_warnings(kb):
@@ -180,8 +180,8 @@ def test_lint_old_unverified(kb):
     data = copy.deepcopy(rec.data)
     data["created"]["at"] = "2020-01-01T00:00:00Z"
     kb.conn.execute("DROP TRIGGER items_frozen")          # simulate an old item
-    kb.save(Record(data, kb))
-    assert any(p.code == "unverified" for p in lint.lint(KB.open(kb.root)))
+    kb.save(Item(data, kb))
+    assert any(p.code == "unverified" for p in lint.lint(Store.open(kb.root)))
 
 
 def test_json_columns_round_trip(kb):

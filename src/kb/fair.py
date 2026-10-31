@@ -6,27 +6,27 @@ import re
 import shutil
 from pathlib import Path
 
-from . import store
+from . import content
 from .errors import KBError
-from .records import KB, Record
+from .items import Store, Item
 
 ROCRATE_CONTEXT = "https://w3id.org/ro/crate/1.1/context"
 
 
-def _entity_type(rec: Record) -> str:
+def _entity_type(rec: Item) -> str:
     return {"document": "CreativeWork", "dataset": "Dataset", "software": "SoftwareSourceCode",
             "person": "Person", "observation": "Claim", "topic": "Article", "view": "CreativeWork",
             "config": "PropertyValue", "snapshot": "Dataset"}.get(rec.kind, "CreativeWork")
 
 
-def rocrate(kb: KB, ids: list[str], outdir: Path, copy: bool = True) -> Path:
+def rocrate(kb: Store, ids: list[str], outdir: Path, copy: bool = True) -> Path:
     """Write an RO-Crate 1.1 for *ids* (and the persons they name) into *outdir*."""
     outdir.mkdir(parents=True, exist_ok=True)
     graph = [
         {"@id": "ro-crate-metadata.json", "@type": "CreativeWork",
          "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"}, "about": {"@id": "./"}},
     ]
-    root = {"@id": "./", "@type": "Dataset", "name": f"{kb.cfg.name}: export of {len(ids)} record(s)",
+    root = {"@id": "./", "@type": "Dataset", "name": f"{kb.cfg.name}: export of {len(ids)} item(s)",
             "hasPart": []}
     graph.append(root)
     for ident in ids:
@@ -45,7 +45,7 @@ def rocrate(kb: KB, ids: list[str], outdir: Path, copy: bool = True) -> Path:
             ent["sameAs"] = f"https://doi.org/{d['identifiers']['doi']}"
         authors = d.get("creators") or [a["who"] for a in d.get("asserted_by", [])]
         if authors:
-            ent["author"] = [{"@id": f"#{a}"} if a in kb.records else a for a in authors]
+            ent["author"] = [{"@id": f"#{a}"} if a in kb.items else a for a in authors]
         if rec.inputs():
             ent["isBasedOn"] = [{"@id": f"#{r.split('#')[0]}"} for r in rec.inputs()]
         if d.get("supersedes"):
@@ -53,7 +53,7 @@ def rocrate(kb: KB, ids: list[str], outdir: Path, copy: bool = True) -> Path:
         parts = []
         for r in rec.renditions:
             fid = None
-            path = store.resolve(kb, rec, r, fetch_urls=False)
+            path = content.resolve(kb, rec, r, fetch_urls=False)
             if copy and path is not None:
                 fn = next((l.get("filename") for l in r["locations"] if l["type"] == "db"), None)
                 rel = Path(rec.id) / (fn or Path(path).name)
@@ -76,7 +76,7 @@ def rocrate(kb: KB, ids: list[str], outdir: Path, copy: bool = True) -> Path:
         root["hasPart"].append({"@id": f"#{rec.id}"})
     persons = {a for e in graph for a in [x.get("@id", "")[1:] for x in e.get("author", []) if isinstance(x, dict)]}
     for pid in sorted(persons):
-        p = kb.records.get(pid)
+        p = kb.items.get(pid)
         if p is not None:
             graph.append({"@id": f"#{pid}", "@type": "Person", "name": p.data.get("name", pid),
                           **({"affiliation": p.data["affiliation"]} if p.data.get("affiliation") else {})})
@@ -129,7 +129,7 @@ def infer_resource(path: Path, name: str, sample: int = 1000) -> dict:
     }
 
 
-def datapackage(kb: KB, ident: str) -> dict:
+def datapackage(kb: Store, ident: str) -> dict:
     """Infer datapackage.json for a dataset's CSV/TSV renditions and add it as a metadata rendition."""
     rec = kb.get(ident)
     if rec.kind != "dataset":
@@ -137,7 +137,7 @@ def datapackage(kb: KB, ident: str) -> dict:
     resources = []
     for r in rec.renditions:
         if r["media_type"] in ("text/csv", "text/tab-separated-values"):
-            p = store.resolve(kb, rec, r)
+            p = content.resolve(kb, rec, r)
             if p is None:
                 raise KBError(f"{rec.id}#{r['name']} is not reachable")
             res = infer_resource(p, r["name"])
@@ -153,12 +153,12 @@ def datapackage(kb: KB, ident: str) -> dict:
     if rec.data.get("license"):
         pkg["licenses"] = [{"name": rec.data["license"]}]
     import copy as _copy
-    from .records import Record
+    from .items import Item
     data = _copy.deepcopy(rec.data)
     with kb.tx():
-        locs, sha, size = store.place_bytes(kb, (json.dumps(pkg, indent=2) + "\n").encode(), "datapackage.json")
+        locs, sha, size = content.place_bytes(kb, (json.dumps(pkg, indent=2) + "\n").encode(), "datapackage.json")
         meta = {"name": "datapackage", "role": "metadata", "media_type": "application/json",
                 "sha256": sha, "size": size, "locations": locs}
         data["renditions"] = [r for r in data.get("renditions", []) if r["name"] != "datapackage"] + [meta]
-        kb.save(Record(data, kb), "datapackage")
+        kb.save(Item(data, kb), "datapackage")
     return pkg

@@ -7,8 +7,8 @@ decides how knowledge moves along it by default:
     relation  push (here -> there)  pull (there -> here)  arriving items
     up        select                all                   land as configured
     down      all                   select
-    peer      select                select                reviewed (branch)
-    twin      git: the same store, kept in sync with git pull/merge/push
+    peer      select                select                into the inbox, reviewed
+    twin      the same store elsewhere: kb sync, both ways, newer change wins
 
 ``select`` moves only an explicit knowledge set (shallow or deep), ``all``
 moves every new or changed item, ``none`` nothing.  Every default can be
@@ -29,13 +29,13 @@ from pathlib import Path
 
 import tomli_w
 
-from .config import CONFIG_NAME, RELATIONS, access_rank, cache_home, _read
+from .config import DB_NAME, RELATIONS, access_rank, cache_home, _read
 from .errors import KBError
-from .records import KB
+from .items import Store
 
 PUSH_MODES = ("apply", "inbox", "pr")      # how a push lands: applied, into the inbox for review, as a PR of the bundle
 FORMS = ("select", "all", "none")
-ACCEPT = ("direct", "review")                          # pulled items: straight in, or on a branch
+ACCEPT = ("direct", "review")                          # pulled items: applied, or into the inbox for review
 PREFER = ("ours", "theirs")                            # mutable-field conflicts from another path
 EDGE_DEFAULTS = {
     "up":   {"push": "select", "pull": "all", "accept": "direct", "prefer": "theirs"},
@@ -52,28 +52,26 @@ class Neighbor:
     path: Path | None = None
     url: str | None = None
     mode: str = "apply"            # how pushes land there: apply | inbox | pr
-    relabel: str | None = None     # access level records may be relabelled to when pushed here
+    relabel: str | None = None     # access level items may be relabelled to when pushed here
     description: str = ""
     push: str = "select"           # what goes here -> there: select | all | none
     pull: str = "all"              # what comes there -> here: select | all | none
-    accept: str = "direct"         # how pulled items land here: direct | review (on a branch)
+    accept: str = "direct"         # how pulled items land here: direct | review (into the inbox)
     prefer: str = "ours"           # mutable-field conflicts arriving from this edge
-    remote: str | None = None      # twins: the git remote (or use path/url)
-    branch: str | None = None      # twins: the branch to sync (default: current)
 
     @property
     def location(self) -> Path | None:
-        """Where the store is on this machine: its path, else the cache clone of its URL."""
+        """Where the store is on this machine: its path, else the cached snapshot from its URL."""
         if self.path is not None:
             return self.path
         if self.url:
-            return clone_dir(self.url)
+            return snapshot_dir(self.url)
         return None
 
     @property
     def available(self) -> bool:
         loc = self.location
-        return loc is not None and (loc / CONFIG_NAME).exists()
+        return loc is not None and (loc / DB_NAME).exists()
 
     @property
     def writable(self) -> bool:
@@ -82,13 +80,13 @@ class Neighbor:
     exchange: Path | None = None   # pr landing: a git clone of the receiver's bundle exchange repository
 
 
-def clone_dir(url: str) -> Path:
+def snapshot_dir(url: str) -> Path:
     """Where a URL neighbor's snapshot is kept on this machine."""
     tail = url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".sqlite") or "store"
     return cache_home() / "snapshots" / f"{tail}-{hashlib.sha256(url.encode()).hexdigest()[:8]}"
 
 
-def neighbors(kb: KB) -> list[Neighbor]:
+def neighbors(kb: Store) -> list[Neighbor]:
     out = []
     for name, n in sorted(kb.cfg.neighbors.items()):
         rel = n.get("relation", "up")
@@ -103,12 +101,11 @@ def neighbors(kb: KB) -> list[Neighbor]:
         out.append(Neighbor(name, rel, n.get("path"), n.get("url"), mode, n.get("relabel"),
                             n.get("description", ""), n.get("push", d["push"]), n.get("pull", d["pull"]),
                             n.get("accept", d["accept"]), n.get("prefer", d["prefer"]),
-                            n.get("remote"), n.get("branch"),
                             Path(n["exchange"]).expanduser() if n.get("exchange") else None))
     return out
 
 
-def neighbor(kb: KB, name: str) -> Neighbor:
+def neighbor(kb: Store, name: str) -> Neighbor:
     for n in neighbors(kb):
         if n.name == name:
             return n
@@ -116,9 +113,9 @@ def neighbor(kb: KB, name: str) -> Neighbor:
     raise KBError(f"no neighbor {name!r} (have: {have}); see kb neighbor add")
 
 
-def open_store(path: Path, readonly: bool = True) -> KB:
+def open_store(path: Path, readonly: bool = True) -> Store:
     """The store at *path*; read-only stores are opened mode=ro, with scratch files in the user cache."""
-    kb = KB.open(path, readonly=readonly)
+    kb = Store.open(path, readonly=readonly)
     if readonly:
         kb.cfg.kbdir_override = cache_home() / "stores" / _safe(kb.cfg.id)
     return kb
@@ -131,16 +128,16 @@ def _safe(text: str) -> str:
 @dataclass
 class Reached:
     label: str            # neighbor name path, e.g. "home" or "home>group-x"
-    kb: KB
+    kb: Store
     distance: int
     relation: str
 
 
-def reachable(kb: KB, depth: int = 1, relations=("up", "peer"), only: list[str] | None = None) -> list[Reached]:
+def reachable(kb: Store, depth: int = 1, relations=("up", "peer"), only: list[str] | None = None) -> list[Reached]:
     """Stores reachable from *kb* within *depth* hops along *relations*, nearest first.
 
     Each store is visited once (by store ID), so cycles in the graph are harmless.
-    Unavailable neighbors (not cloned here) are skipped.
+    Unavailable neighbors (no path here, snapshot not fetched) are skipped.
     """
     seen = {kb.cfg.id}
     out: list[Reached] = []
@@ -167,7 +164,7 @@ def reachable(kb: KB, depth: int = 1, relations=("up", "peer"), only: list[str] 
     return out
 
 
-def fetch(kb: KB, names: list[str] | None = None) -> list[tuple[str, str]]:
+def fetch(kb: Store, names: list[str] | None = None) -> list[tuple[str, str]]:
     """Download the snapshots of URL-only neighbors (read-only copies in the cache)."""
     import shutil
     import urllib.request
@@ -176,7 +173,7 @@ def fetch(kb: KB, names: list[str] | None = None) -> list[tuple[str, str]]:
         if names and n.name not in names:
             continue
         if n.path is None and n.url:
-            dest = clone_dir(n.url) / CONFIG_NAME
+            dest = snapshot_dir(n.url) / DB_NAME
             dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = dest.with_suffix(".partial")
             try:
@@ -185,7 +182,7 @@ def fetch(kb: KB, names: list[str] | None = None) -> list[tuple[str, str]]:
                 fresh = not dest.exists()
                 tmp.replace(dest)
                 for side in ("-wal", "-shm"):
-                    (dest.parent / (CONFIG_NAME + side)).unlink(missing_ok=True)
+                    (dest.parent / (DB_NAME + side)).unlink(missing_ok=True)
                 done.append((n.name, "fetched" if fresh else "updated"))
             except OSError as exc:
                 tmp.unlink(missing_ok=True)
@@ -201,7 +198,7 @@ def _write_toml(path: Path, data: dict, header: str) -> None:
     path.write_text(header + tomli_w.dumps(data))
 
 
-def add(kb: KB, name: str, relation: str, path: str | None = None, url: str | None = None,
+def add(kb: Store, name: str, relation: str, path: str | None = None, url: str | None = None,
         shared: bool = False, mode: str = "apply", relabel: str | None = None,
         description: str = "", **edge) -> dict:
     """Declare a neighbor.  Shared declarations go in the store's settings (no machine paths);
@@ -224,11 +221,11 @@ def add(kb: KB, name: str, relation: str, path: str | None = None, url: str | No
         edge["exchange"] = str(Path(edge["exchange"]).expanduser().resolve())
     if path:
         p = Path(path).expanduser().resolve()
-        if not (p / CONFIG_NAME).exists():
-            raise KBError(f"{p} is not a kb store (no {CONFIG_NAME})")
+        if not (p / DB_NAME).exists():
+            raise KBError(f"{p} is not a kb store (no {DB_NAME})")
         if p == kb.root.resolve():
             raise KBError("a store cannot be its own neighbor")
-        other = KB.open(p, readonly=True)
+        other = Store.open(p, readonly=True)
         if relation == "twin" and other.cfg.id != kb.cfg.id:
             raise KBError(f"{p} is a different store (id {other.cfg.id}); twins are copies of one store")
         if relation != "twin" and other.cfg.id == kb.cfg.id:
@@ -262,7 +259,7 @@ def add(kb: KB, name: str, relation: str, path: str | None = None, url: str | No
     return entry | ({"path": path} if path else {})
 
 
-def remove(kb: KB, name: str) -> list[str]:
+def remove(kb: Store, name: str) -> list[str]:
     removed = []
     nbs = dict(kb.setting("neighbors", {}) or {})
     if name in nbs:
@@ -282,7 +279,7 @@ def remove(kb: KB, name: str) -> list[str]:
     return removed
 
 
-def describe(kb: KB, depth: int = 2) -> list[dict]:
+def describe(kb: Store, depth: int = 2) -> list[dict]:
     """The neighborhood as rows: label, relation, distance, store, scope, access, where."""
     rows = []
     for n in neighbors(kb):
@@ -292,18 +289,18 @@ def describe(kb: KB, depth: int = 2) -> list[dict]:
         for row in rows:
             if row["label"] == r.label:
                 row.update(store=r.kb.cfg.id, scope=r.kb.cfg.scope, access=r.kb.cfg.access,
-                           records=len(r.kb.records))
+                           items=len(r.kb.items))
                 break
         else:
             rows.append({"label": r.label, "relation": r.relation, "distance": r.distance, "available": True,
                          "where": str(r.kb.root), "store": r.kb.cfg.id, "scope": r.kb.cfg.scope,
-                         "access": r.kb.cfg.access, "records": len(r.kb.records)})
+                         "access": r.kb.cfg.access, "items": len(r.kb.items)})
     return rows
 
 
-def locate(kb: KB, ident: str, depth: int = 3) -> "Reached | None":
-    """The nearest reachable store (any relation) holding record *ident*."""
+def locate(kb: Store, ident: str, depth: int = 3) -> "Reached | None":
+    """The nearest reachable store (any relation) holding item *ident*."""
     for r in reachable(kb, depth, relations=("up", "peer", "down")):
-        if ident in r.kb.records:
+        if ident in r.kb.items:
             return r
     return None

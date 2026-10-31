@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from kb import authoring, store
+from kb import authoring, content
 from kb.errors import KBError
-from kb.records import KB
+from kb.items import Store
 
 from conftest import observation, set_store
 
@@ -17,7 +17,7 @@ def test_new_observation(kb):
     assert rec.data["created"]["by"] == "per-tester"
     note = rec.rendition("note")
     assert note["locations"] == [{"type": "db", "filename": "note.md"}]
-    again = KB.open(kb.root).get(rec.id)                 # it is in the database, not just in memory
+    again = Store.open(kb.root).get(rec.id)                 # it is in the database, not just in memory
     assert again.data == rec.data and again.text("note") == "Noise was high.\n"
     assert [e["action"] for e in kb.events(rec.id)] == ["create"]
 
@@ -25,7 +25,7 @@ def test_new_observation(kb):
 def test_invalid_record_is_not_written(kb):
     with pytest.raises(KBError, match="not written"):
         authoring.new(kb, "observation", {"title": "x"}, text="t")   # no asserted_by
-    assert KB.open(kb.root).records == {}
+    assert Store.open(kb.root).items == {}
     assert kb.conn.execute("SELECT count(*) FROM blobs").fetchone()[0] == 0   # the content was rolled back too
 
 
@@ -51,19 +51,19 @@ def test_add_small_file_goes_into_the_store(kb, tmp_path):
     r = rec.rendition("original")
     assert r["locations"] == [{"type": "db", "filename": "noise.csv"}]
     assert rec.content("original") == f.read_bytes() and r["media_type"] == "text/csv"
-    assert store.resolve(kb, rec, r).read_bytes() == f.read_bytes()      # materialized for tools
+    assert content.resolve(kb, rec, r).read_bytes() == f.read_bytes()      # materialized for tools
 
 
 def test_add_large_file_goes_to_content_store(root, tmp_path):
     cas = set_store(root)
-    kb = KB.open(root)
+    kb = Store.open(root)
     big = tmp_path / "big.root"
     big.write_bytes(b"x" * (kb.cfg.max_inline_bytes + 1))
     rec = authoring.add(kb, "dataset", [str(big)], {"title": "Big", "summary": "A big file."})
     r = rec.rendition("original")
-    assert r["locations"] == [{"type": "cas", "store": "default"}]
-    assert store.blob_path(cas, r["sha256"]).exists()
-    assert store.resolve(kb, rec, r) == store.blob_path(cas, r["sha256"])
+    assert r["locations"] == [{"type": "cas", "name": "default"}]
+    assert content.blob_path(cas, r["sha256"]).exists()
+    assert content.resolve(kb, rec, r) == content.blob_path(cas, r["sha256"])
     assert not kb.has_blob(r["sha256"])
 
 
@@ -73,7 +73,7 @@ def test_add_large_file_without_store_is_local_only(kb, tmp_path):
     rec = authoring.add(kb, "dataset", [str(big)], {"title": "Big", "summary": "Only here."})
     loc = rec.rendition("original")["locations"][0]
     assert loc["type"] == "local" and loc["host"] == kb.cfg.host
-    assert store.resolve(kb, rec, rec.rendition("original")) == big.resolve()
+    assert content.resolve(kb, rec, rec.rendition("original")) == big.resolve()
 
 
 def test_add_url_fetches_and_hashes(kb, tmp_path):
@@ -82,7 +82,7 @@ def test_add_url_fetches_and_hashes(kb, tmp_path):
     rec = authoring.add(kb, "document", [f.as_uri()], {"title": "Talk", "summary": "A talk.", "doctype": "presentation",
                                                        "date": "2026-10-28", "creators": ["A"]})
     r = rec.rendition("original")
-    assert r["sha256"] == store.sha256_file(f)[0]
+    assert r["sha256"] == content.sha256_file(f)[0]
     assert [l["type"] for l in r["locations"]] == ["url", "db"] and "retrieved" in r["locations"][0]
 
 
@@ -109,7 +109,7 @@ def test_add_refuses_duplicate_identifier(kb, tmp_path):
     fields = {"title": "P", "summary": "S", "doctype": "paper", "date": "2026", "creators": ["A"],
               "identifiers": {"arxiv": "2601.00001"}}
     authoring.add(kb, "document", [str(f)], fields)
-    with pytest.raises(KBError, match="already in the KB"):
+    with pytest.raises(KBError, match="already in this store"):
         authoring.add(kb, "document", [str(f)], fields)
 
 
@@ -146,16 +146,16 @@ def test_from_json(kb):
 
 def test_locate_mirror_on_frozen_source(root, tmp_path):
     from kb import checks, edit
-    kb = KB.open(root)
+    kb = Store.open(root)
     big = tmp_path / "big.bin"
     big.write_bytes(b"q" * (kb.cfg.max_inline_bytes + 1))
     rec = authoring.add(kb, "dataset", [str(big)], {"title": "B", "summary": "Big."})
     cas = set_store(root, publish=False)
-    kb = KB.open(root)
+    kb = Store.open(root)
     loc = edit.add_location(kb, f"{rec.id}#original", "default")
-    assert loc == {"type": "cas", "store": "default"}
-    assert store.blob_path(cas, rec.rendition("original")["sha256"]).exists()
-    assert [p for p in checks.check(KB.open(root)) if p.level == "error"] == []
+    assert loc == {"type": "cas", "name": "default"}
+    assert content.blob_path(cas, rec.rendition("original")["sha256"]).exists()
+    assert [p for p in checks.check(Store.open(root)) if p.level == "error"] == []
     other = tmp_path / "other.bin"
     other.write_bytes(b"different")
     with pytest.raises(KBError, match="records"):

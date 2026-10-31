@@ -1,8 +1,8 @@
 """The derivation graph: dependencies, staleness and stamping.
 
-Edges run from a derived record to its inputs (``derived_from``).  A topic or
+Edges run from a derived item to its inputs (``derived_from``).  A topic or
 view pins each input by digest once stamped or built; when an input's digest
-changes or it stops being current, the derived record is stale.
+changes or it stops being current, the derived item is stale.
 """
 
 import json
@@ -10,14 +10,14 @@ from dataclasses import dataclass, field
 
 from .errors import KBError
 from .ids import parse_ref
-from .records import KB, Record
+from .items import Store, Item
 
 
 @dataclass
 class Stale:
     id: str
     kind: str
-    what: str                     # "rendition", "topic", "view", "record"
+    what: str                     # "rendition", "topic", "view", "item"
     reasons: list[str] = field(default_factory=list)
     rendition: str | None = None
 
@@ -26,7 +26,7 @@ class Stale:
                 "rendition": self.rendition, "reasons": self.reasons}
 
 
-def deps(kb: KB, ident: str, transitive: bool = False) -> list[str]:
+def deps(kb: Store, ident: str, transitive: bool = False) -> list[str]:
     seen: list[str] = []
     todo = [ident]
     while todo:
@@ -35,14 +35,14 @@ def deps(kb: KB, ident: str, transitive: bool = False) -> list[str]:
             dep = parse_ref(ref)[0]
             if dep not in seen and dep != ident:
                 seen.append(dep)
-                if transitive and dep in kb.records:
+                if transitive and dep in kb.items:
                     todo.append(dep)
     return seen
 
 
-def reverse_edges(kb: KB) -> dict[str, list[str]]:
+def reverse_edges(kb: Store) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         for ref in rec.inputs():
             out.setdefault(parse_ref(ref)[0], []).append(rec.id)
         for ref in rec.data.get("evidence", []):
@@ -51,7 +51,7 @@ def reverse_edges(kb: KB) -> dict[str, list[str]]:
     return out
 
 
-def rdeps(kb: KB, ident: str, transitive: bool = False) -> list[str]:
+def rdeps(kb: Store, ident: str, transitive: bool = False) -> list[str]:
     kb.get(ident)
     edges = reverse_edges(kb)
     seen: list[str] = []
@@ -65,8 +65,8 @@ def rdeps(kb: KB, ident: str, transitive: bool = False) -> list[str]:
     return seen
 
 
-def topo_order(kb: KB, ids) -> list[str]:
-    """*ids* ordered so every record comes after those of its inputs also in *ids*."""
+def topo_order(kb: Store, ids) -> list[str]:
+    """*ids* ordered so every item comes after those of its inputs also in *ids*."""
     wanted = set(ids)
     out: list[str] = []
     state: dict[str, int] = {}
@@ -77,8 +77,8 @@ def topo_order(kb: KB, ids) -> list[str]:
         if state.get(i) == 1:
             raise KBError("derivation cycle: " + " -> ".join(path + [i]))
         state[i] = 1
-        if i in kb.records:
-            for ref in kb.records[i].inputs():
+        if i in kb.items:
+            for ref in kb.items[i].inputs():
                 d = parse_ref(ref)[0]
                 if d in wanted:
                     visit(d, path + [i])
@@ -90,7 +90,7 @@ def topo_order(kb: KB, ids) -> list[str]:
     return out
 
 
-def _input_problems(kb: KB, rec: Record, pinned: dict[str, str]) -> list[str]:
+def _input_problems(kb: Store, rec: Item, pinned: dict[str, str]) -> list[str]:
     reasons = []
     for ref in rec.inputs():
         ident = parse_ref(ref)[0]
@@ -106,9 +106,9 @@ def _input_problems(kb: KB, rec: Record, pinned: dict[str, str]) -> list[str]:
     return reasons
 
 
-def stale_renditions(kb: KB) -> list[Stale]:
+def stale_renditions(kb: Store) -> list[Stale]:
     out = []
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         for r in rec.renditions:
             if r["role"] != "derived":
                 continue
@@ -122,16 +122,16 @@ def stale_renditions(kb: KB) -> list[Stale]:
     return out
 
 
-def topic_staleness(kb: KB, rec: Record) -> list[str]:
+def topic_staleness(kb: Store, rec: Item) -> list[str]:
     pinned = {d["ref"]: d["digest"] for d in rec.data.get("derived_from", [])
               if isinstance(d, dict) and "digest" in d}
     return _input_problems(kb, rec, pinned)
 
 
-def stale(kb: KB) -> list[Stale]:
+def stale(kb: Store) -> list[Stale]:
     from .build import view_staleness
     out = stale_renditions(kb)
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         if rec.kind == "view":
             reasons = view_staleness(kb, rec)
             if reasons:
@@ -139,11 +139,11 @@ def stale(kb: KB) -> list[Stale]:
         elif rec.data.get("derived_from"):
             reasons = topic_staleness(kb, rec)
             if reasons:
-                out.append(Stale(rec.id, rec.kind, "topic" if rec.kind == "topic" else "record", reasons))
+                out.append(Stale(rec.id, rec.kind, "topic" if rec.kind == "topic" else "item", reasons))
     return out
 
 
-def stamp(kb: KB, ident: str) -> Record:
+def stamp(kb: Store, ident: str) -> Item:
     """Pin a derived item's inputs by digest (after revising it)."""
     import copy
     rec = kb.get(ident)
@@ -156,13 +156,13 @@ def stamp(kb: KB, ident: str) -> Record:
         raise KBError(f"cannot stamp {rec.id}: inputs not in this store: {', '.join(missing)} (kb obtain them)")
     data = copy.deepcopy(rec.data)
     data["derived_from"] = [{"ref": ref, "digest": kb.ref_digest(ref)} for ref in rec.inputs()]
-    return kb.save(Record(data, kb), "stamp")
+    return kb.save(Item(data, kb), "stamp")
 
 
-def dag(kb: KB, fmt: str = "json") -> str:
+def dag(kb: Store, fmt: str = "json") -> str:
     nodes = {i: {"kind": r.kind, "title": r.data.get("title", ""), "current": kb.is_current(i)}
-             for i, r in kb.records.items()}
-    edges = [(i, parse_ref(ref)[0]) for i, r in kb.records.items() for ref in r.inputs()]
+             for i, r in kb.items.items()}
+    edges = [(i, parse_ref(ref)[0]) for i, r in kb.items.items() for ref in r.inputs()]
     edges += [(new, old) for old, news in kb.superseded_by.items() for new in news]
     if fmt == "json":
         return json.dumps({"nodes": nodes, "edges": edges}, indent=2)

@@ -30,7 +30,7 @@ TYPE_LABEL = {
 }
 ID_LINKS = {
     "doi": "https://doi.org/{}", "arxiv": "https://arxiv.org/abs/{}", "inspire": "https://inspirehep.net/literature/{}",
-    "cds": "https://cds.cern.ch/record/{}",
+    "cds": "https://cds.cern.ch/item/{}",
 }
 
 
@@ -77,7 +77,7 @@ class Lookup:
 
     def get(self, ident: str):
         for h in self.holders:
-            rec = h.records.get(ident)
+            rec = h.items.get(ident)
             if rec is not None:
                 return rec
         return None
@@ -118,7 +118,7 @@ def _excerpt(text: str) -> str:
 
 
 def _rendition_view(r: dict, store_kb=None) -> dict:
-    from . import sources
+    from . import locations
     label = ROLE_LABEL.get(r["role"], r["role"])
     if r["role"] == "derived":
         label = FIDELITY_LABEL.get(r.get("fidelity"), "derived")
@@ -132,12 +132,12 @@ def _rendition_view(r: dict, store_kb=None) -> dict:
         elif loc["type"] == "url":
             where.append("online" + (f", needs {loc['auth']}" if loc.get("auth") else ""))
         elif store_kb is not None:
-            where.append(sources.source(loc).describe(store_kb, loc))
+            where.append(locations.for_location(loc).describe(store_kb, loc))
         else:
-            where.append({"cas": f"content store '{loc.get('store')}'", "local": f"only on {loc.get('host')}",
+            where.append({"cas": f"content store '{loc.get('name')}'", "local": f"only on {loc.get('host')}",
                           "annex": f"DataLad dataset {loc.get('dataset')}"}.get(loc["type"], loc["type"]))
     return {"name": r["name"], "label": label, "type": TYPE_LABEL.get(r["media_type"], r["media_type"]),
-            "size": size(r.get("size")), "where": where, "links": sources.links(r)}
+            "size": size(r.get("size")), "where": where, "links": locations.links(r)}
 
 
 def _links(d: dict, settings: dict | None = None) -> list[tuple[str, str]]:
@@ -209,7 +209,7 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
             total = sum(x.get("size") or 0 for x in v.get("files", []))
             f.append((f"  {v['label']}", ", ".join(x for x in (
                 f"{len(v.get('files', []))} file(s)", size(total), when(v.get("registered")),
-                "seen in " + ", ".join(sorted({s["binding"] for s in v.get("seen", [])})) if v.get("seen") else "",
+                "seen in " + ", ".join(sorted({s["binding"] for s in v.get("sightings", [])})) if v.get("sightings") else "",
                 v.get("note", "")) if x)))
         for b in d.get("bindings", []):
             f.append((f"  source {b['name']}", _binding_text(b)))
@@ -307,13 +307,13 @@ def _field_changes(old: dict, new: dict) -> list[str]:
 
 
 def bundle_view(b: dict, store_kb=None, max_depth: int = 4) -> dict:
-    from .bundle import BundleSource, check
-    src = BundleSource(b)
+    from .bundle import BundleSender, check
+    src = BundleSender(b)
     look = Lookup(src, store_kb)
     view = {"bundle": b["id"][:12], "from": b["from"], "created": {"at": when(b["created"]["at"]),
                                                                        "by": look.name(b["created"]["by"])},
             "note": b.get("note"), "approved": b.get("approved"),
-            "set": item_view(src.records[b["set"]["id"]], look, settings=store_kb.cfg.raw if store_kb else None),
+            "set": item_view(src.items[b["set"]["id"]], look, settings=store_kb.cfg.raw if store_kb else None),
             "tree": tree_view(b["set"], look, max_depth), "missing": b.get("missing", [])}
     if store_kb is not None:
         chk = check(store_kb, b)
@@ -326,10 +326,10 @@ def bundle_view(b: dict, store_kb=None, max_depth: int = 4) -> dict:
                 continue
             cards = []
             for i in ids:
-                rec = src.records[i]
+                rec = src.items[i]
                 v = item_view(rec, look, store_kb, store_kb.cfg.raw)
-                if action == "update" and i in store_kb.records:
-                    v["changes"] = _field_changes(store_kb.records[i].data, rec.data)
+                if action == "update" and i in store_kb.items:
+                    v["changes"] = _field_changes(store_kb.items[i].data, rec.data)
                 if i in chk.get("notes", {}):
                     v["notes"] = chk["notes"][i]
                 cards.append(v)
@@ -337,7 +337,7 @@ def bundle_view(b: dict, store_kb=None, max_depth: int = 4) -> dict:
         view["groups"] = groups
     else:
         view["groups"] = [{"action": "all", "label": "Items",
-                           "items": [item_view(r, look) for i, r in src.records.items() if i != b["set"]["id"]]}]
+                           "items": [item_view(r, look) for i, r in src.items.items() if i != b["set"]["id"]]}]
     return view
 
 

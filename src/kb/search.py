@@ -1,18 +1,18 @@
 """Search: full text (BM25), semantic (embeddings), or both fused by rank."""
 
-from . import index
+from . import query
 from .embed import semantic
-from .records import KB
+from .items import Store
 
 RRF_K = 60
 
 
-def search(kb: KB, text: str, mode: str = "text", limit: int = 20, include_old: bool = False,
+def search(kb: Store, text: str, mode: str = "text", limit: int = 20, include_old: bool = False,
            embedder=None) -> list[dict]:
     if mode == "text":
-        return index.fts(kb, text, limit, include_old)
+        return query.fts(kb, text, limit, include_old)
     def row(rid, score, snip=""):
-        rec = kb.records.get(rid)
+        rec = kb.items.get(rid)
         if rec is None:
             return None
         d = rec.data
@@ -23,7 +23,7 @@ def search(kb: KB, text: str, mode: str = "text", limit: int = 20, include_old: 
     if mode == "semantic":
         rows = [row(rid, s) for rid, s in sem]
     else:
-        lex = index.fts(kb, text, limit * 3, include_old=True)
+        lex = query.fts(kb, text, limit * 3, include_old=True)
         scores: dict[str, float] = {}
         snips = {r["id"]: r["snip"] for r in lex}
         for rank, r in enumerate(lex):

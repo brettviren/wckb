@@ -10,7 +10,7 @@ from . import graph
 from .build import publications
 from .checks import Problem
 from .ids import parse_ref
-from .records import KB
+from .items import Store
 
 
 def _warn(code, where, msg, hint=""):
@@ -21,7 +21,7 @@ def _overlap(a: list, b: list) -> bool:
     return any(x0 <= y1 and y0 <= x1 for x0, x1 in a for y0, y1 in b)
 
 
-def lint(kb: KB) -> list[Problem]:
+def lint(kb: Store) -> list[Problem]:
     out: list[Problem] = []
     days = int(kb.cfg.lint.get("unverified_days", 90))
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
@@ -35,7 +35,7 @@ def lint(kb: KB) -> list[Problem]:
         out.append(_warn("stale", where, "; ".join(s.reasons), hint))
 
     current_obs = []
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         d = rec.data
         if not kb.is_current(rec.id):
             continue
@@ -57,7 +57,7 @@ def lint(kb: KB) -> list[Problem]:
                                  "fetch it (kb verify --record) or add a local copy"))
         if rec.kind == "view":
             for pub in publications(kb, rec)[-1:]:
-                gone = [i for i in pub.get("inputs", []) if parse_ref(i)[0] in kb.records
+                gone = [i for i in pub.get("inputs", []) if parse_ref(i)[0] in kb.items
                         and not kb.is_current(parse_ref(i)[0])]
                 if gone:
                     out.append(_warn("published-stale", rec.id,
@@ -76,10 +76,10 @@ def lint(kb: KB) -> list[Problem]:
     return out
 
 
-def dangling(kb: KB) -> list[tuple[str, str]]:
-    """(record, ref) for references to records that are not in this store."""
+def dangling(kb: Store) -> list[tuple[str, str]]:
+    """(item, ref) for references to items that are not in this store."""
     out = []
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         d = rec.data
         refs = d.get("members", []) + d.get("supersedes", []) + d.get("retracts", []) + d.get("related", [])
         refs += rec.inputs() + [e for e in d.get("evidence", []) if "://" not in e]

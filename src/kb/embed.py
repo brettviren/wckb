@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 
 from .errors import KBError
-from .records import KB
+from .items import Store
 
 CHUNK_CHARS = 1500
 
@@ -37,7 +37,7 @@ class Embedder:
         self.timeout = timeout
 
     @classmethod
-    def from_config(cls, kb: KB) -> "Embedder":
+    def from_config(cls, kb: Store) -> "Embedder":
         c = kb.cfg.embed
         if not c or "url" not in c or "model" not in c:
             raise KBError("no embedding service: kb config set embed '{\"url\": ..., \"model\": ...}' (or [embed] in your config.toml)")
@@ -99,28 +99,28 @@ def _norm(v):
     return [x / n for x in v]
 
 
-def _db(kb: KB) -> sqlite3.Connection:
+def _db(kb: Store) -> sqlite3.Connection:
     return kb.conn   # vectors live in the store's database (table "vectors")
 
 
-def record_chunks(kb: KB) -> dict[tuple[str, int], str]:
-    from .records import text_of
+def item_chunks(kb: Store) -> dict[tuple[str, int], str]:
+    from .items import text_of
     out = {}
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         head = f"{rec.data.get('title', '')}\n{rec.data.get('summary', '')}"
         for i, c in enumerate([head] + chunks(text_of(kb, rec))):
             out[(rec.id, i)] = c
     return out
 
 
-def embed(kb: KB, embedder: Embedder | None = None) -> dict:
+def embed(kb: Store, embedder: Embedder | None = None) -> dict:
     """Embed new or changed chunks; drop vectors of chunks that are gone."""
     embedder = embedder or Embedder.from_config(kb)
     db = _db(kb)
     db.execute("BEGIN IMMEDIATE")
     have = {(r[0], r[1]): r[2] for r in db.execute(
         "SELECT id, chunk, text_hash FROM vectors WHERE identity = ?", (embedder.identity,))}
-    want = record_chunks(kb)
+    want = item_chunks(kb)
     todo = []
     for key, text in want.items():
         h = hashlib.sha256(text.encode()).hexdigest()
@@ -137,8 +137,8 @@ def embed(kb: KB, embedder: Embedder | None = None) -> dict:
     return {"embedded": len(todo), "removed": len(gone), "total": len(want), "identity": embedder.identity}
 
 
-def semantic(kb: KB, query: str, limit: int = 20, embedder: Embedder | None = None) -> list[tuple[str, float]]:
-    """(record ID, best cosine similarity) ordered best first."""
+def semantic(kb: Store, query: str, limit: int = 20, embedder: Embedder | None = None) -> list[tuple[str, float]]:
+    """(item ID, best cosine similarity) ordered best first."""
     embedder = embedder or Embedder.from_config(kb)
     if not kb.conn.execute("SELECT 1 FROM vectors WHERE identity = ? LIMIT 1", (embedder.identity,)).fetchone():
         raise KBError("no embeddings yet: run kb embed")

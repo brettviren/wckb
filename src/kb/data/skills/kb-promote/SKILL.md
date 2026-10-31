@@ -1,6 +1,6 @@
 ---
 name: kb-promote
-description: Review this knowledge base (kb) store and promote selected records to a neighbor store (the user's home store, a group store ...). Use when the user asks to review, promote, push or share KB entries upward, or at a milestone when review autonomy allows it.
+description: Review this knowledge base (kb) store and promote selected items to a neighbor store (the user's home store, a group store ...). Use when the user asks to review, promote, push or share KB entries upward, or at a milestone when review autonomy allows it.
 ---
 
 # Promotion review
@@ -12,13 +12,13 @@ effort small: a short, well-argued list rather than a dump.
    normally goes to an `up` neighbor. If there are several and the user
    didn't say, ask which.
 2. **Tidy first.** Run `kb check` and `kb lint`. Fix weak summaries and
-   missing subjects on the records you're about to propose (allowed via
-   `kb set`). A record should make sense to someone outside this
+   missing subjects on the items you're about to propose (allowed via
+   `kb set`). An item should make sense to someone outside this
    project.
 3. **Get candidates:** `kb candidates --to NEIGHBOR` (`--json` for detail).
    It ranks:
-   - corrections to records already pushed (always propose these);
-   - records marked `promote`;
+   - corrections to items already pushed (always propose these);
+   - items marked `promote`;
    - verified ones;
    - and it flags blockers: drafts, local-only files, access more
      restricted than the target.
@@ -50,7 +50,7 @@ effort small: a short, well-argued list rather than a dump.
    decides how the push lands (`--land apply|inbox|pr` overrides): a group
    store typically takes it into its inbox, or as a pull request in its
    exchange repository.
-7. **Conflicts.** A conflict means the receiver holds a *different* record
+7. **Conflicts.** A conflict means the receiver holds a *different* item
    under the same ID, or a diverged copy of an editable one. Don't force
    it: report it to the human with `kb context ID --in NEIGHBOR` for both
    sides.

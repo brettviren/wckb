@@ -42,10 +42,10 @@ def test_pdf_extract_and_staleness(kb, tmp_path):
         transforms.extract(kb, rec, transform="pdftotext")
     # A derived rendition whose source hash doesn't match is stale.
     import copy
-    from kb.records import Record
+    from kb.items import Item
     data = copy.deepcopy(kb.get(rec.id).data)
     data["renditions"][-1]["source_sha256"] = "f" * 64
-    kb.save(Record(data, kb))
+    kb.save(Item(data, kb))
     assert [s.rendition for s in graph.stale_renditions(kb)] == ["text"]
 
 
@@ -89,8 +89,8 @@ def test_root_describe(kb, tmp_path):
 
 
 def test_command_transform_from_config(root, tmp_path):
-    from kb.records import KB
-    kb = KB.open(root)
+    from kb.items import Store
+    kb = Store.open(root)
     kb.set_setting("transforms", {"upper": {"command": ["sh", "-c", "tr a-z A-Z < {input} > {output}"],
                                             "media_types": ["text/plain"], "fidelity": "lossless"}})
     f = tmp_path / "a.txt"

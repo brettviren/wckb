@@ -6,6 +6,10 @@ LLM policy for stores (instruction snippets, skills, hooks) is in
 `src/kb/data/skills/`. `kb policy enact` writes it into each store's
 target.
 
+Terms are defined in `docs/glossary.md`. Use them in code (names, help
+texts, messages) and docs; when you introduce or rename a concept, update
+the glossary in the same change.
+
 Open design questions live in `docs/questions.md`. When a change settles or
 raises one, update that file.
 
@@ -18,10 +22,10 @@ in scope.
   No data processing goes in either. Every subcommand with required
   arguments shows its help when given none.
 - The store is one SQLite file per store: `db` (DDL, guard triggers,
-  transactions, the network-filesystem guard) and `records` (`KB`: items,
+  transactions, the network-filesystem guard) and `items` (`Store`: items,
   blobs, events, settings, query tables kept in step on every write).
   Item JSON stays validated by JSON Schema on every write.
-- Logic modules: `records` (model, digest, `KB`), `authoring` (new/add/supersede),
+- Logic modules: `items` (model, digest, `Store`), `authoring` (new/add/supersede),
   `edit` (set, renditions, content, checkout/checkin), `sources` (data sources:
   db, cas, url, local, annex), `store` (placing content, hashing, fetch), `checks`
   (consistency scan), `lint` (advice), `graph` (staleness, stamping), `build` (views),

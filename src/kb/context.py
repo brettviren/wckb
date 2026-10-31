@@ -1,26 +1,26 @@
-"""``kb context``: one call that gives an LLM what the KB knows about something.
+"""``kb context``: one call that gives an LLM what the knowledge base knows about something.
 
-Topics come first (they are the synthesis), then current records with their
+Topics come first (they are the synthesis), then current items with their
 summaries, then superseded ones that explain history.  Output stops at a
 character budget so it can be pasted into a context window as is.
 """
 
 import json
 
-from . import graph, index, store
+from . import graph, query, content
 from .errors import KBError
 from .ids import is_id, parse_ref
-from .records import KB, Record
+from .items import Store, Item
 
 
-def _runs(rec: Record) -> str:
+def _runs(rec: Item) -> str:
     rr = rec.data.get("valid", {}).get("runs")
     if not rr:
         return ""
     return "runs " + ",".join(str(a) if a == b else f"{a}-{b}" for a, b in rr)
 
 
-def line(kb: KB, rec: Record) -> str:
+def line(kb: Store, rec: Item) -> str:
     d = rec.data
     bits = [rec.kind] + [x for x in (d.get("status"), d.get("doctype"), _runs(rec)) if x]
     s = f"- **{rec.id}** [{', '.join(bits)}] {d.get('title', '')}: {d.get('summary', '')}"
@@ -29,12 +29,12 @@ def line(kb: KB, rec: Record) -> str:
     return s
 
 
-def _content(kb: KB, rec: Record) -> str:
+def _content(kb: Store, rec: Item) -> str:
     for r in rec.renditions:
         if r["role"] == "content":
             t = rec.text(r["name"])
             if t is None:
-                p = store.resolve(kb, rec, r, fetch_urls=False)
+                p = content.resolve(kb, rec, r, fetch_urls=False)
                 t = p.read_text(errors="replace") if p else None
             if t:
                 return t.strip()
@@ -63,15 +63,15 @@ class _Out:
         return "\n".join(self.parts) + "\n"
 
 
-def context(kb: KB, target: str, runs=None, budget: int = 12000, limit: int = 40) -> str:
+def context(kb: Store, target: str, runs=None, budget: int = 12000, limit: int = 40) -> str:
     out = _Out(budget)
     if is_id(target.split("#")[0]):
-        return _record_context(kb, kb.get(target), out)
+        return _item_context(kb, kb.get(target), out)
 
-    rows = index.ls(kb, subject=target, runs=runs, include_old=True, limit=limit * 2)
+    rows = query.ls(kb, subject=target, runs=runs, include_old=True, limit=limit * 2)
     how = f"subject {target}"
     if not rows:
-        hits = index.fts(kb, target, limit, include_old=True)
+        hits = query.fts(kb, target, limit, include_old=True)
         rows = [{"id": h["id"]} for h in hits]
         how = f"text search {target!r}"
     if not rows:
@@ -88,7 +88,7 @@ def context(kb: KB, target: str, runs=None, budget: int = 12000, limit: int = 40
             out.add(f"\n### {t.id}: {t.data['title']}" + (" (STALE: inputs changed)" if stale else ""))
             out.add(_content(kb, t))
     if current:
-        out.add("\n## Current records")
+        out.add("\n## Current items")
         for r in current[:limit]:
             out.add(line(kb, r))
     if old:
@@ -99,7 +99,7 @@ def context(kb: KB, target: str, runs=None, budget: int = 12000, limit: int = 40
     return str(out)
 
 
-def _record_context(kb: KB, rec: Record, out: _Out) -> str:
+def _item_context(kb: Store, rec: Item, out: _Out) -> str:
     out.add(f"# KB context: {rec.id}\n")
     out.add(line(kb, rec))
     d = rec.data
@@ -118,8 +118,8 @@ def _record_context(kb: KB, rec: Record, out: _Out) -> str:
         if ids:
             out.add(f"\n## {title}")
             for i in ids:
-                if i in kb.records:
-                    out.add(line(kb, kb.records[i]))
+                if i in kb.items:
+                    out.add(line(kb, kb.items[i]))
                 else:
                     out.add(f"- {i} (missing)")
     return str(out)

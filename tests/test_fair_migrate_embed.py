@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from kb import authoring, embed, fair, migrate, search, store
+from kb import authoring, content, embed, fair, migrate, search
 from kb.errors import KBError
-from kb.records import KB
+from kb.items import Store
 
 from conftest import observation
 
@@ -22,7 +22,7 @@ def test_rocrate(kb, tmp_path):
     assert graph[f"#{d.id}"]["license"] == "CC-BY-4.0"
     assert graph["#per-ann"]["name"] == "Ann Example"
     assert (tmp_path / "crate" / d.id / "d.csv").exists()
-    assert graph[f"{d.id}/d.csv"]["sha256"] == store.sha256_file(f)[0]
+    assert graph[f"{d.id}/d.csv"]["sha256"] == content.sha256_file(f)[0]
 
 
 def test_datapackage(kb, tmp_path):
@@ -32,9 +32,9 @@ def test_datapackage(kb, tmp_path):
     pkg = fair.datapackage(kb, d.id)
     types = {fl["name"]: fl["type"] for fl in pkg["resources"][0]["schema"]["fields"]}
     assert types == {"run": "integer", "rms": "number", "ok": "boolean", "date": "date"}
-    assert KB.open(kb.root).get(d.id).rendition("datapackage")["role"] == "metadata"
+    assert Store.open(kb.root).get(d.id).rendition("datapackage")["role"] == "metadata"
     from kb import checks
-    assert checks.check(KB.open(kb.root)) == []
+    assert checks.check(Store.open(kb.root)) == []
 
 
 def test_migration_chain(kb):
@@ -106,9 +106,9 @@ def test_verify_detects_upstream_change(kb, tmp_path):
     f.write_text("v1")
     rec = authoring.add(kb, "document", [f.as_uri()], {"title": "T", "summary": "S", "doctype": "presentation",
                                                        "date": "2026", "creators": ["A"]})
-    assert [i["result"] for i in store.verify(kb, [rec])] == ["ok"]
+    assert [i["result"] for i in content.verify(kb, [rec])] == ["ok"]
     f.write_text("v2: re-uploaded")
-    out = store.verify(kb, [rec])
+    out = content.verify(kb, [rec])
     assert out[0]["result"] == "changed" and "--supersedes" in out[0]["detail"]
 
 
@@ -117,6 +117,6 @@ def test_verify_records_missing_hash(kb, tmp_path):
     f.write_text("paper")
     rec = authoring.add(kb, "document", [f.as_uri()], {"title": "T", "summary": "S", "doctype": "paper",
                                                        "date": "2026", "creators": ["A"]}, fetch=False)
-    assert store.verify(kb, [rec])[0]["result"] == "unhashed"
-    store.verify(kb, [rec], record=True)
-    assert KB.open(kb.root).get(rec.id).rendition("original")["sha256"] == hashlib.sha256(b"paper").hexdigest()
+    assert content.verify(kb, [rec])[0]["result"] == "unhashed"
+    content.verify(kb, [rec], record=True)
+    assert Store.open(kb.root).get(rec.id).rendition("original")["sha256"] == hashlib.sha256(b"paper").hexdigest()

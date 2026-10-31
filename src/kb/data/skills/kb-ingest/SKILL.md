@@ -8,7 +8,7 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
 1. **Is it already there?** Run `kb search` on the title and
    `kb ls --kind document --subject ...`. `kb add` also refuses duplicates
    by identifier.
-2. **Add it** as a source record. `kb add` hashes the content and decides
+2. **Add it** as a primary item. `kb add` hashes the content and decides
    where it lives: small files go in the store, big ones in the content store, and
    URLs stay URLs.
 
@@ -48,12 +48,12 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
      what's new citing `[ID]` for each statement, and put it back
      (`kb content TOPIC --file page.md`). Add the ID to `derived_from`
      (`kb set TOPIC --add derived_from=<new-id>`), then `kb stamp TOPIC`.
-   - If none exists and the material plus related records deserve one, make
+   - If none exists and the material plus related items deserve one, make
      it with `kb new topic --title ... --subject ... --derived-from ID ...
      --text-file page.md`.
 6. **Observations in the material.** Statements of fact that other people
    will need, such as "run 1250 excluded because ...", become their own
-   observation records, citing the document as evidence
+   observation items, citing the document as evidence
    (`--evidence DOC-ID#text`).
 7. Run `kb check` and `kb lint`, and show the user the result
    (`kb render ID` for the new items).

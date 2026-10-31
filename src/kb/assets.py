@@ -35,9 +35,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import store
+from . import content
 from .errors import KBError
-from .records import KB, Record, canonical, now
+from .items import Store, Item, canonical, now
 
 DEFAULT_PRIORITY = {"kb": 0, "fs": 10, "annex": 20, "docdb": 40, "url": 50, "indico": 60}
 
@@ -62,7 +62,7 @@ def digest_of(files: list[dict], asset_type: str, match: str = "exact") -> str:
     return hashlib.sha256(canonical(sorted([norm(f["path"]), f["sha256"]] for f in files))).hexdigest()
 
 
-# -- candidates: what a source offers ---------------------------------------------------
+# -- offers: what a source has for an asset ---------------------------------------------
 
 @dataclass
 class CFile:
@@ -81,7 +81,7 @@ class CFile:
 
 
 @dataclass
-class Candidate:
+class Offer:
     binding: str
     source: str
     native: str | None                  # the source's own version id, if it has one
@@ -90,16 +90,16 @@ class Candidate:
     where: str
     _digest: str | None = None
 
-    def manifest(self, kb: KB) -> list[dict]:
+    def manifest(self, kb: Store) -> list[dict]:
         out = []
         for f in self.files:
             if f.sha256 is None:
                 f.sha256, f.size = hash_file(kb, f.path_here())
             out.append({"path": norm(f.path), "sha256": f.sha256, "size": f.size,
-                        "media_type": store.media_type(f.path)})
+                        "media_type": content.media_type(f.path)})
         return sorted(out, key=lambda x: x["path"])
 
-    def digest(self, kb: KB, asset_type: str, match: str) -> str:
+    def digest(self, kb: Store, asset_type: str, match: str) -> str:
         if self._digest is None:
             self._digest = digest_of(self.manifest(kb), asset_type, match)
         return self._digest
@@ -108,7 +108,7 @@ class Candidate:
 _hash_cache: dict | None = None
 
 
-def hash_file(kb: KB, path: Path) -> tuple[str, int]:
+def hash_file(kb: Store, path: Path) -> tuple[str, int]:
     """sha256 and size, cached by (path, size, mtime) in the user cache so large trees hash once."""
     global _hash_cache
     cache_file = kb.cfg.cache_dir / "fshash.json"
@@ -122,7 +122,7 @@ def hash_file(kb: KB, path: Path) -> tuple[str, int]:
     hit = _hash_cache.get(key)
     if hit and hit[0] == st.st_size and hit[1] == st.st_mtime_ns:
         return hit[2], st.st_size
-    sha, size = store.sha256_file(path)
+    sha, size = content.sha256_file(path)
     _hash_cache[key] = [st.st_size, st.st_mtime_ns, sha]
     try:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -143,10 +143,10 @@ class AssetSource:
     def check_locator(self, locator: dict, asset_type: str) -> None:
         pass
 
-    def candidates(self, kb: KB, asset: Record, binding: dict, remote: bool = True) -> list[Candidate]:
+    def offers(self, kb: Store, asset: Item, binding: dict, remote: bool = True) -> list[Offer]:
         raise NotImplementedError
 
-    def describe(self, kb: KB, binding: dict) -> str:
+    def describe(self, kb: Store, binding: dict) -> str:
         return f"{self.type}: {json.dumps(binding['locator'])}"
 
 
@@ -181,7 +181,7 @@ class FsSource(AssetSource):
         if "root" not in locator:
             raise KBError("an fs binding needs root (a named filesystem or an absolute path) and path")
 
-    def base(self, kb: KB, locator: dict) -> Path | None:
+    def base(self, kb: Store, locator: dict) -> Path | None:
         root = locator["root"]
         if root.startswith("/") or root.startswith("~"):
             r = Path(root).expanduser()
@@ -200,7 +200,7 @@ class FsSource(AssetSource):
                 out.append(CFile(str(rel), local=p))
         return out
 
-    def candidates(self, kb, asset, binding, remote=True):
+    def offers(self, kb, asset, binding, remote=True):
         base = self.base(kb, binding["locator"])
         where = f"{binding['locator']['root']}:{binding['locator'].get('path', '')}"
         if base is None or not base.exists():
@@ -211,10 +211,10 @@ class FsSource(AssetSource):
             if atype == "file":
                 if not base.is_file():
                     raise KBError(f"binding {binding['name']}: {base} is not a file")
-                return [Candidate(binding["name"], self.type, None, None, [CFile(base.name, local=base)], where)]
+                return [Offer(binding["name"], self.type, None, None, [CFile(base.name, local=base)], where)]
             if not base.is_dir():
                 raise KBError(f"binding {binding['name']}: {base} is not a directory")
-            return [Candidate(binding["name"], self.type, None, None, self._files_under(base), where)]
+            return [Offer(binding["name"], self.type, None, None, self._files_under(base), where)]
         pattern = binding.get("pattern")
         if not pattern:
             raise KBError(f"binding {binding['name']}: versioning {versioning} on a filesystem needs a pattern "
@@ -228,10 +228,10 @@ class FsSource(AssetSource):
                 continue
             native = m["version"]
             if atype == "file" and p.is_file():
-                out.append(Candidate(binding["name"], self.type, native, _label_for(binding, native),
+                out.append(Offer(binding["name"], self.type, native, _label_for(binding, native),
                                      [CFile(p.name, local=p)], f"{where}/{rel}"))
             elif atype == "fileset" and p.is_dir():
-                out.append(Candidate(binding["name"], self.type, native, _label_for(binding, native),
+                out.append(Offer(binding["name"], self.type, native, _label_for(binding, native),
                                      self._files_under(p), f"{where}/{rel}"))
         return out
 
@@ -248,24 +248,24 @@ class KbSource(AssetSource):
     type = "kb"
     describe_text = "the store itself (small files in the database, large ones in a content store)"
 
-    def candidates(self, kb, asset, binding, remote=True):
+    def offers(self, kb, asset, binding, remote=True):
         out = []
         for v in asset.data.get("versions", []):
-            kept = (v.get("seen") and any(s["binding"] == binding["name"] for s in v["seen"]))
+            kept = (v.get("sightings") and any(s["binding"] == binding["name"] for s in v["sightings"]))
             if not kept or not v.get("files"):
                 continue
             files = []
             for f in v["files"]:
                 rend = {"name": f["path"], "sha256": f["sha256"], "locations": [{"type": "db", "filename": f["path"]}]}
-                p = store.resolve(kb, None, rend, fetch_urls=False)
+                p = content.resolve(kb, None, rend, fetch_urls=False)
                 if p is None:
-                    rend["locations"] = [{"type": "cas", "store": binding["locator"].get("store") or "default"}]
-                    p = store.resolve(kb, None, rend, fetch_urls=False)
+                    rend["locations"] = [{"type": "cas", "name": binding["locator"].get("cas") or "default"}]
+                    p = content.resolve(kb, None, rend, fetch_urls=False)
                 if p is None:
                     break
                 files.append(CFile(f["path"], f.get("size"), f["sha256"], p))
             else:
-                out.append(Candidate(binding["name"], self.type, v["label"], v["label"], files, "this store"))
+                out.append(Offer(binding["name"], self.type, v["label"], v["label"], files, "this store"))
         return out
 
     def describe(self, kb, binding):
@@ -283,14 +283,14 @@ class UrlSource(AssetSource):
         if asset_type == "fileset" and "urls" not in locator:
             raise KBError("a url binding for a file set needs urls: {path: url}")
 
-    def candidates(self, kb, asset, binding, remote=True):
+    def offers(self, kb, asset, binding, remote=True):
         if not remote:
             return []
         loc = binding["locator"]
         pairs = [(Path(urllib.parse.urlparse(loc["url"]).path).name or "file", loc["url"])] \
             if asset.data["asset_type"] == "file" else sorted(loc["urls"].items())
-        files = [CFile(path, fetch=(lambda u=url: store.fetch(kb, u)[0])) for path, url in pairs]
-        return [Candidate(binding["name"], self.type, None, None, files, loc.get("url") or f"{len(pairs)} URLs")]
+        files = [CFile(path, fetch=(lambda u=url: content.fetch(kb, u)[0])) for path, url in pairs]
+        return [Offer(binding["name"], self.type, None, None, files, loc.get("url") or f"{len(pairs)} URLs")]
 
     def describe(self, kb, binding):
         loc = binding["locator"]
@@ -303,7 +303,7 @@ class PlannedSource(AssetSource):
     def __init__(self, type_, text, locator_doc):
         self.type, self.describe_text, self.locator_doc = type_, text, locator_doc
 
-    def candidates(self, kb, asset, binding, remote=True):
+    def offers(self, kb, asset, binding, remote=True):
         raise KBError(f"source type {self.type} is planned, not implemented yet ({self.describe_text})")
 
 
@@ -331,7 +331,7 @@ def driver(binding: dict) -> AssetSource:
         raise KBError(f"no asset source type {binding['type']!r} (have: {', '.join(SOURCES)})") from None
 
 
-def ordered_bindings(asset: Record, only: list[str] | None = None) -> list[dict]:
+def ordered_bindings(asset: Item, only: list[str] | None = None) -> list[dict]:
     bs = [b for b in asset.data.get("bindings", []) if not only or b["name"] in only]
     return sorted(bs, key=lambda b: (b.get("priority", DEFAULT_PRIORITY.get(b["type"], 30)),
                                      asset.data["bindings"].index(b)))
@@ -339,26 +339,26 @@ def ordered_bindings(asset: Record, only: list[str] | None = None) -> list[dict]
 
 # -- authoring --------------------------------------------------------------------------
 
-def get_asset(kb: KB, ref: str) -> Record:
+def get_asset(kb: Store, ref: str) -> Item:
     rec = kb.get(ref)
     if rec.kind != "asset":
         raise KBError(f"{rec.id} is a {rec.kind}, not an asset")
     return rec
 
 
-def new(kb: KB, asset_type: str, fields: dict, match: str = "exact") -> Record:
+def new(kb: Store, asset_type: str, fields: dict, match: str = "exact") -> Item:
     from . import authoring
     return authoring.new(kb, "asset", fields | {"asset_type": asset_type, "match": match,
                                                  "versions": [], "bindings": []})
 
 
-def _save(kb: KB, asset: Record, data: dict, action: str, detail: dict) -> Record:
-    return kb.save(Record(data, kb), action, detail)
+def _save(kb: Store, asset: Item, data: dict, action: str, detail: dict) -> Item:
+    return kb.save(Item(data, kb), action, detail)
 
 
-def bind(kb: KB, ref: str, name: str, source_type: str, locator: dict, versioning: str = "none",
+def bind(kb: Store, ref: str, name: str, source_type: str, locator: dict, versioning: str = "none",
          pattern: str | None = None, mapping: dict | None = None, priority: int | None = None,
-         note: str | None = None) -> Record:
+         note: str | None = None) -> Item:
     asset = get_asset(kb, ref)
     if any(b["name"] == name for b in asset.data.get("bindings", [])):
         raise KBError(f"{asset.id} already has a binding {name!r}")
@@ -379,7 +379,7 @@ def bind(kb: KB, ref: str, name: str, source_type: str, locator: dict, versionin
     return _save(kb, asset, data, "bind", {"binding": name, "type": source_type})
 
 
-def unbind(kb: KB, ref: str, name: str) -> Record:
+def unbind(kb: Store, ref: str, name: str) -> Item:
     asset = get_asset(kb, ref)
     data = copy.deepcopy(asset.data)
     before = len(data.get("bindings", []))
@@ -392,21 +392,21 @@ def unbind(kb: KB, ref: str, name: str) -> Record:
 # -- scanning and registering -------------------------------------------------------------
 
 @dataclass
-class Seen:
-    candidate: Candidate
+class ScanResult:
+    offer: Offer
     status: str                    # known | new | conflict | unreachable
     version: str | None = None     # the version it is (known) or claims to be (conflict)
     digest: str | None = None
     detail: str = ""
 
     def as_dict(self):
-        c = self.candidate
+        c = self.offer
         return {"binding": c.binding, "source": c.source, "native": c.native, "label": c.label,
                 "where": c.where, "files": len(c.files), "status": self.status, "version": self.version,
                 "digest": self.digest, "detail": self.detail}
 
 
-def scan(kb: KB, ref: str, only: list[str] | None = None, remote: bool = True) -> list[Seen]:
+def scan(kb: Store, ref: str, only: list[str] | None = None, remote: bool = True) -> list[ScanResult]:
     """Ask every bound source what it offers, and relate each offer to the asset's versions."""
     asset = get_asset(kb, ref)
     atype, match = asset.data["asset_type"], asset.data.get("match", "exact")
@@ -415,38 +415,38 @@ def scan(kb: KB, ref: str, only: list[str] | None = None, remote: bool = True) -
     out = []
     for b in ordered_bindings(asset, only):
         try:
-            cands = driver(b).candidates(kb, asset, b, remote=remote)
+            offers_ = driver(b).offers(kb, asset, b, remote=remote)
         except KBError as exc:
-            out.append(Seen(Candidate(b["name"], b["type"], None, None, [], driver(b).describe(kb, b)
+            out.append(ScanResult(Offer(b["name"], b["type"], None, None, [], driver(b).describe(kb, b)
                                       if b["type"] in SOURCES else b["type"]), "unreachable", detail=str(exc)))
             continue
-        if not cands:
-            out.append(Seen(Candidate(b["name"], b["type"], None, None, [], driver(b).describe(kb, b)),
+        if not offers_:
+            out.append(ScanResult(Offer(b["name"], b["type"], None, None, [], driver(b).describe(kb, b)),
                             "unreachable", detail="the source offers nothing here (not mounted, empty, or remote off)"))
-        for c in cands:
+        for c in offers_:
             try:
                 dg = c.digest(kb, atype, match)
             except KBError as exc:
-                out.append(Seen(c, "unreachable", detail=str(exc)))
+                out.append(ScanResult(c, "unreachable", detail=str(exc)))
                 continue
             if dg in by_digest:
-                st = Seen(c, "known", by_digest[dg], dg)
+                st = ScanResult(c, "known", by_digest[dg], dg)
                 if c.label and c.label != by_digest[dg]:
                     st.detail = f"the source calls it {c.label}"
             elif c.label and c.label in by_label and by_label[c.label].get("digest"):
-                st = Seen(c, "conflict", c.label, dg, f"the source's {c.native} maps to {c.label}, "
+                st = ScanResult(c, "conflict", c.label, dg, f"the source's {c.native} maps to {c.label}, "
                                                       f"but its content differs from {c.label}")
             else:
-                st = Seen(c, "new", c.label, dg)
+                st = ScanResult(c, "new", c.label, dg)
             out.append(st)
     # Intra-source ambiguity: one binding offering different content under one label.
     labels: dict[tuple, set] = {}
     for s in out:
-        if s.candidate.label and s.digest:
-            labels.setdefault((s.candidate.binding, s.candidate.label), set()).add(s.digest)
+        if s.offer.label and s.digest:
+            labels.setdefault((s.offer.binding, s.offer.label), set()).add(s.digest)
     for s in out:
-        if s.candidate.label and len(labels.get((s.candidate.binding, s.candidate.label), ())) > 1:
-            s.status, s.detail = "conflict", f"{s.candidate.binding} offers different content as {s.candidate.label}"
+        if s.offer.label and len(labels.get((s.offer.binding, s.offer.label), ())) > 1:
+            s.status, s.detail = "conflict", f"{s.offer.binding} offers different content as {s.offer.label}"
     return out
 
 
@@ -458,9 +458,9 @@ def _next_label(asset: dict) -> str:
     return f"v{n}"
 
 
-def register(kb: KB, ref: str, seen: list[Seen] | None = None, keep: str = "auto",
+def register(kb: Store, ref: str, seen: list[ScanResult] | None = None, keep: str = "auto",
              label: str | None = None, note: str | None = None) -> list[dict]:
-    """Record new versions found by a scan (and fill digests of versions known only by label).
+    """Item new versions found by a scan (and fill digests of versions known only by label).
 
     keep: copy the content into the store (``yes``), don't (``no``), or ``auto``:
     keep it when it came from a source without versions (it may be overwritten
@@ -479,13 +479,13 @@ def register(kb: KB, ref: str, seen: list[Seen] | None = None, keep: str = "auto
     for s in seen:
         if s.status == "known" or (s.status == "new" and s.digest in by_digest):
             v = by_digest[s.digest]                    # also: offered by several sources in this scan
-            if not any(x["binding"] == s.candidate.binding and x.get("native") == s.candidate.native
-                       for x in v.get("seen", [])):
-                v.setdefault("seen", []).append(_seen_entry(s.candidate, when))
+            if not any(x["binding"] == s.offer.binding and x.get("native") == s.offer.native
+                       for x in v.get("sightings", [])):
+                v.setdefault("sightings", []).append(_sighting(s.offer, when))
             continue
         if s.status != "new":
             continue
-        c = s.candidate
+        c = s.offer
         lab = c.label or (label if label and label not in by_label else None) or _next_label(data)
         if lab in by_label and not by_label[lab].get("digest"):
             v = by_label[lab]                            # known by label only: first sight fills it in
@@ -500,12 +500,12 @@ def register(kb: KB, ref: str, seen: list[Seen] | None = None, keep: str = "auto
         v["registered"] = when
         if note:
             v["note"] = note
-        v.setdefault("seen", []).append(_seen_entry(c, when))
+        v.setdefault("sightings", []).append(_sighting(c, when))
         by_digest[s.digest] = v
         unversioned = bindings.get(c.binding, {}).get("versioning", "none") == "none"
         total = sum(f.get("size") or 0 for f in v["files"])
         if keep == "yes" or (keep == "auto" and unversioned and c.source != "kb"
-                             and (total <= kb.cfg.max_inline_bytes * 10 or store.default_store(kb))):
+                             and (total <= kb.cfg.max_inline_bytes * 10 or content.default_cas(kb))):
             kept.append((v, c))
         done.append({"label": lab, "digest": s.digest, "files": len(v["files"]), "from": c.binding,
                      "native": c.native})
@@ -515,11 +515,11 @@ def register(kb: KB, ref: str, seen: list[Seen] | None = None, keep: str = "auto
         for v, c in kept:
             _keep(kb, data, v, c)
             done[[d["label"] for d in done].index(v["label"])]["kept"] = True
-        kb.save(Record(data, kb), "register", {"versions": [d["label"] for d in done]})
+        kb.save(Item(data, kb), "register", {"versions": [d["label"] for d in done]})
     return done
 
 
-def _seen_entry(c: Candidate, when: str) -> dict:
+def _sighting(c: Offer, when: str) -> dict:
     e = {"binding": c.binding, "at": when}
     if c.native:
         e["native"] = c.native
@@ -535,20 +535,20 @@ def _kb_binding(data: dict) -> dict:
     return b
 
 
-def _keep(kb: KB, data: dict, v: dict, c: Candidate) -> None:
+def _keep(kb: Store, data: dict, v: dict, c: Offer) -> None:
     """Copy a version's files into the store, and say so with a seen-entry for the kb binding."""
     b = _kb_binding(data)
     for f in c.files:
         p = f.path_here()
-        locs, _, _ = store.place(kb, p, norm(f.path), "auto")
+        locs, _, _ = content.place(kb, p, norm(f.path), "auto")
         if locs and locs[0]["type"] == "local":
             raise KBError(f"{f.path} is too large for the store and no content store is configured")
         if locs and locs[0]["type"] == "cas":
-            b["locator"]["store"] = locs[0]["store"]
-    v.setdefault("seen", []).append({"binding": b["name"], "native": v["label"], "at": now()})
+            b["locator"]["cas"] = locs[0]["name"]
+    v.setdefault("sightings", []).append({"binding": b["name"], "native": v["label"], "at": now()})
 
 
-def add_version(kb: KB, ref: str, path: Path, label: str | None = None, note: str | None = None) -> dict:
+def add_version(kb: Store, ref: str, path: Path, label: str | None = None, note: str | None = None) -> dict:
     """Register local files (a file, or a directory for a file set) as a new version kept in the store."""
     asset = get_asset(kb, ref)
     atype = asset.data["asset_type"]
@@ -560,12 +560,12 @@ def add_version(kb: KB, ref: str, path: Path, label: str | None = None, note: st
         if not path.is_dir():
             raise KBError(f"{path} is not a directory")
         files = FsSource()._files_under(path)
-    c = Candidate("kb", "kb", label, label, files, str(path))
+    c = Offer("kb", "kb", label, label, files, str(path))
     dg = c.digest(kb, atype, asset.data.get("match", "exact"))
     known = {v.get("digest"): v["label"] for v in asset.data.get("versions", [])}
     if dg in known:
         raise KBError(f"this content is already version {known[dg]} of {asset.id}")
-    done = register(kb, ref, [Seen(c, "new", label, dg)], keep="yes", label=label, note=note)
+    done = register(kb, ref, [ScanResult(c, "new", label, dg)], keep="yes", label=label, note=note)
     return done[0]
 
 
@@ -588,7 +588,7 @@ class Resolution:
                 "notes": self.notes}
 
 
-def _target(asset: Record, version: str) -> dict | None:
+def _target(asset: Item, version: str) -> dict | None:
     vs = asset.data.get("versions", [])
     if version == "latest":
         if not vs:
@@ -607,7 +607,7 @@ def _target(asset: Record, version: str) -> dict | None:
     raise KBError(f"{asset.id} has no version {version!r} (have: {', '.join(v['label'] for v in vs) or 'none'})")
 
 
-def resolve(kb: KB, ref: str, version: str = "latest", path: str | None = None, remote: bool = True) -> Resolution:
+def resolve(kb: Store, ref: str, version: str = "latest", path: str | None = None, remote: bool = True) -> Resolution:
     """One well-defined, verified file set (or file) for (asset, version).
 
     1. The target: a registered version (by label, ``latest`` or ``digest:...``),
@@ -626,17 +626,17 @@ def resolve(kb: KB, ref: str, version: str = "latest", path: str | None = None, 
     atype, match = asset.data["asset_type"], asset.data.get("match", "exact")
     target = _target(asset, version)
     notes: list[str] = []
-    chosen: Candidate | None = None
+    chosen: Offer | None = None
     if target is None:                                    # current
         for b in ordered_bindings(asset):
             if b["type"] in SOURCES and SOURCES[b["type"]].status == "implemented" and b["type"] != "kb":
                 try:
-                    cands = driver(b).candidates(kb, asset, b, remote)
+                    offers_ = driver(b).offers(kb, asset, b, remote)
                 except KBError as exc:
                     notes.append(f"{b['name']}: {exc}")
                     continue
-                if cands:
-                    chosen = max(cands, key=lambda c: _natural(c.native or ""))
+                if offers_:
+                    chosen = max(offers_, key=lambda c: _natural(c.native or ""))
                     break
         if chosen is None:
             raise KBError(f"no source offers {asset.id} here" + (f" ({'; '.join(notes)})" if notes else ""))
@@ -647,17 +647,17 @@ def resolve(kb: KB, ref: str, version: str = "latest", path: str | None = None, 
             notes.append("this content is not a registered version (kb asset scan --register)")
     else:
         label, want = target["label"], target.get("digest")
-        agreeing: list[tuple[Candidate, str]] = []
-        others: list[Candidate] = []
+        agreeing: list[tuple[Offer, str]] = []
+        others: list[Offer] = []
         for b in ordered_bindings(asset):
             if b["type"] not in SOURCES or SOURCES[b["type"]].status != "implemented":
                 continue
             try:
-                cands = driver(b).candidates(kb, asset, b, remote)
+                offers_ = driver(b).offers(kb, asset, b, remote)
             except KBError as exc:
                 notes.append(f"{b['name']}: {exc}")
                 continue
-            for c in cands:
+            for c in offers_:
                 if c.label is not None and c.label != label:
                     others.append(c)          # differently labelled: only checked if nothing else matches
                     continue

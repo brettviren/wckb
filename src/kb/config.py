@@ -3,7 +3,7 @@
 Layers, last one wins:
 
 1. The store's ``settings`` table (in ``kb.sqlite``): id, name, scope, access,
-   limits, stores, neighbors, policy, autonomy ... (``kb config``,
+   limits, content stores (cas), neighbors, policy, autonomy ... (``kb config``,
    ``kb neighbor``, ``kb policy`` write it).
 2. The user's ``config.toml`` (``$KB_CONFIG``, else ``$XDG_CONFIG_HOME/kb/``).
    Neighbors declared here apply to every store, which is how a personal
@@ -19,9 +19,9 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .db import DB_NAME   # the file that marks (and is) a store
 from .errors import KBError
 
-CONFIG_NAME = "kb.sqlite"   # the file that marks (and is) a store
 SUBDIR = "kb"     # a project's store may live in ./kb next to its working files
 SCOPES = ("project", "home", "group", "org", "other")
 RELATIONS = ("up", "peer", "down", "twin")
@@ -37,16 +37,16 @@ def find_root(start: Path | None = None) -> Path:
     env = os.environ.get("KB_ROOT")
     if env:
         root = Path(env).expanduser().resolve()
-        if not (root / CONFIG_NAME).exists():
-            raise KBError(f"KB_ROOT={env} holds no {CONFIG_NAME}")
+        if not (root / DB_NAME).exists():
+            raise KBError(f"KB_ROOT={env} holds no {DB_NAME}")
         return root
     here = (start or Path.cwd()).resolve()
     for d in (here, *here.parents):
-        if (d / CONFIG_NAME).exists():
+        if (d / DB_NAME).exists():
             return d
-        if (d / SUBDIR / CONFIG_NAME).exists():
+        if (d / SUBDIR / DB_NAME).exists():
             return d / SUBDIR
-    raise KBError(f"not inside a kb store (no {CONFIG_NAME} here or above); use -C, KB_ROOT or kb init")
+    raise KBError(f"not inside a kb store (no {DB_NAME} here or above); use -C, KB_ROOT or kb init")
 
 
 def _merge(base: dict, over: dict) -> dict:
@@ -83,7 +83,7 @@ class Config:
     schema: str
     access: str
     max_inline_bytes: int
-    stores: dict[str, Path | None]
+    cas: dict[str, Path | None]          # content-addressed stores, by name
     publish_path: Path | None
     publish_url: str | None
     embed: dict | None
@@ -129,15 +129,15 @@ class Config:
 
     @property
     def user(self) -> str:
-        """Who is making records here: a person ref or a name."""
+        """Who is making items here: a person ref or a name."""
         return (os.environ.get("KB_USER") or self.raw.get("user")
                 or os.environ.get("USER") or "unknown")
 
 
 def load(root: Path | None = None) -> Config:
     """Configuration of the store at *root* (read-only)."""
-    from .records import KB
-    kb = KB.open(root, readonly=True)
+    from .items import Store
+    kb = Store.open(root, readonly=True)
     try:
         return kb.cfg
     finally:
@@ -170,7 +170,7 @@ def from_settings(root: Path, settings: dict, keep: "Config | None" = None) -> C
         p = Path(os.path.expandvars(str(p))).expanduser()
         return p if p.is_absolute() else root / p
 
-    stores = {name: path(s.get("path")) for name, s in raw.get("stores", {}).items()}
+    cas = {name: path(s.get("path")) for name, s in raw.get("cas", {}).items()}
     scope = kbsec.get("scope", "other")
     if scope not in SCOPES:
         raise KBError(f"store setting kb.scope must be one of {', '.join(SCOPES)}")
@@ -192,7 +192,7 @@ def from_settings(root: Path, settings: dict, keep: "Config | None" = None) -> C
         schema=str(kbsec.get("schema", "1.0")),
         access=access,
         max_inline_bytes=int(raw.get("limits", {}).get("max_inline_bytes", DEFAULT_MAX_INLINE)),
-        stores=stores,
+        cas=cas,
         publish_path=path(views.get("publish_path")),
         publish_url=views.get("publish_url"),
         embed=raw.get("embed"),

@@ -5,7 +5,7 @@ import pytest
 
 from kb import authoring, build, graph, lint
 from kb.errors import KBError
-from kb.records import KB
+from kb.items import Store
 
 from conftest import observation, set_store
 
@@ -17,7 +17,7 @@ SCRIPT = """\
 import json, os
 inputs = json.load(open(os.environ["KB_INPUTS"]))
 for ref, item in sorted(inputs.items()):
-    rec = json.load(open(item["record"]))
+    rec = json.load(open(item["item"]))
     print(f"| {rec['id']} | {rec['title']} |")
 """
 
@@ -59,7 +59,7 @@ def test_build_manifest_and_staleness(kb):
     build.build(kb, v.id)
 
     authoring.supersede(kb, o.id, {}, text="Corrected.")
-    reasons = build.view_staleness(kb, KB.open(kb.root).get(v.id))
+    reasons = build.view_staleness(kb, Store.open(kb.root).get(v.id))
     assert any("superseded" in r for r in reasons)
 
 
@@ -101,7 +101,7 @@ def test_command_view_gets_inputs(kb, tmp_path):
 
 def test_publish_versions_and_lint(root):
     set_store(root)
-    kb = KB.open(root)
+    kb = Store.open(root)
     o = observation(kb)
     v = make_view(kb, [o.id])
     with pytest.raises(KBError, match="never been built"):
@@ -112,7 +112,7 @@ def test_publish_versions_and_lint(root):
     assert json.loads((kb.cfg.publish_path / v.id / e1["version"] / "_kb_manifest.json").read_text())["view"] == v.id
 
     new = authoring.supersede(kb, o.id, {}, text="Corrected.")
-    kb = KB.open(root)
+    kb = Store.open(root)
     with pytest.raises(KBError, match="stale"):
         build.publish(kb, v.id)
     assert any(p.code == "published-stale" for p in lint.lint(kb))

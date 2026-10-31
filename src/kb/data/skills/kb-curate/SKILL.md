@@ -26,6 +26,6 @@ person decides.
 5. **`summary` and `subject`** findings: write proper summaries and subjects
    (allowed on sources). Reuse existing subject paths (`kb ls --subjects`).
 6. **Missing topics.** If `kb ls --subjects` shows a subject with many
-   records and no topic, propose one.
+   items and no topic, propose one.
 7. Report what you changed (`kb log --limit 50` lists it), what needs a
    human decision, and what `kb lint` still says.

@@ -1,19 +1,19 @@
-# Record schema reference
+# Item schema reference
 
 Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.3) by
 `kb schema --markdown`; a test keeps this file in sync. `kb schema KIND` prints
 the schema itself, which is authoritative.
 
-## Fields common to every record
+## Fields common to every item
 
 | field | required | type | description |
 |---|---|---|---|
 | `schema_version` | yes | `1` | Major schema version; kb migrate upgrades. |
 | `id` | yes | id | Assigned by kb: kind prefix and random suffix. |
-| `kind` | yes | string | Record kind; selects the kind schema. |
+| `kind` | yes | string | Item kind; selects the kind schema. |
 | `title` | yes | string | Short title. |
 | `summary` | yes | string | One to three sentences an LLM can read instead of the content. Shown in listings and search. |
-| `created` | yes | created | When, by whom and via what tool the record was made (not the date of its content). |
+| `created` | yes | created | When, by whom and via what tool the item was made (not the date of its content). |
 | `access` | yes | access | Who may see it: public, collaboration, group, private. |
 | `subject` |  | list of subject | Slash-separated topic paths, e.g. detector/tpc/noise; reuse existing ones (kb ls --subjects). |
 | `tags` |  | list of string | Free labels. |
@@ -22,13 +22,13 @@ the schema itself, which is authoritative.
 | `identifiers` |  | identifiers | External identifiers: doi, arxiv, inspire, indico, cds, url ... |
 | `creators` |  | list of agent | Authors of the thing recorded (person refs or names). |
 | `date` |  | date | Date of the thing itself, e.g. of a talk or paper. |
-| `supersedes` |  | list of ref | Records this one replaces (corrections, new versions). |
-| `retracts` |  | list of ref | Records this one withdraws without replacement. |
-| `derived_from` |  | list of derivation | Inputs of a topic, view or derived record; stamped with digests. |
+| `supersedes` |  | list of ref | Items this one replaces (corrections, new versions). |
+| `retracts` |  | list of ref | Items this one withdraws without replacement. |
+| `derived_from` |  | list of derivation | Inputs of a topic, view or derived item; stamped with digests. |
 | `evidence` |  | list of ref_or_url | Refs or URLs supporting the content; required for verified. |
-| `related` |  | list of ref | Other related records. |
+| `related` |  | list of ref | Other related items. |
 | `license` |  | string | SPDX identifier or a local term such as collaboration-internal. |
-| `renditions` |  | list of rendition | Where the content is: files in git, blob stores, URLs. |
+| `renditions` |  | list of rendition | Representations of the item's material and where each one's bytes are (in the store, a content store, a URL, an asset ...). |
 | `origin` |  | origin | Set on copies pushed from another store. |
 | `x` |  | object | Free-form extensions. The only place unknown fields are allowed. |
 
@@ -36,7 +36,7 @@ the schema itself, which is authoritative.
 
 ID prefix `obs-`; a source (append-only).
 
-An assertion of fact made by someone: 'run 1234 was noisy', 'production used X=7 in 2025'. Its text is a content rendition (note.md). A source record: correct it by superseding, never by editing.
+An assertion of fact made by someone: 'run 1234 was noisy', 'production used X=7 in 2025'. Its text is a content rendition (note.md). A primary item: correct it by superseding, never by editing.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -117,7 +117,7 @@ A code repository at a version, referenced for provenance of datasets, configs a
 
 ID prefix `top-`; not a source (editable).
 
-Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites a record by ID and every cited record is listed in derived_from. Not a source: edit freely, then kb stamp.
+Synthesis: an LLM-maintained page (page.md) about a subject. Every factual statement cites an item by ID and every cited item is listed in derived_from. A derived item: edit freely (kb content), then kb stamp.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -129,7 +129,7 @@ Also required here: `renditions`, `subject`.
 
 ID prefix `view-`; not a source (editable).
 
-Recipe for a human-facing product (HTML site, PDF note, slides). The record directory holds the sources; kb build runs the build tool and writes manifest.json; kb publish copies the output.
+Recipe for a human-facing product (HTML site, PDF note, slides). Its source files are renditions with role source; kb build runs the build tool and stores a manifest; kb publish copies the output.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -142,7 +142,7 @@ Also required here: `derived_from`.
 
 ID prefix `per-`; not a source (editable).
 
-Someone who asserts, creates or reviews records.
+Someone who asserts, creates or reviews items.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -172,11 +172,11 @@ A named, versioned element of LLM policy: an instructions snippet for CLAUDE.md,
 
 ID prefix `ks-`; a source (append-only).
 
-A selection of records, itself a record: the unit of knowledge transfer between stores, and usable as a reading list. Shallow means the members (and members of nested sets); deep also follows every reference from them, recursively. A source: frozen once committed.
+A selection of items, itself an item: the unit of knowledge transfer between stores, and usable as a reading list. Shallow means the members (and members of nested sets); deep also follows every reference from them, recursively. A primary item: frozen once written.
 
 | field | required | type | description |
 |---|---|---|---|
-| `members` | yes | list of ref | The records selected (refs; they need not be in this store). |
+| `members` | yes | list of ref | The items selected (refs; they need not be in this store). |
 | `depth` | yes | `shallow` \| `deep` | shallow: the members only; deep: the members and everything they reference, recursively. |
 | `nested` |  | `follow` \| `inherit` | When a member (or a reference reached deeply) is itself a knowledge set: follow its own depth, or inherit this set's. |
 | `follow` |  | list of `members` \| `supersedes` \| `retracts` \| `derived_from` \| `evidence` \| `related` | Reference fields a deep descent follows (default: all of them). |
@@ -202,12 +202,12 @@ An abstract file or file set: a stable reference independent of where the bytes 
 | field | required | type | description |
 |---|---|---|---|
 | `name` | yes | string |  |
-| `role` | yes | `original` \| `content` \| `derived` \| `metadata` \| `source` | original: as received; content: authored with the record; derived: made from another rendition; metadata: a descriptor; source: a file a view is built from. |
+| `role` | yes | `original` \| `content` \| `derived` \| `metadata` \| `source` | original: as received; content: authored with the item; derived: made from another rendition; metadata: a descriptor; source: a file a view is built from. |
 | `media_type` | yes | string |  |
 | `sha256` |  | sha256 |  |
 | `size` |  | integer |  |
 | `locations` | yes | list of location |  |
-| `derived_from` |  | string | Name of the rendition (in this record) this was made from. |
+| `derived_from` |  | string | Name of the rendition (in this item) this was made from. |
 | `source_sha256` |  | sha256 |  |
 | `fidelity` |  | `lossless` \| `extracted` \| `llm` |  |
 | `transform` |  | object |  |
@@ -218,7 +218,7 @@ An abstract file or file set: a stable reference independent of where the bytes 
 Where a rendition's bytes are. Each type is served by a data source (kb.sources); new types plug in there.
 
 - `db`: `filename`
-- `cas`: `store`
+- `cas`: `name`
 - `url`: `url`, `retrieved`, `auth`
 - `local`: `host`, `path`
 - `annex`: `dataset`, `path`, `key`
@@ -226,7 +226,7 @@ Where a rendition's bytes are. Each type is served by a data source (kb.sources)
 
 ### valid
 
-Validity interval of the record's content, in runs and/or time.
+Validity interval of the item's content, in runs and/or time.
 
 | field | required | type | description |
 |---|---|---|---|
@@ -264,7 +264,7 @@ A ref string, or `{ref, digest}` once stamped.
 
 ### origin
 
-Where a record copied from another store came from; set by kb transfers (push, pull, obtain).
+Where an item copied from another store came from; set by kb transfers (push, pull, obtain).
 
 | field | required | type | description |
 |---|---|---|---|
@@ -276,4 +276,3 @@ Where a record copied from another store came from; set by kb transfers (push, p
 | `approved` |  | string | Who or what approved the push: a person, or the autonomy policy. |
 | `path` |  | list of string | Store IDs it travelled through, oldest first, ending with the sending store. |
 | `set` |  | string | The knowledge set (ks-...) whose transfer brought it. |
-| `commit` |  | string | Git commit of the sending store at transfer time. |

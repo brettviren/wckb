@@ -3,6 +3,9 @@
 - **Status:** **accepted** 2026-10-31. Spikes S1 and S2 are done (see §13);
   S3 (DataLad) is deferred, S4 (twins) is partly done.
 - **Date:** 2026-10-31
+- **Terminology note:** written before the [glossary](../glossary.md);
+  "record" here means *item*, "source record" means *primary item*, and
+  "blob store" means *content store* (cas).
 - **Decides:** the canonical store for knowledge-item metadata (the
   JSON objects `kb` calls records), and, with it, the role of git, the
   transport for transfers, and how content files are held.

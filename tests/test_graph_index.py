@@ -1,6 +1,6 @@
 import pytest
 
-from kb import authoring, context, graph, index, search
+from kb import authoring, context, graph, query, search
 from kb.errors import KBError
 
 from conftest import observation
@@ -63,12 +63,12 @@ def test_index_ls_and_search(kb):
     b = observation(kb, runs=("2000",), subject=("detector/pds",), title="PDS gain drift",
                     summary="Photon detector gains drifted by 3%.", text="Gain drift observed.")
     authoring.supersede(kb, b.id, {}, text="Drift was 2%.")
-    index.build(kb)
-    assert [r["id"] for r in index.ls(kb, subject="detector/tpc")] == [a.id]
-    assert [r["id"] for r in index.ls(kb, runs=[1250, 1250])] == [a.id]
-    assert index.ls(kb, runs=[1301, 1999]) == []
-    assert b.id not in [r["id"] for r in index.ls(kb)]
-    assert b.id in [r["id"] for r in index.ls(kb, include_old=True)]
+    kb.reindex()
+    assert [r["id"] for r in query.ls(kb, subject="detector/tpc")] == [a.id]
+    assert [r["id"] for r in query.ls(kb, runs=[1250, 1250])] == [a.id]
+    assert query.ls(kb, runs=[1301, 1999]) == []
+    assert b.id not in [r["id"] for r in query.ls(kb)]
+    assert b.id in [r["id"] for r in query.ls(kb, include_old=True)]
     hits = search.search(kb, "induction")
     assert [h["id"] for h in hits] == [a.id] and "[induction]" in hits[0]["snip"]
     assert search.search(kb, "induct*")[0]["id"] == a.id
@@ -79,10 +79,10 @@ def test_query_tables_stay_in_step(kb):
     from kb.edit import set_fields
     o = observation(kb)
     observation(kb, title="Another")
-    assert len(index.ls(kb)) == 2
+    assert len(query.ls(kb)) == 2
     set_fields(kb, o.id, add=["subject=detector/daq"])
-    assert [r["id"] for r in index.ls(kb, subject="detector/daq")] == [o.id]
-    assert index.build(kb) == 2 and len(index.ls(kb)) == 2
+    assert [r["id"] for r in query.ls(kb, subject="detector/daq")] == [o.id]
+    assert kb.reindex() == 2 and len(query.ls(kb)) == 2
 
 
 def test_context_pack(kb):
@@ -92,7 +92,7 @@ def test_context_pack(kb):
     old = observation(kb, runs=("1100",), title="Old claim")
     authoring.retract(kb, old.id, "Was a typo.", {})
     out = context.context(kb, "detector/tpc")
-    assert out.index("## Topics") < out.index("## Current records") < out.index("## Superseded")
+    assert out.index("## Topics") < out.index("## Current items") < out.index("## Superseded")
     assert f"Run 1234 was noisy [{o.id}]" in out
     one = context.context(kb, o.id)
     assert "## Used by" in one and t.id in one

@@ -19,7 +19,7 @@ def test_recall_finds_related_records(kb):
 def test_session_note(kb):
     observation(kb)
     out = hooks.session({"cwd": str(kb.root)})
-    assert out.startswith("KB store test (other): 1 records, 0 topics.")
+    assert out.startswith("KB store test (other): 1 items, 0 topics.")
 
 
 def test_run_never_raises(tmp_path):

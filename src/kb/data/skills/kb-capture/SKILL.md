@@ -5,7 +5,7 @@ description: Capture knowledge from the current work session into the group know
 
 # Capture a session into the KB
 
-Goal: a few high-value, well-attributed records, not a session dump.
+Goal: a few high-value, well-attributed items, not a session dump.
 
 1. **Select.** Review the session and list candidate facts that would help
    someone else in the group:
@@ -18,7 +18,7 @@ Goal: a few high-value, well-attributed records, not a session dump.
    Leave out anything already in the KB (`kb context` and `kb search` each
    candidate), anything speculative unless marked as such, and anything
    personal. Show the list to the user and ask which to keep. Expect them to
-   drop some; three good records beat ten weak ones.
+   drop some; three good items beat ten weak ones.
 2. **Write each item with kb**, never by hand:
 
    ```
@@ -37,7 +37,7 @@ Goal: a few high-value, well-attributed records, not a session dump.
    - Status stays `unverified` unless you add `--evidence` pointing at an
      authoritative source.
 3. **Check.** `kb check` must pass. Then run `kb lint`. An `overlap`
-   warning means another record covers the same subject and runs: tell the
+   warning means another item covers the same subject and runs: tell the
    user whether yours agrees, adds detail or contradicts it.
 4. **Report** the items you filed (`kb render ID` shows each as a person
    reads it). Mark the ones that deserve a wider audience with

@@ -21,7 +21,7 @@ def test_end_to_end(root, tmp_path):
     assert oid in run(root, "ls").output
     assert "detector/tpc/noise" in run(root, "ls", "--subjects").output
     assert oid in run(root, "search", "coherent").output
-    assert "## Current records" in run(root, "context", "detector/tpc").output
+    assert "## Current items" in run(root, "context", "detector/tpc").output
     r = run(root, "supersede", oid, "--runs", "1243", "--text", "Was 1243.")
     nid = r.output.split()[0]
     assert oid not in run(root, "ls").output and nid in run(root, "ls").output
@@ -37,13 +37,13 @@ def test_end_to_end(root, tmp_path):
 
 def test_errors_are_one_line(root):
     r = CliRunner().invoke(main, ["-C", str(root), "show", "obs-0000000000"])
-    assert r.exit_code == 1 and "no record obs-0000000000" in r.output and "Traceback" not in r.output
+    assert r.exit_code == 1 and "no item obs-0000000000" in r.output and "Traceback" not in r.output
 
 
 def test_check_fails_with_exit_1(root):
     run(root, "new", "observation", "--title", "T", "--summary", "S", "--by", "x", "--text", "t")
-    from kb.records import KB
-    kb = KB.open(root)
+    from kb.items import Store
+    kb = Store.open(root)
     kb.conn.execute("UPDATE items SET json = replace(json, '\"T\"', '\"Changed\"')")
     r = run(root, "check")
     assert r.exit_code == 1 and "[tamper]" in r.output
@@ -59,10 +59,10 @@ def test_checkout_edit_checkin_and_hook(root, tmp_path):
     d = tmp_path / "co"
     assert run(root, "checkout", tid, str(d)).exit_code == 0
     (d / "page.md").write_text("New page.\n")
-    data = json.loads((d / "record.json").read_text())
+    data = json.loads((d / "item.json").read_text())
     data["summary"] = "Better summary of noise."
-    (d / "record.json").write_text(json.dumps(data))
-    event = {"tool_name": "Edit", "tool_input": {"file_path": str(d / "record.json")}}
+    (d / "item.json").write_text(json.dumps(data))
+    event = {"tool_name": "Edit", "tool_input": {"file_path": str(d / "item.json")}}
     assert CliRunner().invoke(main, ["hook", "check"], input=json.dumps(event)).exit_code == 0
     out = json.loads(run(root, "checkin", str(d)).output)
     assert out["content"] == ["page.md"] and out["fields"] == ["summary"]
@@ -70,10 +70,10 @@ def test_checkout_edit_checkin_and_hook(root, tmp_path):
     # A frozen field changed in a checkout: the hook reports it to Claude (exit 2), checkin refuses.
     d2 = tmp_path / "co2"
     run(root, "checkout", oid, str(d2))
-    data = json.loads((d2 / "record.json").read_text())
+    data = json.loads((d2 / "item.json").read_text())
     data["asserted_by"] = [{"who": "someone else"}]
-    (d2 / "record.json").write_text(json.dumps(data))
-    event = {"tool_name": "Edit", "tool_input": {"file_path": str(d2 / "record.json")}}
+    (d2 / "item.json").write_text(json.dumps(data))
+    event = {"tool_name": "Edit", "tool_input": {"file_path": str(d2 / "item.json")}}
     r = CliRunner().invoke(main, ["hook", "check"], input=json.dumps(event))
     assert r.exit_code == 2 and "frozen" in r.output
     assert run(root, "checkin", str(d2)).exit_code == 1
@@ -129,7 +129,7 @@ def test_cli_reference_in_sync():
 def test_add_store_modes(root, tmp_path):
     f = tmp_path / "n.txt"
     f.write_text("small")
-    r = run(root, "add", str(f), "--kind", "dataset", "--title", "N", "--summary", "S", "--store", "db")
+    r = run(root, "add", str(f), "--kind", "dataset", "--title", "N", "--summary", "S", "--place", "db")
     assert r.exit_code == 0, r.output
-    r = run(root, "add", str(f), "--kind", "dataset", "--title", "N2", "--summary", "S", "--store", "local")
+    r = run(root, "add", str(f), "--kind", "dataset", "--title", "N2", "--summary", "S", "--place", "local")
     assert r.exit_code == 0, r.output

@@ -1,12 +1,12 @@
-"""JSON Schema validation of records.
+"""JSON Schema validation of items.
 
 Schemas are hand-written JSON Schema (draft 2020-12) files shipped in
 ``kb/schemas/v<major>/``.  Their ``$id`` URIs live under the unresolvable
 ``https://schemas.kb.invalid/`` and are served from the package, never fetched.
 
 ``REVISION`` is the schema revision this package implements.  Additive
-changes bump the minor part and leave records alone; breaking changes bump
-the major part, which is the ``schema_version`` written in every record, and
+changes bump the minor part and leave items alone; breaking changes bump
+the major part, which is the ``schema_version`` written in every item, and
 come with a migration (see ``kb.migrate``).
 """
 
@@ -51,7 +51,7 @@ def _validators(major: int = MAJOR):
 def validate(data: dict) -> list[str]:
     """Problems with *data* as ``path: message`` strings; empty when valid."""
     if not isinstance(data, dict):
-        return ["record is not a JSON object"]
+        return ["item is not a JSON object"]
     kind = data.get("kind")
     if kind not in KINDS:
         return [f"kind: {kind!r} is not one of {', '.join(KINDS)}"]
@@ -64,7 +64,7 @@ def validate(data: dict) -> list[str]:
 
 
 def _describe(error) -> str:
-    path = "/".join(str(p) for p in error.absolute_path) or "(record)"
+    path = "/".join(str(p) for p in error.absolute_path) or "(item)"
     if error.validator in ("oneOf", "anyOf") and error.context:
         # The nearest sub-error usually says what was actually wrong.
         best = max(error.context, key=lambda e: len(list(e.absolute_path)))
@@ -80,11 +80,11 @@ def show(kind: str) -> dict:
 
 
 def check_revision(required: str) -> None:
-    """Fail if the KB requires a newer schema revision than this package has."""
+    """Fail if the store requires a newer schema revision than this package has."""
     def parse(v):
         try:
             return tuple(int(x) for x in v.split("."))
         except ValueError:
             raise KBError(f"bad schema revision {v!r} in the store's settings") from None
     if parse(required) > parse(REVISION):
-        raise KBError(f"this KB needs schema {required} but kb implements {REVISION}: upgrade kb")
+        raise KBError(f"this store needs schema {required} but kb implements {REVISION}: upgrade kb")

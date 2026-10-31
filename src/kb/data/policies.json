@@ -84,7 +84,7 @@
     "version": 3,
     "file": "skills/kb-promote/SKILL.md",
     "title": "kb-promote",
-    "description": "Review and push records to a neighbor store."
+    "description": "Review and push items to a neighbor store."
   },
   {
     "name": "kb-review",
@@ -108,7 +108,7 @@
     "version": 1,
     "file": "policies/kb-check-hook.json",
     "title": "Check on edit",
-    "description": "PostToolUse: kb check on every record Claude edits; problems go back to Claude."
+    "description": "PostToolUse: validates edits Claude makes in a kb checkout; problems go back to Claude."
   },
   {
     "name": "kb-recall-hook",
@@ -116,7 +116,7 @@
     "version": 1,
     "file": "policies/kb-recall-hook.json",
     "title": "Recall on prompt",
-    "description": "UserPromptSubmit: a quick local search on the prompt; relevant record lines are added to the context."
+    "description": "UserPromptSubmit: a quick local search on the prompt; relevant item lines are added to the context."
   },
   {
     "name": "kb-session-hook",
@@ -124,6 +124,6 @@
     "version": 1,
     "file": "policies/kb-session-hook.json",
     "title": "Session summary",
-    "description": "SessionStart: one short note on the store (records, promotion candidates, policy drift)."
+    "description": "SessionStart: one short note on the store (items, promotion candidates, policy drift)."
   }
 ]

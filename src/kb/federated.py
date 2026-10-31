@@ -1,13 +1,13 @@
 """Queries across this store and the stores it can reach (read-only)."""
 
 from . import context as context_mod
-from . import index, search as search_mod
+from . import query, search as search_mod
 from .errors import KBError
 from .federation import reachable
-from .records import KB
+from .items import Store
 
 
-def stores(kb: KB, reach: int = 0, only: list[str] | None = None) -> list[tuple[str, KB]]:
+def stores(kb: Store, reach: int = 0, only: list[str] | None = None) -> list[tuple[str, Store]]:
     out = [("here", kb)]
     if reach > 0 or only:
         out += [(r.label, r.kb) for r in reachable(kb, max(reach, 1), only=only)]
@@ -15,7 +15,7 @@ def stores(kb: KB, reach: int = 0, only: list[str] | None = None) -> list[tuple[
 
 
 def _merge(rows: list[dict]) -> list[dict]:
-    """One row per record ID (the nearest store's), noting where else it is (pushed copies)."""
+    """One row per item ID (the nearest store's), noting where else it is (pushed copies)."""
     out: dict[str, dict] = {}
     for r in rows:
         if r["id"] in out:
@@ -25,7 +25,7 @@ def _merge(rows: list[dict]) -> list[dict]:
     return list(out.values())
 
 
-def search(kb: KB, text: str, mode: str = "text", limit: int = 20, include_old: bool = False,
+def search(kb: Store, text: str, mode: str = "text", limit: int = 20, include_old: bool = False,
            reach: int = 0, only: list[str] | None = None) -> list[dict]:
     rows = []
     for label, store in stores(kb, reach, only):
@@ -42,14 +42,14 @@ def search(kb: KB, text: str, mode: str = "text", limit: int = 20, include_old: 
     return rows[:limit]
 
 
-def ls(kb: KB, reach: int = 0, only: list[str] | None = None, **kw) -> list[dict]:
+def ls(kb: Store, reach: int = 0, only: list[str] | None = None, **kw) -> list[dict]:
     rows = []
     for label, store in stores(kb, reach, only):
-        rows += [{k: r[k] for k in r.keys() if k != "json"} | {"store": label} for r in index.ls(store, **kw)]
+        rows += [{k: r[k] for k in r.keys() if k != "json"} | {"store": label} for r in query.ls(store, **kw)]
     return _merge(rows)
 
 
-def context(kb: KB, target: str, runs=None, budget: int = 12000, reach: int = 0,
+def context(kb: Store, target: str, runs=None, budget: int = 12000, reach: int = 0,
             only: list[str] | None = None) -> str:
     """This store's context in full, then each reachable store's, sharing what budget is left."""
     here = context_mod.context(kb, target, runs, budget if not (reach or only) else budget * 2 // 3)

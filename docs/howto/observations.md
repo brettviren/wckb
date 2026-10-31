@@ -3,7 +3,7 @@
 ## An observation is an attributed assertion
 
 Anything someone states as fact is an observation, whether it came from a
-meeting, an email, the elog or your own analysis. The record keeps **who
+meeting, an email, the elog or your own analysis. The item keeps **who
 said it, how, when, and what it applies to**.
 
 ```
@@ -16,7 +16,7 @@ kb new observation \
 ```
 
 - **`--by`**: the person who asserted it. Use a person ID (`per-ann`) if
-  the KB keeps person records, else a name. If Claude inferred it, use
+  the KB keeps person items, else a name. If Claude inferred it, use
   `--by claude --how "inferred from <what>"`.
 - **`--runs`**: one run (`1250`), a range (`1200-1300`), or several (repeat
   the option). Use `--start/--end` for time windows. Validity is what makes
@@ -32,7 +32,7 @@ Put the numbers, units and the "because" in the text.
 
 ## Configurations
 
-Use a `config` record for what a system was configured with, rather than
+Use a `config` item for what a system was configured with, rather than
 what was observed:
 
 ```
@@ -48,7 +48,7 @@ files, `kb add the.fcl --kind config --set system=... --start ...`.
 
 ## Writing JSON directly
 
-Claude often finds it easier to give a partial record as JSON. `kb` fills
+Claude often finds it easier to give a partial item as JSON. `kb` fills
 in the ID, timestamps and plumbing:
 
 ```
@@ -61,7 +61,7 @@ EOF2
 ## Changing an observation later
 
 You may change our *relationship* to it: status, subject, tags, summary,
-evidence and related records:
+evidence and related items:
 
 ```
 kb set obs-7k2m9q4xha status=verified --add evidence=https://elog.example/5521

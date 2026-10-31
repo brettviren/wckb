@@ -12,9 +12,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import sources
+from . import locations
 from .errors import KBError
-from .records import now
+from .items import now
 
 _EXTRA_TYPES = {
     ".md": "text/markdown", ".markdown": "text/markdown", ".org": "text/x-org", ".rst": "text/x-rst",
@@ -57,21 +57,21 @@ def sha256_file(path: Path) -> tuple[str, int]:
     return h.hexdigest(), size
 
 
-blob_path = sources.blob_path
-cache_path = sources.cache_path
+blob_path = locations.blob_path
+cache_path = locations.cache_path
 
 
-def store_root(kb, name: str) -> Path:
-    if name not in kb.cfg.stores:
-        raise KBError(f"no content store {name!r} in this store's settings (kb config set stores ...)")
-    root = kb.cfg.stores[name]
+def cas_root(kb, name: str) -> Path:
+    if name not in kb.cfg.cas:
+        raise KBError(f"no content store {name!r} in this store's settings (kb config set cas.NAME '{"path": ...}')")
+    root = kb.cfg.cas[name]
     if root is None:
         raise KBError(f"content store {name!r} has no path on this machine; set it in .kb/local.toml")
     return root
 
 
 def put_cas(kb, name: str, path: Path, sha: str) -> Path:
-    dest = blob_path(store_root(kb, name), sha)
+    dest = blob_path(cas_root(kb, name), sha)
     if not dest.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_suffix(".partial")
@@ -80,8 +80,8 @@ def put_cas(kb, name: str, path: Path, sha: str) -> Path:
     return dest
 
 
-def default_store(kb) -> str | None:
-    usable = [n for n, p in kb.cfg.stores.items() if p is not None]
+def default_cas(kb) -> str | None:
+    usable = [n for n, p in kb.cfg.cas.items() if p is not None]
     if "default" in usable:
         return "default"
     return usable[0] if len(usable) == 1 else None
@@ -105,26 +105,26 @@ def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
 
 
 def resolve(kb, rec, rendition: dict, fetch_urls: bool = True, verify: bool = False) -> Path | None:
-    return sources.resolve(kb, rec, rendition, fetch=fetch_urls)
+    return locations.resolve(kb, rec, rendition, fetch=fetch_urls)
 
 
-STORE_MODES = ("auto", "db", "cas", "local", "none")
+PLACE_MODES = ("auto", "db", "cas", "local", "none")
 
 
-def place(kb, src: Path, filename: str, mode: str = "auto", store: str | None = None) -> tuple[list[dict], str, int]:
+def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = None) -> tuple[list[dict], str, int]:
     """Put *src* where *mode* says; return (locations, sha256, size).
 
     ``auto``: small files in the store's database, large ones in the
     content-addressed store if there is one, else recorded as local to this
-    host.  ``none`` records only the hash (the content lives at a URL).
+    host.  ``none`` items only the hash (the content lives at a URL).
     """
-    if mode not in STORE_MODES:
-        raise KBError(f"store mode must be one of {', '.join(STORE_MODES)}")
+    if mode not in PLACE_MODES:
+        raise KBError(f"store mode must be one of {', '.join(PLACE_MODES)}")
     sha, size = sha256_file(src)
     if mode == "auto":
         if size <= kb.cfg.max_inline_bytes:
             mode = "db"
-        elif store or default_store(kb):
+        elif cas or default_cas(kb):
             mode = "cas"
         else:
             mode = "local"
@@ -135,11 +135,11 @@ def place(kb, src: Path, filename: str, mode: str = "auto", store: str | None = 
         kb.put_blob(src.read_bytes())
         return [{"type": "db", "filename": filename}], sha, size
     if mode == "cas":
-        name = store or default_store(kb)
+        name = cas or default_cas(kb)
         if not name:
-            raise KBError("no content-addressed store configured (kb config set stores '{\"default\": {\"path\": ...}}')")
+            raise KBError("no content-addressed store configured (kb config set cas.default '{\"path\": ...}')")
         put_cas(kb, name, src, sha)
-        return [{"type": "cas", "store": name}], sha, size
+        return [{"type": "cas", "name": name}], sha, size
     if mode == "local":
         return [{"type": "local", "host": kb.cfg.host, "path": str(src.resolve())}], sha, size
     return [], sha, size
@@ -166,7 +166,7 @@ def url_location(url: str, retrieved: bool) -> dict:
 
 
 def verify(kb, recs, record: bool = False) -> list[dict]:
-    """Re-fetch URL originals and compare hashes; with *record*, fill in missing hashes."""
+    """Re-fetch URL originals and compare hashes; with *item*, fill in missing hashes."""
     report = []
     for rec in recs:
         dirty = False

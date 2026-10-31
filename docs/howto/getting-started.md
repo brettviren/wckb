@@ -64,7 +64,7 @@ path = "~/kb"
 Paths as seen from *this* machine go in the store's `.kb/local.toml`:
 
 ```toml
-[stores.default]
+[cas.default]
 path = "/eos/experiment/group/kb-cas"
 
 [views]

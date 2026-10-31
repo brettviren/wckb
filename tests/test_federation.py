@@ -6,7 +6,7 @@ import pytest
 from kb import authoring, bundle, federated, federation, push
 from kb.edit import set_fields
 from kb.errors import KBError
-from kb.records import KB, Record
+from kb.items import Store, Item
 from kb.transfer import expand
 
 from conftest import git, make_store, observation
@@ -22,7 +22,7 @@ def world(tmp_path):
     git(proj_dir, "init", "-q", "-b", "main")
     project = make_store(proj_dir / "kb", "project", up=home.root)
     federation.add(home, "group-x", "up", path=str(group.root))
-    return {"project": KB.open(project.root), "home": KB.open(home.root), "group": KB.open(group.root),
+    return {"project": Store.open(project.root), "home": Store.open(home.root), "group": Store.open(group.root),
             "proj_dir": proj_dir}
 
 
@@ -44,10 +44,10 @@ def test_neighborhood_and_edge_defaults(world):
     nb = federation.neighbor(p, "home")
     assert (nb.push, nb.pull, nb.mode) == ("select", "all", "apply")
     federation.add(world["group"], "home", "down", path=str(world["home"].root))
-    d = federation.neighbor(KB.open(world["group"].root), "home")
+    d = federation.neighbor(Store.open(world["group"].root), "home")
     assert (d.push, d.pull) == ("all", "select")
     federation.add(world["home"], "lab", "peer", path=str(world["group"].root), pull="none", prefer="theirs")
-    pe = federation.neighbor(KB.open(world["home"].root), "lab")
+    pe = federation.neighbor(Store.open(world["home"].root), "lab")
     assert (pe.push, pe.pull, pe.accept, pe.prefer) == ("select", "none", "review", "theirs")
 
 
@@ -78,7 +78,7 @@ def test_snapshot_neighbor(world):
     observation(g, title="In the group")
     snap = g.snapshot(g.root.parent / "published-group.sqlite")     # a consistent single file, as published
     federation.add(world["home"], "upstream", "peer", url=snap.as_uri(), shared=True)
-    home = KB.open(world["home"].root)
+    home = Store.open(world["home"].root)
     assert "upstream" in home.setting("neighbors")
     assert not federation.neighbor(home, "upstream").available
     assert federation.fetch(home) == [("upstream", "fetched")]
@@ -125,19 +125,19 @@ def test_candidates_and_push(world):
 
     r = push.push(p, "home", [a.id])
     assert r["items"]["new"] == [r["set"], a.id] and r["approved"] == "human"
-    home = KB.open(home.root)
+    home = Store.open(home.root)
     copy_ = home.get(a.id)
     o = copy_.data["origin"]
     assert o["store"] == p.cfg.id and o["path"] == [p.cfg.id] and o["set"] == r["set"]
     assert copy_.digest() == p.get(a.id).digest() and copy_.text("note") == p.get(a.id).text("note")
     assert home.get(r["set"]).data["members"] == [a.id]
     assert [e["action"] for e in home.events(a.id)] == ["transfer-in"]
-    assert a.id not in [x.id for x in push.candidates(KB.open(p.root), "home")]
-    hits = federated.search(KB.open(p.root), "drift", reach=1)
+    assert a.id not in [x.id for x in push.candidates(Store.open(p.root), "home")]
+    hits = federated.search(Store.open(p.root), "drift", reach=1)
     assert len(hits) == 1 and hits[0]["also_in"] == ["home"]
 
-    fix = authoring.supersede(KB.open(p.root), a.id, {}, text="Measured 1.60 mm/us; unit slip before.")
-    top = push.candidates(KB.open(p.root), "home")[0]
+    fix = authoring.supersede(Store.open(p.root), a.id, {}, text="Measured 1.60 mm/us; unit slip before.")
+    top = push.candidates(Store.open(p.root), "home")[0]
     assert top.id == fix.id and any("corrects" in r for r in top.reasons)
 
 
@@ -149,9 +149,9 @@ def test_shallow_and_deep_push(world):
                                    "derived_from": [o.id]}, text=f"See [{o.id}].")
     r = push.push(p, "home", [t.id])
     assert set(r["items"]["new"]) == {r["set"], t.id} and r["dangling"] == [o.id]
-    h = KB.open(world["home"].root)
+    h = Store.open(world["home"].root)
     assert [x.code for x in check(h)] == ["dangling"]                      # a warning, not an error
-    r = push.push(KB.open(p.root), "home", [t.id], deep=True)
+    r = push.push(Store.open(p.root), "home", [t.id], deep=True)
     assert o.id in r["items"]["new"] and t.id in r["items"]["same"]
 
 
@@ -160,8 +160,8 @@ def test_access_relabel_is_deliberate(world):
     o = observation(home, title="Group-worthy fact", summary="Something the group should know.")
     with pytest.raises(KBError, match="relabel deliberately"):
         push.push(home, "group-x", [o.id])
-    push.push(KB.open(home.root), "group-x", [o.id], access="group")
-    assert KB.open(world["group"].root).get(o.id).data["access"] == "group"
+    push.push(Store.open(home.root), "group-x", [o.id], access="group")
+    assert Store.open(world["group"].root).get(o.id).data["access"] == "group"
 
 
 def test_push_into_inbox_then_review(world):
@@ -169,14 +169,14 @@ def test_push_into_inbox_then_review(world):
     o = observation(home, access="group", title="For the group")
     r = push.push(home, "group-x", [o.id], mode="inbox", message="Please review")
     assert r["land"] == "inbox" and r["status"] == "pending"
-    gk = KB.open(g.root)
-    assert o.id not in gk.records
+    gk = Store.open(g.root)
+    assert o.id not in gk.items
     [e] = bundle.entries(gk)
     bundle.review(gk, e.bundle, "accept", "Well attributed, adds a run range we lacked.", kind="llm")
     bundle.review(gk, e.bundle, "comment", "Fine by me.")
     assert [rv["reviewer_kind"] for rv in bundle.get(gk, e.bundle).reviews] == ["llm", "human"]
     rep = bundle.accept(gk, e.bundle, note="ok")
-    assert o.id in rep["items"]["new"] and o.id in KB.open(g.root).records
+    assert o.id in rep["items"]["new"] and o.id in Store.open(g.root).items
     assert bundle.get(gk, e.bundle).status == "accepted"
     with pytest.raises(KBError, match="already accepted"):
         bundle.accept(gk, e.bundle)
@@ -186,19 +186,19 @@ def test_repush_and_multipath(world):
     p, home, g = world["project"], world["home"], world["group"]
     o = observation(p, access="group")
     push.push(p, "home", [o.id])
-    push.push(KB.open(home.root), "group-x", [o.id])                  # forwarded: project -> home -> group
-    assert KB.open(g.root).get(o.id).data["origin"]["path"] == [p.cfg.id, home.cfg.id]
+    push.push(Store.open(home.root), "group-x", [o.id])                  # forwarded: project -> home -> group
+    assert Store.open(g.root).get(o.id).data["origin"]["path"] == [p.cfg.id, home.cfg.id]
 
-    set_fields(KB.open(p.root), o.id, ["status=disputed", "summary=Now disputed by a second measurement."])
-    p = KB.open(p.root)
+    set_fields(Store.open(p.root), o.id, ["status=disputed", "summary=Now disputed by a second measurement."])
+    p = Store.open(p.root)
     assert {x.id: x for x in push.candidates(p, "home")}[o.id].state == "changed"
     push.push(p, "home", [o.id])                                       # same path: the update lands
-    assert KB.open(home.root).get(o.id).data["status"] == "disputed"
+    assert Store.open(home.root).get(o.id).data["status"] == "disputed"
 
     federation.add(p, "group-x", "up", path=str(g.root))               # a second path, directly
-    set_fields(KB.open(p.root), o.id, ['tags=["cross-check"]'])
-    r = push.push(KB.open(p.root), "group-x", [o.id])
-    gk = KB.open(g.root)
+    set_fields(Store.open(p.root), o.id, ['tags=["cross-check"]'])
+    r = push.push(Store.open(p.root), "group-x", [o.id])
+    gk = Store.open(g.root)
     assert gk.get(o.id).data["status"] == "unverified" and "cross-check" in gk.get(o.id).data["tags"]
     assert any("kept our status" in n for n in r["notes"][o.id])
 
@@ -208,14 +208,14 @@ def test_conflicting_core_refuses_whole_transfer(world):
     o = observation(p)
     other = observation(p, title="Innocent")
     push.push(p, "home", [o.id])
-    hk = KB.open(home.root)
+    hk = Store.open(home.root)
     hk.conn.execute("DROP TRIGGER items_frozen")                        # someone bypassed kb in home
     data = copy.deepcopy(hk.get(o.id).data)
     data["valid"] = {"runs": [[1, 2]]}
-    hk.save(Record(data, hk))
+    hk.save(Item(data, hk))
     with pytest.raises(KBError, match="conflicts"):
-        push.push(KB.open(p.root), "home", [o.id, other.id])
-    assert other.id not in KB.open(home.root).records                   # atomic: nothing landed
+        push.push(Store.open(p.root), "home", [o.id, other.id])
+    assert other.id not in Store.open(home.root).items                   # atomic: nothing landed
 
 
 def test_agent_autonomy(world, monkeypatch):
@@ -223,13 +223,13 @@ def test_agent_autonomy(world, monkeypatch):
     o = observation(p)
     monkeypatch.setenv("KB_AGENT", "1")
     with pytest.raises(KBError, match="approval"):
-        push.push(KB.open(p.root), "home", [o.id])
-    r = push.push(KB.open(p.root), "home", [o.id], approved="yes, push the drift one")
+        push.push(Store.open(p.root), "home", [o.id])
+    r = push.push(Store.open(p.root), "home", [o.id], approved="yes, push the drift one")
     assert r["approved"] == "human: yes, push the drift one"
-    assert KB.open(world["home"].root).events(o.id)[-1]["approved"] == r["approved"]
+    assert Store.open(world["home"].root).events(o.id)[-1]["approved"] == r["approved"]
     from kb import policy
     with pytest.raises(KBError, match="granted by the human"):
-        policy.set_autonomy(KB.open(p.root), ["push.home=auto"])
+        policy.set_autonomy(Store.open(p.root), ["push.home=auto"])
 
 
 # -- pull, obtain ---------------------------------------------------------------------
@@ -240,7 +240,7 @@ def test_pull_all_from_up(world):
     b = observation(home, title="Home fact two")
     r = push.pull(p, "home", [])                       # the up edge's default pull is "all"
     assert set(r["items"]["new"]) >= {a.id, b.id}
-    pk = KB.open(p.root)
+    pk = Store.open(p.root)
     assert pk.get(a.id).data["origin"]["store"] == home.cfg.id
     assert pk.get(r["set"]).data["purpose"] == "transfer"
     assert push.pull(pk, "home", [])["result"] == "nothing new or changed"
@@ -250,11 +250,11 @@ def test_pull_from_peer_goes_to_inbox(world):
     home, g = world["home"], world["group"]
     federation.add(home, "lab", "peer", path=str(g.root))        # peers: accept = review
     o = observation(g)
-    r = push.pull(KB.open(home.root), "lab", [o.id])
-    assert r["land"] == "inbox" and o.id not in KB.open(home.root).records
-    hk = KB.open(home.root)
+    r = push.pull(Store.open(home.root), "lab", [o.id])
+    assert r["land"] == "inbox" and o.id not in Store.open(home.root).items
+    hk = Store.open(home.root)
     bundle.accept(hk, r["bundle"])
-    assert o.id in KB.open(home.root).records
+    assert o.id in Store.open(home.root).items
 
 
 def test_obtain_dangling(world):
@@ -262,10 +262,10 @@ def test_obtain_dangling(world):
     o = observation(g, title="Group calibration constant")
     mine = observation(p, related=[o.id])                         # resolvable in a reachable store
     with pytest.raises(KBError, match="any reachable store"):
-        observation(KB.open(p.root), related=["obs-nowherexyz"])
-    reps = push.obtain(KB.open(p.root), dangling=True)
+        observation(Store.open(p.root), related=["obs-nowherexyz"])
+    reps = push.obtain(Store.open(p.root), dangling=True)
     assert reps[0]["via"] == "home>group-x" and o.id in reps[0]["items"]["new"]
-    assert o.id in KB.open(p.root).records and mine.id in KB.open(p.root).records
+    assert o.id in Store.open(p.root).items and mine.id in Store.open(p.root).items
 
 
 # -- twins --------------------------------------------------------------------------
@@ -276,17 +276,17 @@ def test_twin_sync(tmp_path):
     shared = observation(a, title="Before the copy")
     a.close()
     shutil.copytree(tmp_path / "laptop", tmp_path / "desktop", ignore=shutil.ignore_patterns(".kb"))
-    a, b = KB.open(tmp_path / "laptop"), KB.open(tmp_path / "desktop")
+    a, b = Store.open(tmp_path / "laptop"), Store.open(tmp_path / "desktop")
     assert a.cfg.id == b.cfg.id
     federation.add(a, "desk", "twin", path=str(b.root))
-    oa = observation(KB.open(a.root), title="On the laptop")
-    ob = observation(KB.open(b.root), title="On the desktop")
-    set_fields(KB.open(a.root), shared.id, ["summary=Edited on the laptop first."])
-    set_fields(KB.open(b.root), shared.id, ["summary=Edited on the desktop later."])
-    rep = sync(KB.open(a.root))[0]
+    oa = observation(Store.open(a.root), title="On the laptop")
+    ob = observation(Store.open(b.root), title="On the desktop")
+    set_fields(Store.open(a.root), shared.id, ["summary=Edited on the laptop first."])
+    set_fields(Store.open(b.root), shared.id, ["summary=Edited on the desktop later."])
+    rep = sync(Store.open(a.root))[0]
     assert ob.id in rep["pulled"]["new"] and oa.id in rep["pushed"]["new"]
-    for k in (KB.open(a.root), KB.open(b.root)):
-        assert {oa.id, ob.id} <= set(k.records)
+    for k in (Store.open(a.root), Store.open(b.root)):
+        assert {oa.id, ob.id} <= set(k.items)
         assert k.get(shared.id).data["summary"] == "Edited on the desktop later."   # the later change wins
         assert "origin" not in k.get(oa.id).data and "origin" not in k.get(ob.id).data
     with pytest.raises(KBError, match="different store"):

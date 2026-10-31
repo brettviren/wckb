@@ -29,7 +29,7 @@ database directly.
 
 Rules:
 
-1. **Sources are append-only.** The store refuses changes to what an
+1. **Primary items are append-only.** The store refuses changes to what an
    observation, document, dataset, config, snapshot or software item
    asserts. To correct one, use `kb supersede ID`; to withdraw one, use
    `kb retract ID`. You may change `status`, `subject`, `tags`, `summary`,

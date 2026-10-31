@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.kb.invalid/v1/view.json",
   "title": "View",
-  "description": "Recipe for a human-facing product (HTML site, PDF note, slides). The record directory holds the sources; kb build runs the build tool and writes manifest.json; kb publish copies the output.",
+  "description": "Recipe for a human-facing product (HTML site, PDF note, slides). Its source files are renditions with role source; kb build runs the build tool and stores a manifest; kb publish copies the output.",
   "type": "object",
   "allOf": [
     {
-      "$ref": "record.json"
+      "$ref": "item.json"
     }
   ],
   "properties": {

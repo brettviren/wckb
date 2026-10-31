@@ -14,7 +14,7 @@ simple first version (see decisions/0001 and questions B15).
 from .errors import KBError
 from .federation import neighbors, open_store
 from .push import changed_items
-from .records import KB, now
+from .items import Store, now
 from .transfer import transfer
 
 
@@ -24,7 +24,7 @@ def _sync_set(ids: list[str]) -> dict:
             "kind": "kset", "members": ids, "depth": "shallow"}
 
 
-def sync(kb: KB, names: list[str] | None = None) -> list[dict]:
+def sync(kb: Store, names: list[str] | None = None) -> list[dict]:
     twins = [n for n in neighbors(kb) if n.relation == "twin" and (not names or n.name in names)]
     if not twins:
         raise KBError("no twin neighbors" + (f" named {', '.join(names)}" if names else "")

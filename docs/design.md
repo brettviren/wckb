@@ -7,6 +7,7 @@ and people review what crosses into shared stores.
 
 Related documents:
 
+- [glossary.md](glossary.md): the terms used here, and their names in the code;
 - [plan.md](plan.md): the implementation plan;
 - [howto/](howto/): task guides;
 - [questions.md](questions.md): open questions;
@@ -170,7 +171,7 @@ The schemas are hand-written JSON Schema (draft 2020-12) in
 `kb/schemas/v<N>/`:
 
 - `common.json` holds shared definitions;
-- `record.json` holds the common fields;
+- `item.json` holds the common fields;
 - there is one file per kind, closed with `unevaluatedProperties: false`,
   so invented fields fail and extensions go under `x`.
 
@@ -217,7 +218,7 @@ inputs by digest. A copy in another store has the same digest.
 ```json
 {"name": "original", "role": "original", "media_type": "application/pdf", "sha256": "9f2c…", "size": 48211337,
  "locations": [{"type": "url", "url": "https://indico.example/…/slides.pdf", "retrieved": "2026-10-30T14:02:11Z"},
-               {"type": "cas", "store": "default"}]}
+               {"type": "cas", "name": "default"}]}
 ```
 
 **Roles:**
@@ -228,7 +229,7 @@ inputs by digest. A copy in another store has the same digest.
 - `metadata`: a descriptor, e.g. `datapackage.json` or a view manifest;
 - `source`: a file a view is built from.
 
-**Data sources** (`kb.sources`) serve location types behind one interface:
+**Location sources** (`kb.locations`) serve location types behind one interface:
 resolve to a local file, describe for people, link.
 
 | type | where | |

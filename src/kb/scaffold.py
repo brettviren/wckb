@@ -27,7 +27,7 @@ def init(path: Path, name: str | None = None, access: str | None = None, scope: 
          target: str | None = None, force: bool = False, enact: bool = True,
          up: Path | None = None) -> list[str]:
     from . import federation, policy
-    from .records import KB
+    from .items import Store
     if scope not in SCOPES:
         raise KBError(f"scope must be one of {', '.join(SCOPES)}")
     access = access or DEFAULT_ACCESS[scope]
@@ -44,18 +44,18 @@ def init(path: Path, name: str | None = None, access: str | None = None, scope: 
         "limits": {"max_inline_bytes": 1024 * 1024},
         "lint": {"unverified_days": 90},
     } | policy.default_settings(scope, target or default_target(path, scope))
-    KB.create(path, settings)
+    Store.create(path, settings)
     made = [str(path / DB_NAME)]
     if _in_git_worktree(path):
         # A store is not versioned by the repository around it; knowledge travels by bundles.
         (path / ".gitignore").write_text("# a kb store: not versioned here (share it with kb bundles)\n*\n")
         made.append(str(path / ".gitignore"))
-    kb = KB.open(path)
+    kb = Store.open(path)
     if up is not None:
-        other = KB.open(Path(up).expanduser().resolve(), readonly=True)
+        other = Store.open(Path(up).expanduser().resolve(), readonly=True)
         federation.add(kb, other.cfg.name, "up", path=str(other.root))
         made.append(f".kb/local.toml (neighbor {other.cfg.name}, up)")
     if enact:
-        r = policy.enact(KB.open(path))
+        r = policy.enact(Store.open(path))
         made += [c["path"] for c in r["changes"]]
     return made

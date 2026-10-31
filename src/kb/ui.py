@@ -10,8 +10,8 @@ def emit_json(obj) -> None:
     click.echo(json.dumps(obj, indent=2, default=str, ensure_ascii=False))
 
 
-def record_line(row, show_current: bool = True, store: str | None = None) -> str:
-    """One line per record: [store] id kind status title (summary on --long)."""
+def item_line(row, show_current: bool = True, store: str | None = None) -> str:
+    """One line per item: [store] id kind status title (summary on --long)."""
     get = row.get if isinstance(row, dict) else (lambda k, d=None: row[k] if k in row.keys() else d)
     status = get("status") or "-"
     mark = "" if not show_current or get("current", 1) else "  [superseded]"
@@ -22,9 +22,9 @@ def record_line(row, show_current: bool = True, store: str | None = None) -> str
     return f"{prefix}{get('id'):<16} {get('kind'):<11} {status:<10} {get('title')}{mark}"
 
 
-def records(rows, long: bool = False, with_store: bool = False) -> None:
+def item_list(rows, long: bool = False, with_store: bool = False) -> None:
     for r in rows:
-        click.echo(record_line(r, store=r.get("store") if with_store else None))
+        click.echo(item_line(r, store=r.get("store") if with_store else None))
         if long:
             summary = r["summary"] if not isinstance(r, dict) else r.get("summary")
             click.echo(f"{'':<16} {summary}")

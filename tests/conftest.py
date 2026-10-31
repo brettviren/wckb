@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from kb import authoring
-from kb.records import KB
+from kb.items import Store
 from kb.scaffold import init
 
 
@@ -37,8 +37,8 @@ def root(tmp_path) -> Path:
 
 
 @pytest.fixture
-def kb(root) -> KB:
-    return KB.open(root)
+def kb(root) -> Store:
+    return Store.open(root)
 
 
 def commit(root: Path, msg: str = "commit") -> None:
@@ -48,7 +48,7 @@ def commit(root: Path, msg: str = "commit") -> None:
         git(root, "commit", "-q", "--no-verify", "-m", msg)
 
 
-def observation(kb: KB, runs=("1234",), subject=("detector/tpc/noise",), text="Noise was high.", **kw):
+def observation(kb: Store, runs=("1234",), subject=("detector/tpc/noise",), text="Noise was high.", **kw):
     fields = authoring.fields_from_options(
         title=kw.pop("title", "Noisy run"), summary=kw.pop("summary", "Elevated coherent noise was seen."),
         subject=subject, runs=runs, by=kw.pop("by", "A. Colleague"), how="verbal", when="2026-10-28", **kw)
@@ -60,13 +60,13 @@ def set_store(root: Path, name="default", publish=True) -> Path:
     store = root.parent / f"cas-{name}"
     pub = root.parent / "published"
     (root / ".kb").mkdir(exist_ok=True)
-    text = f'[stores.{name}]\npath = "{store}"\n'
+    text = f'[cas.{name}]\npath = "{store}"\n'
     if publish:
         text += f'[views]\npublish_path = "{pub}"\npublish_url = "https://example.org/views"\n'
     (root / ".kb" / "local.toml").write_text(text)
     return store
 
 
-def make_store(path: Path, scope: str, name: str | None = None, **kw) -> KB:
+def make_store(path: Path, scope: str, name: str | None = None, **kw) -> Store:
     init(path, name=name, scope=scope, **kw)
-    return KB.open(path)
+    return Store.open(path)

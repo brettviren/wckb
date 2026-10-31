@@ -4,7 +4,7 @@ import pytest
 
 from kb import checks, policy
 from kb.errors import KBError
-from kb.records import KB
+from kb.items import Store
 
 from conftest import make_store
 
@@ -57,11 +57,11 @@ def test_status_capture_release_cycle(root, kb):
     rec = policy.capture(kb, "kb-core")
     n = v("kb-core")
     assert rec.data["version"] == n + 1 and rec.data["stage"] == "draft" and rec.data["based_on"] == f"builtin:kb-core@{n}"
-    kb = KB.open(root)
+    kb = Store.open(root)
     assert policy.resolve(kb, "kb-core").spec == f"kb-core@{n}"        # drafts are not used by default
     assert policy.resolve(kb, "kb-core@draft").version == n + 1
     policy.release(kb, "kb-core")
-    kb = KB.open(root)
+    kb = Store.open(root)
     assert policy.resolve(kb, "kb-core").source == "here"             # the local release now wins
     assert any(f"resolves now to kb-core@{n + 1}" in s["what"] for s in policy.status(kb))
     policy.enact(kb)
@@ -71,14 +71,14 @@ def test_status_capture_release_cycle(root, kb):
     # Released versions are frozen.
     from kb.edit import set_content
     with pytest.raises(KBError, match="frozen"):
-        set_content(KB.open(root), rec.id, "changed")
+        set_content(Store.open(root), rec.id, "changed")
     import copy
-    from kb.records import Record
-    kb = KB.open(root)
+    from kb.items import Item
+    kb = Store.open(root)
     data = copy.deepcopy(kb.get(rec.id).data)
     data["stage"] = "draft"
     with pytest.raises(KBError, match="append-only"):
-        kb.save(Record(data, kb))
+        kb.save(Item(data, kb))
 
 
 def test_new_edit_and_hook_validation(kb, tmp_path):
@@ -87,7 +87,7 @@ def test_new_edit_and_hook_validation(kb, tmp_path):
     rec = policy.new(kb, "group-review", "instructions", "Review merge requests within a week.\n", order=40)
     assert rec.data["stage"] == "draft"
     policy.edit(kb, "group-review", "Review merge requests within three days.\n")
-    assert checks.check(KB.open(kb.root)) == []
+    assert checks.check(Store.open(kb.root)) == []
     with pytest.raises(KBError, match="only drafts"):
         policy.use(kb, ["group-review"])
     policy.use(kb, ["group-review@draft"])
@@ -102,7 +102,7 @@ def test_policy_from_neighbor_store(tmp_path):
     policy.release(group, "group-review")
     home = make_store(tmp_path / "home", "home", "home")
     federation.add(home, "group-x", "up", path=str(group.root))
-    home = KB.open(home.root)
+    home = Store.open(home.root)
     e = policy.resolve(home, "group-review")
     assert e.source == "group-x" and e.version == 1
     policy.use(home, ["group-review"])
@@ -117,7 +117,7 @@ def test_pinning_reports_newer(kb):
     policy.release(kb, "kb-routine")
     policy.use(kb, [f"kb-routine@{n}"])
     policy.enact(kb)
-    st = policy.status(KB.open(kb.root))
+    st = policy.status(Store.open(kb.root))
     assert any(f"kb-routine@{n + 1} is available" in s["what"] for s in st)
 
 
@@ -134,5 +134,5 @@ def test_user_target(kb):
 def test_agent_needs_approval_for_policy_changes(kb, monkeypatch):
     monkeypatch.setenv("KB_AGENT", "1")
     with pytest.raises(KBError, match="approval"):
-        policy.use(KB.open(kb.root), ["kb-view"])
-    policy.use(KB.open(kb.root), ["kb-view"], approved="ok, add the view skill")
+        policy.use(Store.open(kb.root), ["kb-view"])
+    policy.use(Store.open(kb.root), ["kb-view"], approved="ok, add the view skill")

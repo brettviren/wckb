@@ -6,7 +6,7 @@
   "type": "object",
   "allOf": [
     {
-      "$ref": "record.json"
+      "$ref": "item.json"
     }
   ],
   "properties": {
@@ -102,8 +102,8 @@
         "note": {
           "type": "string"
         },
-        "seen": {
-          "description": "Where and as what this version was observed.",
+        "sightings": {
+          "description": "Where this version was observed: by which binding, as which native version, when.",
           "type": "array",
           "items": {
             "type": "object",

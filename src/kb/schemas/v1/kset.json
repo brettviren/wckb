@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.kb.invalid/v1/kset.json",
   "title": "Knowledge set",
-  "description": "A selection of records, itself a record: the unit of knowledge transfer between stores, and usable as a reading list. Shallow means the members (and members of nested sets); deep also follows every reference from them, recursively. A source: frozen once committed.",
+  "description": "A selection of items, itself an item: the unit of knowledge transfer between stores, and usable as a reading list. Shallow means the members (and members of nested sets); deep also follows every reference from them, recursively. A primary item: frozen once written.",
   "type": "object",
   "allOf": [
     {
-      "$ref": "record.json"
+      "$ref": "item.json"
     }
   ],
   "properties": {
@@ -18,7 +18,7 @@
       "pattern": "^ks-"
     },
     "members": {
-      "description": "The records selected (refs; they need not be in this store).",
+      "description": "The items selected (refs; they need not be in this store).",
       "type": "array",
       "items": {
         "$ref": "common.json#/$defs/ref"

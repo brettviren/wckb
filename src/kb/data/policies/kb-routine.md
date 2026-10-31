@@ -6,7 +6,7 @@ human doesn't have to remind you.
 - **Before answering**, when the request touches facts about this
   project, its data, its decisions or its history, run
   `kb context "<key words or subject>"` (add `--reach 1` for neighbor stores
-  when the local store is thin). Use what it returns and cite record IDs.
+  when the local store is thin). Use what it returns and cite item IDs.
   If a "KB may be relevant" note was injected into the prompt, follow it up
   only if it is relevant.
 - **While working**, when a fact, decision, number, pitfall or result is
@@ -14,9 +14,9 @@ human doesn't have to remind you.
   the `capture` autonomy:
   - `auto`: file it with `kb new` (or `kb add` for files) and say so in one
     line;
-  - `ask`: propose the record in one line and file it if the human agrees.
+  - `ask`: propose the item in one line and file it if the human agrees.
 
-  Prefer few, specific, attributed records over many vague ones, and don't
+  Prefer few, specific, attributed items over many vague ones, and don't
   file what is already there (`kb search` first).
 - **When something you find contradicts the KB**, say so and offer
   `kb supersede` (see kb-correct). Don't silently work around it.

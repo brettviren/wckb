@@ -33,7 +33,7 @@ Status:
   relate to the store graph?
 
 **S5. `datalad run` vs our provenance.** *(deferred with spike S3)*
-- Can it replace view manifests and transform records, or should it
+- Can it replace view manifests and transform provenance, or should it
   complement them?
 
 **S6. Growth.** *(open)*
@@ -122,7 +122,7 @@ Status:
 
 ## A. Group setup and infrastructure
 
-**A1. Where do the blob store and the publish store live?** *(open)*
+**A1. Where do the content store (cas) and the publish store live?** *(open)*
 - Today: content stores (`cas`) are paths in the store settings or `.kb/local.toml`; snapshots and publications are anywhere.
 - Options: EOS, a group NFS area, or S3 via rclone.
 - Affects CI (it must mount them) and laptops.
@@ -135,7 +135,7 @@ Status:
 - Today: `created.by` and `asserted_by.who` accept a `per-…` ref or any
   string, and nothing checks them.
 - A registry gives stable attribution across stores but needs upkeep.
-- Could person records be pushed up from home stores, so each person
+- Could person items be pushed up from home stores, so each person
   maintains their own?
 
 **A4. Who approves topic revisions?** *(open)*
@@ -158,7 +158,7 @@ Status:
   stores and the set. `origin` is excluded from the digest.
 - Arrival along several paths is reconciled (B15).
 
-**B4. What should happen upstream when a pushed record is superseded at the source?** *(open)*
+**B4. What should happen upstream when a pushed item is superseded at the source?** *(open)*
 - Today: the correction becomes a top candidate ("corrects X, which was
   pushed"). Pushing it supersedes X in the parent too, provided X is there.
 - Open: should this be automatic under `auto` autonomy? Should the parent
@@ -172,7 +172,7 @@ Status:
   (read live with `--reach` instead), or `select`?
 
 **B7. Access relabeling on push.** *(exploring)*
-- Today: a record more restricted than the target is refused, unless
+- Today: an item more restricted than the target is refused, unless
   `--access` (a human decision) or a neighbor's `relabel` setting allows it.
 - Should relabeling need a second confirmation, or a recorded reason?
   Should `private` ever be relabeled by an agent, even with `ask` approval?
@@ -202,11 +202,11 @@ Status:
     selection happens only at the sender.
 - Implemented: (a) for the push/pull forms, plus `accept = direct` on
   up/down edges, which also gives (b): what a narrower store pushes lands
-  without a review branch unless the edge says `land = branch|pr`.
+  without review unless the edge says `land = inbox|pr`.
 - To confirm with the group.
 
 **B12. Peer defaults.** *(open)*
-- Today: `select` both ways, with pulled items landing on a review branch.
+- Today: `select` both ways, with pulled items landing in the inbox for review.
   A deliberately conservative placeholder.
 
 **B13. Believability beyond `prefer`.** *(open)*
@@ -222,19 +222,19 @@ Status:
   reasons reported.
 - Wanted: a resolution workflow. Options include `--skip-conflicts`, a
   quarantine area (`.kb/conflicts/`), or `kb conflicts` showing both sides
-  side by side, and recording the resolution as a record.
+  side by side, and recording the resolution as an item.
 
 **B15. Reconciling mutable fields without clocks.** *(exploring)*
 - Today: lists are united. Single values take the incoming value only from
   the same sender as before, or when the edge prefers theirs; otherwise
   ours is kept and the difference noted.
-- There is no notion of "newer". A per-record revision counter bumped by
+- There is no notion of "newer". A per-item revision counter bumped by
   `kb set` would give a partial order, but concurrent edits remain genuine
   conflicts.
 
 **B16. Knowledge-set proliferation.** *(open)*
 - Every push or pull makes a set (`subject kb/transfer`, `purpose
-  transfer`), committed in the sender, or in the receiver for pulls. They're
+  transfer`), stored in the sender, or in the receiver for pulls. They're
   hidden from candidates but listed by `kb ls`.
 - Should `kb ls` hide them by default, or should transfer sets live in a
   separate area?
@@ -246,8 +246,8 @@ Status:
   `kb obtain` afterwards enough?
 
 **B18. Scale of "all".** *(open)*
-- `all` compares every current record of both stores. That's fine for
-  thousands of records. A digest index in the ledger would make it
+- `all` compares every current item of both stores. That's fine for
+  thousands of items. A digest index in the ledger would make it
   incremental.
 
 **B19. Twins.** *(exploring)*
@@ -263,7 +263,7 @@ Status:
 **C1. Who writes policy, and how is it reviewed?** *(open)*
 - Today: anyone can draft. Releasing needs a human, or `policy` autonomy
   set to `auto`. Released versions are frozen, and group policies change
-  through merge requests in the group store.
+  through reviewed bundles (inbox or pull request) into the group store.
 - Open: a policy owner role? Required reviewers for policies in a group
   store?
 
@@ -271,7 +271,7 @@ Status:
 - We have no way to tell whether a policy change made Claude behave better.
 - Ideas:
   - a small set of scripted scenarios (prompts plus a fixture store) run
-    against two policy versions, comparing the records filed, the
+    against two policy versions, comparing the items filed, the
     candidates proposed and the tokens used;
   - `claude plugin eval` may fit.
 
@@ -325,14 +325,14 @@ Status:
 - With `capture = auto`, how much is too much? Ideas:
   - a per-session cap;
   - a `session` tag plus a periodic digest;
-  - letting lint flag low-value records (short summary, no subject, never
+  - letting lint flag low-value items (short summary, no subject, never
     consulted).
 
 **D3. When should Claude start a promotion review itself?** *(open)*
 - Today: `review = auto` lets it start one "at a natural milestone", a
   phrase the instructions leave to the model's judgment.
-- Should `kb` track signals ("12 new records since the last review", "a
-  pushed record was corrected") and surface them in the session hook,
+- Should `kb` track signals ("12 new items since the last review", "a
+  pushed item was corrected") and surface them in the session hook,
   instead of relying on judgment?
 
 **D4. Is agent detection by environment enough?** *(leaning: yes, as a guardrail)*
@@ -345,7 +345,7 @@ Status:
   configs, ask for topics"), or tied to record status ("auto-push
   verified")?
 
-## E. Records and schema
+## E. Items and schema
 
 **E1. Should hearsay become a status?** *(open)*
 - Today `unverified` covers both "nobody checked" and "I heard it".
@@ -356,7 +356,7 @@ Status:
   shallow transfer plus `kb obtain` on demand the right pattern, or should
   such topics travel deep?
 
-**E3. Making `kb` recognize that a record is used.** *(open)*
+**E3. Making `kb` recognize that an item is used.** *(open)*
 - Recording which records a session consulted, for ranking candidates and
   finding dead weight. This has privacy and effort costs.
 
@@ -392,7 +392,7 @@ Status:
 
 **G6. Merge locally or through the API?** *(open)*
 - `kb forge pr merge` merges on the forge. For stores without a forge, a
-  local "merge the review branch" (B20) is the equivalent.
+  accepting from the inbox (B20) is the equivalent.
 
 ## R. Rendering and review (see rendering.md)
 
@@ -449,7 +449,7 @@ Status:
 
 **DS4. Third-party sources.** *(open)*
 - Register `Source` classes through Python entry points
-  (`kb.sources` group), so groups can add their own without changing kb.
+  (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
 ## Decided
 
@@ -475,9 +475,9 @@ Status:
   default is B12.
 
 **B6. Cross-store references.** *(decided 2026-10-31)*
-- Records can always reference other records, store-independently, by
+- Items can always reference other items, store-independently, by
   global ID.
-- Obtaining a referenced record is a separate step, as with a content-addressed
+- Obtaining a referenced item is a separate step, as with a content-addressed
   store: `kb obtain` fetches from reachable stores, and transfers are
   shallow or deep through knowledge sets.
 - `kb check` reports unresolved references as `dangling` warnings.

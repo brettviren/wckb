@@ -17,7 +17,7 @@ kb datapackage dat-...        # Frictionless datapackage.json: column names and 
 any tool (or LLM) knows the columns without reading the data. Edit
 `datapackage.json` to add units and descriptions, then
 `kb set ID summary=...` if needed. Variables can also be listed on the
-record:
+item:
 
 ```
 kb set dat-... 'variables=[{"name":"rms","unit":"ADC","description":"coherent noise RMS"}]'
@@ -46,7 +46,7 @@ opening them:
 kb extract dat-... --name structure    # trees/RNTuples with branches and entries, histograms with contents
 ```
 
-## Many small records, or one dataset?
+## Many small items, or one dataset?
 
 Per-run condition values arriving by the hundreds belong in **one dataset**
 (a CSV or JSONL per period), not hundreds of observations. Observations are

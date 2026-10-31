@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from . import schema
 from .config import access_rank
 from .ids import KIND, is_ref, parse_ref
-from .records import KB, Record, core_digest, digest, fixed, is_frozen
+from .items import Store, Item, core_digest, digest, fixed, is_frozen
 
 LEVELS = ("public", "collaboration", "group", "private")
 
@@ -44,7 +44,7 @@ def _warn(code, where, msg, hint=""):
     return Problem("warning", code, where, msg, hint)
 
 
-def check_data(kb: KB, data: dict) -> list[Problem]:
+def check_data(kb: Store, data: dict) -> list[Problem]:
     """Checks that need only this item and the store (used for incoming items too)."""
     rid = data.get("id", "?")
     probs = [_err("schema", rid, m, "kb schema " + str(data.get("kind", "KIND"))) for m in schema.validate(data)]
@@ -53,14 +53,14 @@ def check_data(kb: KB, data: dict) -> list[Problem]:
     prefix = data["id"].split("-", 1)[0]
     if KIND.get(prefix) not in (None, data.get("kind")):
         probs.append(_err("id", rid, f"ID prefix {prefix} is for {KIND[prefix]}, not {data.get('kind')}"))
-    rec = Record(data, kb)
+    rec = Item(data, kb)
     probs += _check_content(kb, rec)
     probs += _check_access(kb, rec)
     probs += _check_refs(kb, rec)
     return probs
 
 
-def _check_content(kb: KB, rec: Record, deep: bool = False) -> list[Problem]:
+def _check_content(kb: Store, rec: Item, deep: bool = False) -> list[Problem]:
     probs = []
     for r in rec.data.get("renditions", []):
         if not isinstance(r, dict):
@@ -81,7 +81,7 @@ def _check_content(kb: KB, rec: Record, deep: bool = False) -> list[Problem]:
     return probs
 
 
-def _check_access(kb: KB, rec: Record) -> list[Problem]:
+def _check_access(kb: Store, rec: Item) -> list[Problem]:
     level = rec.data.get("access")
     if level not in LEVELS:
         return []
@@ -91,7 +91,7 @@ def _check_access(kb: KB, rec: Record) -> list[Problem]:
                           "this item does not belong in this store"))
     for ref in rec.inputs():
         try:
-            dep = kb.records.get(parse_ref(ref)[0])
+            dep = kb.items.get(parse_ref(ref)[0])
         except Exception:  # noqa: BLE001
             continue
         if dep is not None and dep.data.get("access") in LEVELS and access_rank(dep.data["access"]) > access_rank(level):
@@ -100,7 +100,7 @@ def _check_access(kb: KB, rec: Record) -> list[Problem]:
     return probs
 
 
-def _check_refs(kb: KB, rec: Record) -> list[Problem]:
+def _check_refs(kb: Store, rec: Item) -> list[Problem]:
     probs = []
     d = rec.data
     fields = [(f, r) for f in ("supersedes", "retracts", "related", "members") for r in d.get(f, [])]
@@ -115,8 +115,8 @@ def _check_refs(kb: KB, rec: Record) -> list[Problem]:
         elif parse_ref(ref)[0] == rec.id:
             probs.append(_err("ref", rec.id, f"{field}: refers to itself"))
     for ref in d.get("supersedes", []):
-        if is_ref(ref) and parse_ref(ref)[0] in kb.records and kb.records[parse_ref(ref)[0]].kind != rec.kind:
-            probs.append(_err("ref", rec.id, f"supersedes {ref}, a {kb.records[parse_ref(ref)[0]].kind}",
+        if is_ref(ref) and parse_ref(ref)[0] in kb.items and kb.items[parse_ref(ref)[0]].kind != rec.kind:
+            probs.append(_err("ref", rec.id, f"supersedes {ref}, a {kb.items[parse_ref(ref)[0]].kind}",
                               "an item supersedes one of its own kind; use retracts otherwise"))
     if d.get("status") == "verified":
         evidence = d.get("evidence", [])
@@ -130,7 +130,7 @@ def _check_refs(kb: KB, rec: Record) -> list[Problem]:
                     strong = True
                     continue
                 ident, name = parse_ref(e)
-                dep = kb.records.get(ident)
+                dep = kb.items.get(ident)
                 if dep is None:
                     strong = True   # can't judge what isn't here; dangling is reported separately
                     continue
@@ -143,7 +143,7 @@ def _check_refs(kb: KB, rec: Record) -> list[Problem]:
     return probs
 
 
-def check(kb: KB, ids: list[str] | None = None, deep: bool = False) -> list[Problem]:
+def check(kb: Store, ids: list[str] | None = None, deep: bool = False) -> list[Problem]:
     """Scan the store (or the items *ids*)."""
     probs: list[Problem] = []
     rows = kb.conn.execute("SELECT id, kind, json, digest, core, fixed, frozen FROM items").fetchall()
@@ -163,6 +163,6 @@ def check(kb: KB, ids: list[str] | None = None, deep: bool = False) -> list[Prob
                               "restore from a backup or the sender's copy"))
         probs += check_data(kb, data)
         if deep:
-            probs += [p for p in _check_content(kb, Record(data, kb), deep=True) if p.code == "hash"]
+            probs += [p for p in _check_content(kb, Item(data, kb), deep=True) if p.code == "hash"]
     return probs
 

@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.kb.invalid/v1/person.json",
   "title": "Person",
-  "description": "Someone who asserts, creates or reviews records.",
+  "description": "Someone who asserts, creates or reviews items.",
   "type": "object",
   "allOf": [
     {
-      "$ref": "record.json"
+      "$ref": "item.json"
     }
   ],
   "properties": {

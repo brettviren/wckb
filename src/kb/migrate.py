@@ -1,9 +1,9 @@
 """Schema migrations between major versions.
 
-A migration is a pure function from a record of version N to version N+1,
-registered in ``MIGRATIONS[N]``.  ``upgrade`` applies the chain to one record
-(used when comparing against old git revisions), ``migrate`` rewrites the
-whole KB in one reviewable change.  There are none yet: v1 is the first.
+A migration is a pure function from an item of version N to version N+1,
+registered in ``MIGRATIONS[N]``.  ``upgrade`` applies the chain to one item
+(also used on items arriving from stores at an older version), ``migrate`` rewrites the
+whole store in one transaction.  There are none yet: v1 is the first.
 """
 
 import json
@@ -11,7 +11,7 @@ from collections.abc import Callable
 
 from . import schema
 from .errors import KBError
-from .records import KB, Record
+from .items import Store, Item
 
 MIGRATIONS: dict[int, Callable[[dict], dict]] = {}
 
@@ -28,7 +28,7 @@ def upgrade(data: dict, to: int = schema.MAJOR, migrations=None) -> dict:
     return data
 
 
-def migrate(kb: KB, to: int = schema.MAJOR, migrations=None, dry_run: bool = False) -> list[str]:
+def migrate(kb: Store, to: int = schema.MAJOR, migrations=None, dry_run: bool = False) -> list[str]:
     """Upgrade every item to version *to*, in one transaction; returns the IDs changed.
 
     Migrations restructure items, frozen ones included, so the append-only
@@ -36,13 +36,13 @@ def migrate(kb: KB, to: int = schema.MAJOR, migrations=None, dry_run: bool = Fal
     it commits.
     """
     from . import db as dbm
-    todo = [r for r in kb.records.values() if r.data.get("schema_version", 1) < to]
+    todo = [r for r in kb.items.values() if r.data.get("schema_version", 1) < to]
     if dry_run or not todo:
         return [r.id for r in todo]
     with kb.tx():
         kb.conn.execute("DROP TRIGGER IF EXISTS items_frozen")
         for rec in todo:
-            kb.save(Record(upgrade(rec.data, to, migrations), kb), "migrate", {"to": to},
+            kb.save(Item(upgrade(rec.data, to, migrations), kb), "migrate", {"to": to},
                     validate=(to == schema.MAJOR))
         kb.conn.execute(dbm.GUARD)
         cur = kb.setting("kb", {})

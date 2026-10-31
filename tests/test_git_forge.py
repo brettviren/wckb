@@ -8,7 +8,7 @@ import pytest
 
 from kb import forge, githooks, secrets
 from kb.errors import KBError
-from kb.records import KB
+from kb.items import Store
 
 from conftest import commit, git, make_store, observation
 
@@ -221,16 +221,16 @@ def test_push_as_pull_request(tmp_path, server):
     group = make_store(tmp_path / "group", "group", "grp")
     home = make_store(tmp_path / "home", "home", "home", access="group")
     federation.add(home, "grp", "up", path=str(group.root), mode="pr", exchange=str(ex))
-    o = observation(KB.open(home.root))
-    r = push.push(KB.open(home.root), "grp", [o.id])
+    o = observation(Store.open(home.root))
+    r = push.push(Store.open(home.root), "grp", [o.id])
     assert r["pr"]["number"] == 1 and r["pr"]["base"] == "main" and r["branch"].startswith("kb/ks-")
     body = [c for c in FakeForge.calls if c[0] == "POST" and c[1].endswith("/pulls")][0][3]["body"]
     assert "Noisy run" in body and "What accepting it would do" in body           # reviewers see a rendering
     assert git(ex, "branch", "--show-current").strip() == "main"
     assert r["branch"] in git(bare, "branch", "--list")
-    assert o.id not in KB.open(group.root).records                                # waits for review on the forge
+    assert o.id not in Store.open(group.root).items                                # waits for review on the forge
     # After the PR is merged, the group store imports the bundle.
     git(ex, "merge", "-q", "--ff-only", r["branch"])
-    out = bundle.import_dir(KB.open(group.root), ex, accept_all=True)
-    assert out[0]["status"] == "accepted" and o.id in KB.open(group.root).records
-    assert bundle.import_dir(KB.open(group.root), ex)[0]["status"] == "accepted"   # idempotent
+    out = bundle.import_dir(Store.open(group.root), ex, accept_all=True)
+    assert out[0]["status"] == "accepted" and o.id in Store.open(group.root).items
+    assert bundle.import_dir(Store.open(group.root), ex)[0]["status"] == "accepted"   # idempotent

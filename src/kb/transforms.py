@@ -16,9 +16,9 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import store
+from . import content
 from .errors import KBError
-from .records import KB, Record
+from .items import Store, Item
 
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -236,7 +236,7 @@ def builtin() -> list[Transform]:
     ]
 
 
-def registry(kb: KB) -> list[Transform]:
+def registry(kb: Store) -> list[Transform]:
     out = builtin()
     for name, conf in kb.cfg.transforms.items():
         if "command" not in conf:
@@ -253,7 +253,7 @@ def registry(kb: KB) -> list[Transform]:
     return out
 
 
-def choose(kb: KB, media_type: str, name: str | None = None) -> Transform:
+def choose(kb: Store, media_type: str, name: str | None = None) -> Transform:
     candidates = registry(kb)
     if name:
         for t in candidates:
@@ -269,7 +269,7 @@ def choose(kb: KB, media_type: str, name: str | None = None) -> Transform:
     return usable[0]
 
 
-def extract(kb: KB, rec: Record, source: str | None = None, transform: str | None = None,
+def extract(kb: Store, rec: Item, source: str | None = None, transform: str | None = None,
             name: str = "text", force: bool = False) -> dict:
     """Derive rendition *name* from *source* (default: the first original)."""
     rec = kb.get(rec.id)          # the stored version, whatever the caller holds
@@ -284,9 +284,9 @@ def extract(kb: KB, rec: Record, source: str | None = None, transform: str | Non
         if existing.get("source_sha256") == src_r.get("sha256"):
             raise KBError(f"{rec.id}#{name} exists and is up to date (use --force to redo)")
     t = choose(kb, src_r["media_type"], transform)
-    src = store.resolve(kb, rec, src_r)
+    src = content.resolve(kb, rec, src_r)
     if src is None:
-        raise KBError(f"{rec.id}#{source} is not reachable from here (no git/blob/cache copy, URL unfetchable)")
+        raise KBError(f"{rec.id}#{source} is not reachable from here (not in the store, a content store or the cache, and no fetchable URL)")
 
     filename = name + t.suffix
     kb.cfg.kbdir.mkdir(parents=True, exist_ok=True)
@@ -296,7 +296,7 @@ def extract(kb: KB, rec: Record, source: str | None = None, transform: str | Non
         if not out.is_file():
             raise KBError(f"transform {t.name} produced nothing")
         with kb.tx():
-            locs, sha, size = store.place(kb, out, filename)
+            locs, sha, size = content.place(kb, out, filename)
             if locs and locs[0]["type"] == "local":
                 raise KBError(f"{filename} is too large for the database and no content store is configured")
             derived = {
@@ -309,5 +309,5 @@ def extract(kb: KB, rec: Record, source: str | None = None, transform: str | Non
                 derived.pop("source_sha256")
             data = copy.deepcopy(rec.data)
             data["renditions"] = [r for r in data.get("renditions", []) if r["name"] != name] + [derived]
-            kb.save(Record(data, kb), "extract", {"rendition": name, "transform": t.name})
+            kb.save(Item(data, kb), "extract", {"rendition": name, "transform": t.name})
     return derived

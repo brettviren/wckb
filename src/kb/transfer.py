@@ -9,8 +9,8 @@ knowledge travels between people, machines and review queues.  Both sides
 log the transfer as events (``transfer-out``, ``transfer-in``).
 
 The same item can arrive along several paths, possibly changed on one of
-them.  An item's *core* (what a source record asserts; see
-``checks.IMMUTABLE``) must be identical wherever it travels: a different
+them.  An item's *core* (what a primary item asserts; see
+``items.IMMUTABLE``) must be identical wherever it travels: a different
 core is a conflict, and the whole transfer is refused.  Its mutable fields
 (status, summary, subject, tags, evidence, related, ...) are reconciled:
 lists are united; for single values the receiver keeps its own unless the
@@ -24,11 +24,11 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import store
+from . import content
 from .config import access_rank
 from .errors import KBError
 from .ids import parse_ref
-from .records import KB, Record, blob_shas, canonical, core, fixed_compatible, is_frozen, now
+from .items import Store, Item, blob_shas, canonical, core, fixed_compatible, is_frozen, now
 REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "related")
 MUTABLE_LISTS = ("subject", "tags", "evidence", "related")
 MUTABLE_SCALARS = ("status", "summary", "license")
@@ -64,7 +64,7 @@ def expand(kset: dict, lookup: Callable[[str], dict | None]) -> Expansion:
     them (the fields in ``follow``), recursively.  A member, or a reference
     reached deeply, that is itself a set contributes its members, at its own
     depth (``nested = "follow"``, the default) or at the depth in force where
-    it was reached (``nested = "inherit"``).  Missing records are reported,
+    it was reached (``nested = "inherit"``).  Missing items are reported,
     not fatal: references are store-independent.
     """
     nested = kset.get("nested", "follow")
@@ -114,11 +114,11 @@ def _strip(d: dict) -> dict:
 
 
 @dataclass
-class Item:
+class PlanEntry:
     id: str
     action: str                   # new | update | same | conflict
     data: dict
-    src: Record
+    src: Item
     notes: list[str] = field(default_factory=list)
 
 
@@ -130,13 +130,13 @@ def _core_differs(a: dict, b: dict) -> list[str]:
     return diff
 
 
-def classify(incoming: dict, src: Record, existing: Record | None, sender_id: str, prefer: str) -> Item:
+def classify(incoming: dict, src: Item, existing: Item | None, sender_id: str, prefer: str) -> PlanEntry:
     """What arriving *incoming* means for a store holding *existing*.
 
     prefer: ours | theirs | newer (by the stores' last-update times; for twins).
     """
     if existing is None:
-        return Item(src.id, "new", incoming, src)
+        return PlanEntry(src.id, "new", incoming, src)
     mine = existing.data
     same_path = mine.get("origin", {}).get("store") == sender_id
     if prefer == "newer":
@@ -146,7 +146,7 @@ def classify(incoming: dict, src: Record, existing: Record | None, sender_id: st
     if is_frozen(mine) or is_frozen(incoming):
         diff = _core_differs(mine, incoming)
         if diff:
-            return Item(src.id, "conflict", incoming, src,
+            return PlanEntry(src.id, "conflict", incoming, src,
                         [f"what the item asserts differs ({', '.join(diff)}): two different items share this ID, "
                          "or a source was changed outside kb somewhere"])
         merged = copy.deepcopy(mine)
@@ -176,14 +176,14 @@ def classify(incoming: dict, src: Record, existing: Record | None, sender_id: st
         if theirs and "origin" in incoming:
             merged["origin"] = incoming["origin"]
         if canonical(_strip(merged)) == canonical(_strip(mine)):
-            return Item(src.id, "same", merged, src, notes)
-        return Item(src.id, "update", merged, src, notes)
+            return PlanEntry(src.id, "same", merged, src, notes)
+        return PlanEntry(src.id, "update", merged, src, notes)
     # Editable items (topics, views, drafts, persons): replaced whole, or not at all.
     if canonical(_strip(mine)) == canonical(_strip(incoming)):
-        return Item(src.id, "same", mine, src)
+        return PlanEntry(src.id, "same", mine, src)
     if theirs:
-        return Item(src.id, "update", incoming, src)
-    return Item(src.id, "conflict", incoming, src,
+        return PlanEntry(src.id, "update", incoming, src)
+    return PlanEntry(src.id, "conflict", incoming, src,
                 ["an editable item that diverged along different paths; keep ours, or transfer with prefer=theirs"])
 
 
@@ -197,21 +197,21 @@ def _merge_asset(merged: dict, incoming: dict) -> None:
             continue
         if not mine.get("digest") and v.get("digest"):
             mine.update(digest=v["digest"], files=v.get("files", []))
-        for e in v.get("seen", []):
-            if e not in mine.setdefault("seen", []):
-                mine["seen"].append(e)
+        for e in v.get("sightings", []):
+            if e not in mine.setdefault("sightings", []):
+                mine["sightings"].append(e)
     names = {b["name"] for b in merged.setdefault("bindings", [])}
     merged["bindings"] += [copy.deepcopy(b) for b in incoming.get("bindings", []) if b["name"] not in names]
 
 
 # -- the transfer -----------------------------------------------------------------
 
-def state(rec: Record) -> str:
+def state(rec: Item) -> str:
     """Digest plus mutable fields: what a repeated transfer would change."""
     return hashlib.sha256(canonical([rec.digest(), {k: rec.data.get(k) for k in MUTABLE}])).hexdigest()
 
 
-def ledger(kb: KB) -> list[dict]:
+def ledger(kb: Store) -> list[dict]:
     """Transfers out of and into *kb*, oldest first."""
     out = []
     for e in kb.events():
@@ -221,7 +221,7 @@ def ledger(kb: KB) -> list[dict]:
     return out
 
 
-def _origin(sender, rec: Record, kset_id: str) -> dict:
+def _origin(sender, rec: Item, kset_id: str) -> dict:
     prev = rec.data.get("origin", {})
     path = list(prev.get("path") or ([prev["store"]] if prev.get("store") else []))
     o = {"store": sender.cfg.id, "name": sender.cfg.name, "scope": sender.cfg.scope,
@@ -231,7 +231,7 @@ def _origin(sender, rec: Record, kset_id: str) -> dict:
 
 @dataclass
 class Plan:
-    items: list[Item]
+    items: list[PlanEntry]
     expansion: Expansion
     dangling: list[str]
     relabeled: list[str] = field(default_factory=list)
@@ -248,19 +248,19 @@ class Plan:
         return {a: [i.id for i in self.items if i.action == a] for a in ("new", "update", "same", "conflict")}
 
 
-def plan(sender, dst: KB, kset: dict, *, prefer: str = "ours", access: str | None = None,
+def plan(sender, dst: Store, kset: dict, *, prefer: str = "ours", access: str | None = None,
          relabel: str | None = None) -> Plan:
     """What applying *kset* from *sender* (a store or a bundle) to *dst* would do."""
-    lookup = lambda i: sender.records[i].data if i in sender.records else None  # noqa: E731
+    lookup = lambda i: sender.items[i].data if i in sender.items else None  # noqa: E731
     exp = expand(kset, lookup)
     if exp.missing_members:
         raise KBError("set members not held by the sender: " + ", ".join(f"{i} (from {f})" for f, i in exp.missing_members)
                       + "; obtain them first (kb obtain) or leave them out")
     items, relabeled = [], []
     for ident in exp.items:
-        if ident not in sender.records:
+        if ident not in sender.items:
             continue  # the set itself, when the receiver made it (pulls)
-        rec = sender.records[ident]
+        rec = sender.items[ident]
         data = copy.deepcopy(rec.data)
         lvl = data.get("access", "group")
         if access_rank(lvl) > access_rank(dst.cfg.access):
@@ -272,17 +272,17 @@ def plan(sender, dst: KB, kset: dict, *, prefer: str = "ours", access: str | Non
             relabeled.append(ident)
         if sender.cfg.id != dst.cfg.id:      # twins are one store: provenance stays as it was
             data["origin"] = _origin(sender, rec, kset["id"])
-        items.append(classify(data, rec, dst.records.get(ident), sender.cfg.id, prefer))
+        items.append(classify(data, rec, dst.items.get(ident), sender.cfg.id, prefer))
     sent = {i.id for i in items} | {kset["id"]}
     dangling = []
     for it in items:
         for r in refs_of(it.data, REF_FIELDS):
-            if r not in sent and r not in dst.records and r not in dangling:
+            if r not in sent and r not in dst.items and r not in dangling:
                 dangling.append(r)
     return Plan(items, exp, dangling, relabeled)
 
 
-def _copy_content(sender, rec: Record, dst: KB, data: dict) -> list[str]:
+def _copy_content(sender, rec: Item, dst: Store, data: dict) -> list[str]:
     """Bring the bytes of the item's renditions into *dst* where the receiver keeps them."""
     warnings = []
     for sha in blob_shas(data):
@@ -296,24 +296,24 @@ def _copy_content(sender, rec: Record, dst: KB, data: dict) -> list[str]:
         sha = r.get("sha256")
         for loc in r.get("locations", []):
             if loc["type"] == "cas" and sha:
-                name = loc["store"] if dst.cfg.stores.get(loc["store"]) else store.default_store(dst)
-                if name is not None and store.blob_path(dst.cfg.stores[name], sha).exists():
-                    loc["store"] = name
+                name = loc["name"] if dst.cfg.cas.get(loc["name"]) else content.default_cas(dst)
+                if name is not None and content.blob_path(dst.cfg.cas[name], sha).exists():
+                    loc["name"] = name
                     continue
                 path = sender.resolve(rec, r) if hasattr(sender, "resolve") else None
                 if path is None or name is None:
                     warnings.append(f"{rec.id}#{r['name']}: large content stays at the sender's store "
-                                    f"({loc['store']}); the receiver can't reach it yet")
+                                    f"({loc['name']}); the receiver can't reach it yet")
                     continue
-                store.put_cas(dst, name, path, sha)
-                loc["store"] = name
+                content.put_cas(dst, name, path, sha)
+                loc["name"] = name
             elif loc["type"] == "local":
                 warnings.append(f"{rec.id}#{r['name']} is local-only; the copy points at {loc['host']}")
     return warnings
 
 
-def apply(sender, dst: KB, p: Plan, kset: dict, *, approved: str, edge: str, direction: str,
-          extra: list[Record] | None = None) -> dict:
+def apply(sender, dst: Store, p: Plan, kset: dict, *, approved: str, edge: str, direction: str,
+          extra: list[Item] | None = None) -> dict:
     """Write the plan into *dst* in one transaction (rolled back if any item fails its checks)."""
     from .checks import check_data
     warnings: list[str] = []
@@ -335,7 +335,7 @@ def _apply_tx(sender, dst, p, kset, approved, edge, direction, extra, warnings):
             warnings += _copy_content(sender, it.src, dst, it.data)
         dst.reload()
         for it in p.changes:
-            dst.save(Record(it.data, dst), "transfer-in", {"set": kset["id"], "from": sender.cfg.id,
+            dst.save(Item(it.data, dst), "transfer-in", {"set": kset["id"], "from": sender.cfg.id,
                                                             "action": it.action}, approved=approved)
         errors = [x for it in p.changes for x in check_data(dst, it.data) if x.level == "error"]
         if errors:
@@ -346,9 +346,9 @@ def _apply_tx(sender, dst, p, kset, approved, edge, direction, extra, warnings):
                       if i.action != "conflict"]}, approved=approved)
 
 
-def transfer(sender, dst: KB, kset: dict, *, prefer: str = "ours", access: str | None = None,
+def transfer(sender, dst: Store, kset: dict, *, prefer: str = "ours", access: str | None = None,
              relabel: str | None = None, approved: str = "human", edge: str = "", direction: str = "push",
-             dry_run: bool = False, extra: list[Record] | None = None, log_source: bool = True) -> dict:
+             dry_run: bool = False, extra: list[Item] | None = None, log_source: bool = True) -> dict:
     """Apply *kset* from *sender* to *dst*, atomically; log it on both sides."""
     p = plan(sender, dst, kset, prefer=prefer, access=access, relabel=relabel)
     report = {"set": kset["id"], "from": sender.cfg.name, "to": dst.cfg.name, "direction": direction,
@@ -366,7 +366,7 @@ def transfer(sender, dst: KB, kset: dict, *, prefer: str = "ours", access: str |
         report["result"] = "nothing to transfer"
         return report
     report.update(apply(sender, dst, p, kset, approved=approved, edge=edge, direction=direction, extra=extra))
-    if log_source and isinstance(sender, KB) and not sender.readonly:
+    if log_source and isinstance(sender, Store) and not sender.readonly:
         with sender.tx():
             sender.log_event("transfer-out", kset["id"], {
                 "to": edge, "store": dst.cfg.id, "to_name": dst.cfg.name, "direction": direction,

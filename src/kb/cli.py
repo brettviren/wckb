@@ -1,6 +1,6 @@
 """The ``kb`` command line.  Parses arguments, calls logic modules, renders.
 
-No data processing lives here: see records, authoring, checks, index, build...
+No data processing lives here: see items, authoring, checks, index, build...
 """
 
 import functools
@@ -23,13 +23,13 @@ class Ctx:
     @property
     def kb(self):
         if self._kb is None:
-            from .records import KB
+            from .items import Store
             try:
-                self._kb = KB.open(self.root)
+                self._kb = Store.open(self.root)
             except KBError as exc:
                 if "network filesystem" not in str(exc):
                     raise
-                self._kb = KB.open(self.root, readonly=True)   # reading is fine; writes will say why not
+                self._kb = Store.open(self.root, readonly=True)   # reading is fine; writes will say why not
         return self._kb
 
 
@@ -59,7 +59,7 @@ def command(group, *args, **kwargs):
 @click.version_option(__version__, prog_name="kb")
 @click.pass_context
 def main(ctx, root):
-    """kb: a shared, git-backed knowledge base for people and their LLMs.
+    """kb: knowledge stores shared by people and their LLMs.
 
     Start with: kb context SUBJECT, kb ls, kb search WORDS.  Every command
     has --help.  Docs: docs/howto/ in the kb source.
@@ -67,9 +67,9 @@ def main(ctx, root):
     ctx.obj = Ctx(root)
 
 
-# -- options shared by commands that make records -----------------------------
+# -- options shared by commands that make items -----------------------------
 
-def record_options(fn):
+def item_options(fn):
     opts = [
         click.option("--title", help="Short title."),
         click.option("--summary", help="1-3 sentences for the next reader (an LLM); not the title again."),
@@ -91,7 +91,7 @@ def record_options(fn):
         click.option("--derived-from", "derived_from", multiple=True, help="Input ref, for topics and views (repeatable)."),
         click.option("--license"),
         click.option("--set", "sets", multiple=True, help="Any field: key=value (JSON values parsed; dotted keys nest)."),
-        click.option("--via", help="Tool or session making the record (e.g. claude-code)."),
+        click.option("--via", help="Tool or session making the item (e.g. claude-code)."),
     ]
     for o in reversed(opts):
         fn = o(fn)
@@ -125,7 +125,7 @@ def _done(kb, rec, json_out=False):
         ui.info(f"stored {rec.kind} {rec.id} in {kb.cfg.name}")
 
 
-# -- making records -------------------------------------------------------------
+# -- making items -------------------------------------------------------------
 
 @command(main, "init")
 @click.argument("path", type=click.Path(file_okay=False, path_type=Path), default=".")
@@ -156,15 +156,15 @@ def init_cmd(path, scope, name, access, target, up, no_enact):
 
 @command(main, "new", no_args_is_help=True)
 @click.argument("kind", type=click.Choice(KINDS))
-@record_options
+@item_options
 @click.option("--text", help="Content (note.md, or page.md for topics).")
 @click.option("--text-file", type=click.Path(dir_okay=False, allow_dash=True), help="Content from a file (- for stdin).")
-@click.option("--slug", help="Readable ID suffix (person records only).")
-@click.option("--from-json", "from_json", type=click.File(), help="Partial record as JSON (- for stdin); kb fills the rest.")
-@click.option("--json", "json_out", is_flag=True, help="Print the record as JSON.")
+@click.option("--slug", help="Readable ID suffix (person items only).")
+@click.option("--from-json", "from_json", type=click.File(), help="Partial item as JSON (- for stdin); kb fills the rest.")
+@click.option("--json", "json_out", is_flag=True, help="Print the item as JSON.")
 @pass_ctx
 def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
-    """Make a new record of KIND.
+    """Make a new item of KIND.
 
     \b
       kb new observation --title "Noisy run 1234" --summary "..." \\
@@ -192,20 +192,20 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.argument("sources", nargs=-1, required=True)
 @click.option("--kind", default="document", type=click.Choice(["document", "dataset", "config", "snapshot", "software", "observation"]),
               show_default=True)
-@record_options
-@click.option("--store", "mode", default="auto", show_default=True,
+@item_options
+@click.option("--place", "mode", default="auto", show_default=True,
               type=click.Choice(["auto", "db", "cas", "local", "none"]),
               help="Where content goes: auto = in the store if small, else the content store (cas), else local-only.")
-@click.option("--store-name", help="Content store name (default: 'default').")
+@click.option("--cas", "cas_name", help="Content store (cas) to use (default: 'default').")
 @click.option("--url", help="Canonical URL of a single local file (e.g. Indico behind SSO).")
 @click.option("--no-fetch", is_flag=True, help="Record URLs without downloading (no hash).")
-@click.option("--supersedes", "supersedes", help="This is a new version of that record.")
+@click.option("--supersedes", "supersedes", help="This is a new version of that item.")
 @click.option("--extract", is_flag=True, help="Run kb extract afterwards.")
-@click.option("--force", is_flag=True, help="Add even if an identifier is already in the KB.")
+@click.option("--force", is_flag=True, help="Add even if an identifier is already in this store.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def add_cmd(c, sources, kind, mode, store_name, url, no_fetch, supersedes, extract, force, json_out, via, **kw):
-    """Add files or URLs as a new source record (default kind: document).
+def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract, force, json_out, via, **kw):
+    """Add files or URLs as a new primary item (default kind: document).
 
     \b
       kb add slides.pdf --url https://indico.example/... --set doctype=presentation \\
@@ -218,7 +218,7 @@ def add_cmd(c, sources, kind, mode, store_name, url, no_fetch, supersedes, extra
     fields = _fields(kw)
     if supersedes:
         fields["supersedes"] = [kb.get(supersedes).id]
-    rec = authoring.add(kb, kind, list(sources), fields, mode=mode, store_name=store_name, url=url,
+    rec = authoring.add(kb, kind, list(sources), fields, mode=mode, cas_name=cas_name, url=url,
                         fetch=not no_fetch, force=force, via=via)
     if extract:
         try:
@@ -231,13 +231,13 @@ def add_cmd(c, sources, kind, mode, store_name, url, no_fetch, supersedes, extra
 
 @command(main, "supersede", no_args_is_help=True)
 @click.argument("ref")
-@record_options
+@item_options
 @click.option("--text", help="The corrected content.")
 @click.option("--text-file", type=click.Path(dir_okay=False, allow_dash=True))
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
 def supersede_cmd(c, ref, text, text_file, json_out, via, **kw):
-    """Correct a record: a new one that supersedes REF (fields inherited unless given)."""
+    """Correct an item: a new one that supersedes REF (fields inherited unless given)."""
     from .authoring import supersede
     kb = c.kb
     _done(kb, supersede(kb, ref, _fields(kw), _text(text, text_file), via=via), json_out)
@@ -270,9 +270,9 @@ def retract_cmd(c, ref, reason, by, evidence, via):
 @click.option("--replace-ref", multiple=True, help="OLD=NEW in derived_from, evidence and related.")
 @pass_ctx
 def set_cmd(c, ref, assignments, adds, removes, replace_ref):
-    """Change fields of a record, within policy (key=value; key=null deletes).
+    """Change fields of an item, within policy (key=value; key=null deletes).
 
-    On source records only status, subject, tags, summary, evidence, related,
+    On primary items only status, subject, tags, summary, evidence, related,
     identifiers and license may change; the rest needs kb supersede.
     """
     from .edit import set_fields
@@ -282,7 +282,7 @@ def set_cmd(c, ref, assignments, adds, removes, replace_ref):
 
 @main.group("rendition")
 def rendition_grp():
-    """Renditions of a record."""
+    """Renditions of an item."""
 
 
 @command(rendition_grp, "add", no_args_is_help=True)
@@ -305,15 +305,15 @@ def rendition_add_cmd(c, ref, file, name, role, fidelity, source, tool, media_ty
 
 @command(rendition_grp, "locate", no_args_is_help=True)
 @click.argument("ref")
-@click.option("--store", "store_name", help="Copy into this content store (the default one if neither option is given).")
+@click.option("--cas", "cas_name", help="Copy into this content store (the default one if neither option is given).")
 @click.option("--url", help="Add this URL as a mirror (fetched and hash-checked).")
 @click.option("--file", type=click.Path(dir_okay=False, exists=True, path_type=Path),
               help="Local copy to store, when the content is not reachable otherwise.")
 @pass_ctx
-def rendition_locate_cmd(c, ref, store_name, url, file):
+def rendition_locate_cmd(c, ref, cas_name, url, file):
     """Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must match its hash."""
     from .edit import add_location
-    loc = add_location(c.kb, ref, store_name, url, file)
+    loc = add_location(c.kb, ref, cas_name, url, file)
     click.echo(json.dumps(loc))
 
 
@@ -337,7 +337,7 @@ def extract_cmd(c, ref, source, transform, name, force, all_stale):
             click.echo(f"{s.id}#{s.rendition}")
         return
     if not ref:
-        raise KBError("give a record or --stale")
+        raise KBError("give an item or --stale")
     r = transforms.extract(kb, kb.get(ref), source, transform, name, force)
     click.echo(f"{kb.get(ref).id}#{r['name']}")
     ui.info(f"{r['transform']['name']} {r['transform'].get('version', '')}: {r['size']} bytes, fidelity {r['fidelity']}")
@@ -363,16 +363,16 @@ def transforms_cmd(c, json_out):
 
 @command(main, "show", no_args_is_help=True)
 @click.argument("ref")
-@click.option("--json", "json_out", is_flag=True, help="The record JSON.")
+@click.option("--json", "json_out", is_flag=True, help="The item JSON.")
 @pass_ctx
 def show_cmd(c, ref, json_out):
-    """Show one record."""
-    from .context import _Out, _record_context
+    """Show one item."""
+    from .context import _Out, _item_context
     kb = c.kb
     rec = kb.get(ref)
     if json_out:
         return ui.emit_json(rec.data)
-    click.echo(_record_context(kb, rec, _Out(10**9)), nl=False)
+    click.echo(_item_context(kb, rec, _Out(10**9)), nl=False)
 
 
 @command(main, "ls")
@@ -381,7 +381,7 @@ def show_cmd(c, ref, json_out):
 @click.option("--runs", help="Overlapping run range: N or FIRST-LAST.")
 @click.option("--status", type=click.Choice(["draft", "unverified", "verified", "disputed"]))
 @click.option("--since", help="Created on or after (date).")
-@click.option("--all", "include_old", is_flag=True, help="Include superseded and retracted records.")
+@click.option("--all", "include_old", is_flag=True, help="Include superseded and retracted items.")
 @click.option("--limit", type=int)
 @click.option("-l", "--long", is_flag=True, help="Show summaries.")
 @click.option("--subjects", is_flag=True, help="List subject paths in use, with counts.")
@@ -390,12 +390,12 @@ def show_cmd(c, ref, json_out):
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
 def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subjects, reach, only, json_out):
-    """List records (current ones unless --all), newest first."""
-    from . import index
+    """List items (current ones unless --all), newest first."""
+    from . import query
     from .context import parse_run_window
     kb = c.kb
     if subjects:
-        counts = index.subjects(kb)
+        counts = query.subjects(kb)
         if json_out:
             return ui.emit_json(counts)
         for subj, n in counts.items():
@@ -407,18 +407,18 @@ def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subj
                   include_old=include_old, since=since, limit=limit)
         if json_out:
             return ui.emit_json(rows)
-        return ui.records(rows, long, with_store=True)
-    rows = index.ls(kb, kind, subject, parse_run_window(runs), status, include_old, since, limit)
+        return ui.item_list(rows, long, with_store=True)
+    rows = query.ls(kb, kind, subject, parse_run_window(runs), status, include_old, since, limit)
     if json_out:
         return ui.emit_json(rows)
-    ui.records(rows, long)
+    ui.item_list(rows, long)
 
 
 @command(main, "search", no_args_is_help=True)
 @click.argument("words", nargs=-1, required=True)
 @click.option("-s", "--semantic", "mode", flag_value="semantic", help="Match meaning (needs kb embed).")
 @click.option("--hybrid", "mode", flag_value="hybrid", help="Fuse word and meaning matches.")
-@click.option("--all", "include_old", is_flag=True, help="Include superseded records.")
+@click.option("--all", "include_old", is_flag=True, help="Include superseded items.")
 @click.option("--limit", default=20, show_default=True)
 @click.option("--reach", default=0, help="Also search neighbor stores up to this many hops away.")
 @click.option("--in", "only", multiple=True, help="Also search this neighbor store (repeatable).")
@@ -431,20 +431,20 @@ def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
     if json_out:
         return ui.emit_json(rows)
     for r in rows:
-        click.echo(ui.record_line(r, store=r["store"] if (reach or only) else None))
+        click.echo(ui.item_line(r, store=r["store"] if (reach or only) else None))
         if r.get("snip"):
             click.echo(f"{'':<{29 if (reach or only) else 16}} {' '.join(r['snip'].split())}")
 
 
 @command(main, "context", no_args_is_help=True)
 @click.argument("target", nargs=-1, required=True)
-@click.option("--runs", help="Only records valid for these runs: N or FIRST-LAST.")
+@click.option("--runs", help="Only items valid for these runs: N or FIRST-LAST.")
 @click.option("--budget", default=12000, show_default=True, help="Maximum characters of output.")
 @click.option("--reach", default=0, help="Also include neighbor stores up to this many hops away.")
 @click.option("--in", "only", multiple=True, help="Also include this neighbor store (repeatable).")
 @pass_ctx
 def context_cmd(c, target, runs, budget, reach, only):
-    """What the KB knows about a subject, a record, or some words; compact markdown for LLMs."""
+    """What the KB knows about a subject, an item, or some words; compact markdown for LLMs."""
     from .context import parse_run_window
     from .federated import context
     click.echo(context(c.kb, " ".join(target), parse_run_window(runs), budget, reach, list(only)), nl=False)
@@ -467,9 +467,9 @@ def path_cmd(c, ref, no_fetch):
 @pass_ctx
 def verify_cmd(c, refs, record, json_out):
     """Re-fetch URL originals and compare with their recorded sha256."""
-    from .store import verify
+    from .content import verify
     kb = c.kb
-    recs = [kb.get(r) for r in refs] if refs else list(kb.records.values())
+    recs = [kb.get(r) for r in refs] if refs else list(kb.items.values())
     report = verify(kb, recs, record)
     if json_out:
         return ui.emit_json(report)
@@ -487,14 +487,14 @@ def verify_cmd(c, refs, record, json_out):
 @click.option("-t", "--transitive", is_flag=True)
 @pass_ctx
 def deps_cmd(c, ref, reverse, transitive):
-    """Inputs of a record, or (-r) the records built on it."""
+    """Inputs of an item, or (-r) the items built on it."""
     from . import graph
     kb = c.kb
     ident = kb.get(ref).id
     ids = graph.rdeps(kb, ident, transitive) if reverse else graph.deps(kb, ident, transitive)
     for i in ids:
-        r = kb.records.get(i)
-        click.echo(ui.record_line({"id": i, "kind": r.kind if r else "?", "status": r.data.get("status") if r else None,
+        r = kb.items.get(i)
+        click.echo(ui.item_line({"id": i, "kind": r.kind if r else "?", "status": r.data.get("status") if r else None,
                                    "title": r.data.get("title") if r else "(missing)",
                                    "current": kb.is_current(i)}))
 
@@ -522,7 +522,7 @@ def schema_cmd(kind, markdown):
         click.echo(f"schema revision {schema.REVISION}")
         for k in KINDS:
             click.echo(f"  {k:<12} {schema.show(k).get('description', '')[:100]}")
-        click.echo("shared definitions: kb schema common;  common fields: kb schema record")
+        click.echo("shared definitions: kb schema common;  common fields: kb schema item")
         return
     ui.emit_json(schema.show(kind))
 
@@ -606,8 +606,7 @@ def stamp_cmd(c, refs):
 @pass_ctx
 def reindex_cmd(c):
     """Rebuild the store's query tables (search, subjects, runs, references) from the items."""
-    from .index import build
-    n = build(c.kb)
+    n = c.kb.reindex()
     ui.info(f"reindexed {n} items")
 
 
@@ -636,7 +635,7 @@ def build_cmd(c, refs, only_stale, world, publish_too):
         if world:
             report = build.world(kb, ui.info, publish_too)
         else:
-            stale = [r.id for r in kb.records.values() if r.kind == "view" and build.view_staleness(kb, r)]
+            stale = [r.id for r in kb.items.values() if r.kind == "view" and build.view_staleness(kb, r)]
             report = {"built": [], "failed": [], "published": []}
             for vid in graph.topo_order(kb, stale):
                 try:
@@ -675,7 +674,7 @@ def publish_cmd(c, refs):
 
 @main.group("export")
 def export_grp():
-    """Export records in community formats."""
+    """Export items in community formats."""
 
 
 @command(export_grp, "rocrate", no_args_is_help=True)
@@ -702,10 +701,10 @@ def datapackage_cmd(c, ref):
 @click.option("--dry-run", is_flag=True)
 @pass_ctx
 def migrate_cmd(c, dry_run):
-    """Upgrade every record to this kb's schema version (one reviewable change)."""
+    """Upgrade every item to this kb's schema version (in one transaction)."""
     from .migrate import migrate
     ids = migrate(c.kb, dry_run=dry_run)
-    ui.info(f"{'would migrate' if dry_run else 'migrated'} {len(ids)} record(s)")
+    ui.info(f"{'would migrate' if dry_run else 'migrated'} {len(ids)} item(s)")
     for i in ids:
         click.echo(i)
 
@@ -718,14 +717,14 @@ def hook_grp():
 @hook_grp.command("check")
 @pass_ctx
 def hook_check_cmd(c):
-    """PostToolUse: check the record just edited; problems go back to Claude (exit 2)."""
+    """PostToolUse: validate an edit Claude made in a kb checkout; problems go back to Claude (exit 2)."""
     _hook_check(c)
 
 
 @hook_grp.command("recall")
 @pass_ctx
 def hook_recall_cmd(c):
-    """UserPromptSubmit: print the few records that look relevant to the prompt."""
+    """UserPromptSubmit: print the few items that look relevant to the prompt."""
     from .hooks import run
     _, text = run("recall", sys.stdin.read(), c.root)
     if text:
@@ -763,19 +762,19 @@ def neighbor_list_cmd(c, depth, json_out):
     click.echo(f"here: {kb.cfg.name} ({kb.cfg.scope}, access {kb.cfg.access}, id {kb.cfg.id})")
     for r in rows:
         avail = "" if r.get("available", True) else "  [not available here: kb neighbor fetch, or add --path]"
-        extra = f"{r.get('scope', '?')}, access {r.get('access', '?')}, {r.get('records', '?')} records"
+        extra = f"{r.get('scope', '?')}, access {r.get('access', '?')}, {r.get('items', '?')} items"
         click.echo(f"{'  ' * r['distance']}{r['label']:<24} {r['relation']:<5} {extra}{avail}")
 
 
 @command(neighbor_grp, "add", no_args_is_help=True)
 @click.argument("name")
 @click.option("--relation", default="up", type=click.Choice(["up", "peer", "down", "twin"]), show_default=True,
-              help="up: broader; down: narrower; peer: sibling; twin: another clone of this same store (git sync).")
+              help="up: broader; down: narrower; peer: sibling; twin: a copy of this same store (kb sync).")
 @click.option("--path", help="The store's directory on this machine (needed to write to it).")
 @click.option("--url", help="A published read-only snapshot of it (kb neighbor fetch downloads it).")
 @click.option("--exchange", type=click.Path(file_okay=False, exists=True),
               help="Land 'pr': a git clone of the neighbor's bundle exchange repository.")
-@click.option("--shared", is_flag=True, help="Declare it for everyone (neighbors.toml); default is this clone only.")
+@click.option("--shared", is_flag=True, help="Declare it in the store's settings, for everyone; default is this machine only (.kb/local.toml).")
 @click.option("--land", "--mode", "mode", default="apply", type=click.Choice(["apply", "inbox", "pr"]),
               show_default=True, help="How pushes land there: applied, into its inbox for review, or as a pull request.")
 @click.option("--push", "push_form", type=click.Choice(["select", "all", "none"]),
@@ -786,7 +785,7 @@ def neighbor_list_cmd(c, depth, json_out):
 @click.option("--prefer", type=click.Choice(["ours", "theirs", "newer"]),
               help="Who wins on mutable fields when the same item arrives changed along another path.")
 @click.option("--relabel", type=click.Choice(["public", "collaboration", "group", "private"]),
-              help="Access level that more restricted records may be relabelled to when pushed here.")
+              help="Access level that more restricted items may be relabelled to when pushed here.")
 @click.option("--description", default="")
 @pass_ctx
 def neighbor_add_cmd(c, name, relation, path, url, exchange, shared, mode, push_form, pull_form, accept,
@@ -811,7 +810,7 @@ def neighbor_remove_cmd(c, name):
 @click.argument("names", nargs=-1)
 @pass_ctx
 def neighbor_fetch_cmd(c, names):
-    """Clone or update URL-only neighbors (read-only copies in the cache)."""
+    """Download (or refresh) the published snapshots of URL-only neighbors, into the cache."""
     from .federation import fetch
     for name, what in fetch(c.kb, list(names) or None):
         click.echo(f"{name}: {what}")
@@ -819,11 +818,11 @@ def neighbor_fetch_cmd(c, names):
 
 @command(main, "candidates", no_args_is_help=True)
 @click.option("--to", "target", required=True, help="Neighbor to promote to.")
-@click.option("--all", "include_all", is_flag=True, help="Include records already pushed and unchanged.")
+@click.option("--all", "include_all", is_flag=True, help="Include items already pushed and unchanged.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
 def candidates_cmd(c, target, include_all, json_out):
-    """Records worth pushing to a neighbor, best first, with reasons and blockers."""
+    """Items worth pushing to a neighbor, best first, with reasons and blockers."""
     from .push import candidates
     rows = candidates(c.kb, target, include_all)
     if json_out:
@@ -845,16 +844,16 @@ def candidates_cmd(c, target, include_all, json_out):
               help="Nested knowledge sets: use their own depth, or this one.")
 @click.option("--all", "all_items", is_flag=True, help="Send every new or changed item (the 'all' form).")
 @click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
-              help="Relabel more restricted records to this level in the copy (a deliberate human decision).")
+              help="Relabel more restricted items to this level in the copy (a deliberate human decision).")
 @click.option("--land", "--mode", "mode", type=click.Choice(["apply", "inbox", "pr"]),
               help="Override how it lands there: applied, its inbox, or a pull request (the edge's default otherwise).")
 @click.option("--approved", help="The human's approval, in their words (needed by agents under 'ask' autonomy).")
 @click.option("--title", help="Title of the knowledge set made for this transfer.")
-@click.option("--message", "-m", help="Commit message in the receiving store.")
+@click.option("--message", "-m", help="A note for the receiver (the bundle's note, or the pull request's title).")
 @click.option("--dry-run", is_flag=True)
 @pass_ctx
 def push_cmd(c, refs, target, deep, nested, all_items, access, mode, approved, title, message, dry_run):
-    """Send knowledge to a neighbor: records (a new knowledge set is made of them), a ks- set, or --all.
+    """Send knowledge to a neighbor: items (a new knowledge set is made of them), a ks- set, or --all.
 
     \b
       kb push --to home obs-... obs-...            # shallow: just these
@@ -880,7 +879,7 @@ def push_cmd(c, refs, target, deep, nested, all_items, access, mode, approved, t
 @click.option("--dry-run", is_flag=True)
 @pass_ctx
 def pull_cmd(c, refs, source, deep, nested, all_items, land, approved, message, dry_run):
-    """Receive knowledge from a neighbor (with no records named, the edge's pull form decides)."""
+    """Receive knowledge from a neighbor (with no items named, the edge's pull form decides)."""
     from .push import pull
     ui.emit_json(pull(c.kb, source, list(refs), deep=deep, nested=nested, all_items=all_items,
                       approved=approved, dry_run=dry_run, land=land, message=message))
@@ -888,16 +887,16 @@ def pull_cmd(c, refs, source, deep, nested, all_items, land, approved, message, 
 
 @command(main, "obtain")
 @click.argument("refs", nargs=-1)
-@click.option("--dangling", is_flag=True, help="Every record referenced here but not present.")
+@click.option("--dangling", is_flag=True, help="Every item referenced here but not present.")
 @click.option("--deep", is_flag=True)
 @click.option("--approved")
 @click.option("--dry-run", is_flag=True)
 @pass_ctx
 def obtain_cmd(c, refs, dangling, deep, approved, dry_run):
-    """Fetch referenced records from the nearest reachable store that has them."""
+    """Fetch referenced items from the nearest reachable store that has them."""
     from .push import obtain
     if not refs and not dangling:
-        raise KBError("name records, or --dangling")
+        raise KBError("name items, or --dangling")
     ui.emit_json(obtain(c.kb, list(refs), deep=deep, dangling=dangling, approved=approved, dry_run=dry_run))
 
 
@@ -932,7 +931,7 @@ def transfers_cmd(c, limit, json_out):
 
 @main.group("kset")
 def kset_grp():
-    """Knowledge sets: selections of records, the unit of transfer."""
+    """Knowledge sets: selections of items, the unit of transfer."""
 
 
 @command(kset_grp, "new", no_args_is_help=True)
@@ -959,7 +958,7 @@ def kset_expand_cmd(c, ref, json_out):
     """The items a knowledge set denotes here, and what it references that is missing."""
     from .transfer import expand
     kb = c.kb
-    e = expand(kb.get(ref).data, lambda i: kb.records[i].data if i in kb.records else None)
+    e = expand(kb.get(ref).data, lambda i: kb.items[i].data if i in kb.items else None)
     out = {"items": e.items, "missing": [{"from": f, "id": i, "member": m} for f, i, m in e.missing]}
     if json_out:
         return ui.emit_json(out)
@@ -1004,7 +1003,7 @@ def config_set_cmd(c, key, value):
     """Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
 
     \b
-      kb config set stores.default '{"path": "/eos/group/kb-cas"}'
+      kb config set cas.default '{"path": "/eos/group/kb-cas"}'
       kb config set views.publish_path /eos/group/www/kb
       kb config set links.indico https://indico.example.org
     """
@@ -1065,7 +1064,7 @@ def content_cmd(c, ref, name, file):
 @click.argument("directory", required=False, type=click.Path(file_okay=False, path_type=Path))
 @pass_ctx
 def checkout_cmd(c, ref, directory):
-    """Write an item (record.json) and its content files into a directory for editing."""
+    """Write an item (item.json) and its content files into a directory for editing."""
     from .edit import checkout
     click.echo(checkout(c.kb, ref, directory))
 
@@ -1077,9 +1076,9 @@ def checkout_cmd(c, ref, directory):
 def checkin_cmd(c, directory, dry_run):
     """Apply a checkout's changes (fields within policy, changed/added/removed content files)."""
     from .edit import CHECKOUT_MARK, checkin
-    from .records import KB
+    from .items import Store
     mark = json.loads((directory / CHECKOUT_MARK).read_text()) if (directory / CHECKOUT_MARK).exists() else {}
-    kb = KB.open(Path(mark["store"])) if mark.get("store") and c.root is None else c.kb
+    kb = Store.open(Path(mark["store"])) if mark.get("store") and c.root is None else c.kb
     ui.emit_json(checkin(kb, directory, dry_run))
 
 
@@ -1090,7 +1089,7 @@ def checkin_cmd(c, directory, dry_run):
 def edit_cmd(c, ref, what):
     """Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy."""
     from .edit import edit
-    ui.emit_json(edit(c.kb, ref, what or "record"))
+    ui.emit_json(edit(c.kb, ref, what or "item"))
 
 
 @command(main, "render", no_args_is_help=True)
@@ -1220,7 +1219,7 @@ def asset_scan_cmd(c, ref, only, no_remote, do_register, keep, json_out):
     rows = [s.as_dict() for s in seen]
     done = assets.register(kb, ref, seen, keep=keep) if do_register else None
     if json_out:
-        return ui.emit_json({"seen": rows, "registered": done})
+        return ui.emit_json({"offers": rows, "registered": done})
     for r in rows:
         ver = f" = {r['version']}" if r["version"] else ""
         nat = f" [{r['native']}]" if r["native"] else ""
@@ -1259,7 +1258,7 @@ def asset_versions_cmd(c, ref, json_out):
         return ui.emit_json(vs)
     for v in vs:
         total = sum(f.get("size") or 0 for f in v.get("files", []))
-        seen = ", ".join(sorted({s["binding"] + (f"[{s['native']}]" if s.get("native") else "") for s in v.get("seen", [])}))
+        seen = ", ".join(sorted({s["binding"] + (f"[{s['native']}]" if s.get("native") else "") for s in v.get("sightings", [])}))
         click.echo(f"{v['label']:<10} {len(v.get('files', [])):>4} file(s) {size(total):>10}  "
                    f"{when(v.get('registered')):<22} seen in: {seen or '-'}")
 
@@ -1481,7 +1480,7 @@ def review_accept_cmd(c, ref, note, access, approved):
 @click.option("--approved")
 @pass_ctx
 def review_reject_cmd(c, ref, reason, approved):
-    """Reject, saying why (the sender can see it in the bundle's record here)."""
+    """Reject, saying why (kept with the inbox entry and in the store's history)."""
     from . import bundle as bundles
     e = bundles.reject(c.kb, ref, reason, approved)
     click.echo(f"{e.bundle[:12]} {e.status}")
@@ -1954,8 +1953,8 @@ def policy_autonomy_cmd(c, assignments):
     kb = c.kb
     if assignments:
         set_autonomy(kb, list(assignments))
-        from .records import KB
-        kb = KB.open(kb.root)
+        from .items import Store
+        kb = Store.open(kb.root)
     from .federation import neighbors
     for key in ("capture", "review", "curate", "policy", "pull", "accept", "merge"):
         if key in kb.cfg.autonomy:

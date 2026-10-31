@@ -6,9 +6,9 @@ the most valuable thing in the KB, and the easiest to let drift.
 
 ## Rules
 
-- Every factual sentence cites a record: `Run 1243 was noisy [obs-1kfvnqgzgv].`
-- Every cited record is in `derived_from`.
-- Cite current records. If you mention history, cite the old record
+- Every factual sentence cites an item: `Run 1243 was noisy [obs-1kfvnqgzgv].`
+- Every cited item is in `derived_from`.
+- Cite current items. If you mention history, cite the old item
   *as history*: "earlier placed in run 1234 [obs-old], corrected to 1243
   [obs-new]".
 - After every edit: `kb stamp TOPIC`. This pins each input's digest, so
@@ -41,6 +41,6 @@ input, so `kb stale` can tell when the topic needs revising again.
 
 ## When to make one
 
-`kb ls --subjects` shows record counts per subject. A subject with more
-than a handful of records and no topic is a gap. The `kb-curate` skill
+`kb ls --subjects` shows item counts per subject. A subject with more
+than a handful of items and no topic is a gap. The `kb-curate` skill
 looks for these.

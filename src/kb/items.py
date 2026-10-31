@@ -2,7 +2,7 @@
 
 An item is a JSON object validated by JSON Schema, exactly as before; it now
 lives in the ``items`` table of the store's SQLite file (see ``kb.db``).
-``KB`` is the store: it loads items, writes them (validating, guarding,
+``Store`` is the store: it loads items, writes them (validating, guarding,
 keeping derived tables in step and logging an event), and holds the blobs
 that small content lives in.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import db as dbm
 from .errors import KBError
-from .ids import SOURCE_KINDS, parse_ref
+from .ids import PRIMARY_KINDS, parse_ref
 
 # Fields of a frozen item (source, released policy) that never change: what it asserts.
 IMMUTABLE = ("id", "kind", "created", "asserted_by", "creators", "date", "valid", "doctype",
@@ -71,7 +71,7 @@ def digest(data: dict) -> str:
 
 
 def is_frozen(data: dict) -> bool:
-    return data.get("kind") in SOURCE_KINDS or data.get("kind") == "asset" or (
+    return data.get("kind") in PRIMARY_KINDS or data.get("kind") == "asset" or (
         data.get("kind") == "policy" and data.get("stage") in ("released", "deprecated"))
 
 
@@ -103,10 +103,10 @@ def core_digest(data: dict) -> str:
     return hashlib.sha256(canonical(core(data))).hexdigest()
 
 
-class Record:
+class Item:
     """One knowledge item."""
 
-    def __init__(self, data: dict, kb: "KB | None" = None, updated_at: str | None = None):
+    def __init__(self, data: dict, kb: "Store | None" = None, updated_at: str | None = None):
         self.data = data
         self.kb = kb
         self.updated_at = updated_at
@@ -120,8 +120,8 @@ class Record:
         return self.data["kind"]
 
     @property
-    def is_source(self) -> bool:
-        return self.kind in SOURCE_KINDS
+    def is_primary(self) -> bool:
+        return self.kind in PRIMARY_KINDS
 
     @property
     def frozen(self) -> bool:
@@ -159,7 +159,7 @@ class Record:
         return None if b is None else b.decode("utf-8", errors="replace")
 
     def __repr__(self):
-        return f"Record({self.id})"
+        return f"Item({self.id})"
 
 
 def blob_shas(data: dict) -> list[str]:
@@ -172,9 +172,9 @@ def blob_shas(data: dict) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def text_of(kb: "KB", rec: Record) -> str:
+def text_of(kb: "Store", rec: Item) -> str:
     """Searchable text: the item's textual renditions held in the database."""
-    from .store import is_text
+    from .content import is_text
     parts = []
     for r in rec.renditions:
         if r["role"] == "source" or not is_text(r["media_type"]):
@@ -185,7 +185,7 @@ def text_of(kb: "KB", rec: Record) -> str:
     return "\n\n".join(parts)
 
 
-class KB:
+class Store:
     """A store: its settings, items, blobs and history in one SQLite file."""
 
     def __init__(self, root: Path, conn, cfg, readonly: bool):
@@ -196,7 +196,7 @@ class KB:
         self.tx = dbm.Tx(conn)
 
     @classmethod
-    def open(cls, root: Path | None = None, readonly: bool = False) -> "KB":
+    def open(cls, root: Path | None = None, readonly: bool = False) -> "Store":
         from . import config as config_mod
         from .schema import check_revision
         root = (root.resolve() if root else config_mod.find_root())
@@ -210,7 +210,7 @@ class KB:
         return cls(root, conn, cfg, readonly)
 
     @classmethod
-    def create(cls, root: Path, settings: dict) -> "KB":
+    def create(cls, root: Path, settings: dict) -> "Store":
         root.mkdir(parents=True, exist_ok=True)
         path = root / dbm.DB_NAME
         if path.exists():
@@ -252,36 +252,37 @@ class KB:
     # -- items ------------------------------------------------------------------
 
     @cached_property
-    def records(self) -> dict[str, Record]:
+    def items(self) -> dict[str, Item]:
+        """All items of the store, by ID."""
         out = {}
         for r in self.conn.execute("SELECT json, updated_at FROM items"):
             data = json.loads(r["json"])
-            out[data["id"]] = Record(data, self, r["updated_at"])
+            out[data["id"]] = Item(data, self, r["updated_at"])
         return out
 
     def reload(self) -> None:
-        for attr in ("records", "superseded_by"):
+        for attr in ("items", "superseded_by"):
             self.__dict__.pop(attr, None)
 
-    def get(self, ref: str) -> Record:
+    def get(self, ref: str) -> Item:
         ident, _ = parse_ref(ref)
         try:
-            return self.records[ident]
+            return self.items[ident]
         except KeyError:
-            raise KBError(f"no record {ident}") from None
+            raise KBError(f"no item {ident}") from None
 
     def exists(self, ref: str) -> bool:
         try:
             ident, rendition = parse_ref(ref)
         except KBError:
             return False
-        rec = self.records.get(ident)
+        rec = self.items.get(ident)
         return rec is not None and (rendition is None or rec.has_rendition(rendition))
 
     @cached_property
     def superseded_by(self) -> dict[str, list[str]]:
         out: dict[str, list[str]] = {}
-        for rec in self.records.values():
+        for rec in self.items.values():
             for ref in rec.data.get("supersedes", []) + rec.data.get("retracts", []):
                 out.setdefault(parse_ref(ref)[0], []).append(rec.id)
         return out
@@ -298,8 +299,8 @@ class KB:
             d = hashlib.sha256(f"{d}:{name}:{sha}".encode()).hexdigest()
         return d
 
-    def save(self, rec: Record, action: str = "set", detail: dict | None = None,
-             approved: str | None = None, actor: str | None = None, validate: bool = True) -> Record:
+    def save(self, rec: Item, action: str = "set", detail: dict | None = None,
+             approved: str | None = None, actor: str | None = None, validate: bool = True) -> Item:
         """Write an item (insert or update), keep derived tables in step, log the event."""
         from .schema import validate as schema_validate
         self._writable()
@@ -327,11 +328,11 @@ class KB:
             if "kb:" in str(exc):
                 raise KBError(f"{data['id']}: {exc}") from None
             raise
-        self.records[rec.id] = rec
+        self.items[rec.id] = rec
         self.__dict__.pop("superseded_by", None)
         return rec
 
-    def _index(self, rec: Record) -> None:
+    def _index(self, rec: Item) -> None:
         d, c, i = rec.data, self.conn, rec.id
         for t in ("subjects", "runs", "refs", "identifiers", "renditions"):
             c.execute(f"DELETE FROM {t} WHERE {'src' if t == 'refs' else 'id'} = ?", (i,))
@@ -355,18 +356,18 @@ class KB:
         with self.tx():
             for t in ("subjects", "runs", "refs", "identifiers", "renditions", "fts"):
                 self.conn.execute(f"DELETE FROM {t}")
-            for rec in self.records.values():
+            for rec in self.items.values():
                 self._index(rec)
-        return len(self.records)
+        return len(self.items)
 
-    def write_new(self, data: dict, approved: str | None = None) -> Record:
-        if data["id"] in self.records:
-            raise KBError(f"record {data['id']} already exists")
-        return self.save(Record(data, self), "create", approved=approved)
+    def write_new(self, data: dict, approved: str | None = None) -> Item:
+        if data["id"] in self.items:
+            raise KBError(f"item {data['id']} already exists")
+        return self.save(Item(data, self), "create", approved=approved)
 
-    def resolve(self, rec: Record, rendition: dict, fetch: bool = False):
+    def resolve(self, rec: Item, rendition: dict, fetch: bool = False):
         """A local file with the rendition's content, if this store can reach it."""
-        from .sources import resolve
+        from .locations import resolve
         return resolve(self, rec, rendition, fetch=fetch)
 
     def snapshot(self, dest: Path) -> Path:

@@ -14,7 +14,7 @@ kb new view --title "TPC noise, Q4 summary" \
   --subject detector/tpc/noise \
   --derived-from top-e6mv1m318t --derived-from dat-4h2k9m3qpz#original \
   --set build.tool=quarto --set build.target=index.qmd --set 'build.formats=["html","pdf"]'
-kb checkout view-... ~/work/noise-view        # record.json plus the current sources
+kb checkout view-... ~/work/noise-view        # item.json plus the current sources
 # ... write index.qmd, scripts/plot_noise.py, pixi.toml ... in ~/work/noise-view
 kb checkin ~/work/noise-view                  # new and changed files become the view's sources
 ```
@@ -26,7 +26,7 @@ They never hard-code paths:
 
 | variable | meaning |
 |---|---|
-| `KB_INPUTS` | JSON file: `{ref: {record, renditions: {name: path or null}}}`. `record` is the path of the input item's JSON. A rendition named in the ref (`dat-…#original`) is fetched as needed; others are filled in only when already local |
+| `KB_INPUTS` | JSON file: `{ref: {item, renditions: {name: path or null}}}`. `item` is the path of the input item's JSON. A rendition named in the ref (`dat-…#original`) is fetched as needed; others are filled in only when already local |
 | `KB_OUT` | where final products must go |
 | `KB_WORK` | the work area holding the materialized sources (the build's current directory) |
 | `KB_ROOT` | the store's directory |

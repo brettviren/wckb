@@ -39,7 +39,7 @@ kb add https://arxiv.org/pdf/2601.01234 --set doctype=preprint \
 
 The URL is the canonical location, and the copy in the store or the content
 store is a mirror that is checked by hash. Later mirrors can be added with
-`kb rendition locate ID#original --store default` or `--url URL`.
+`kb rendition locate ID#original --cas default` or `--url URL`.
 Where content can live is a pluggable set of *data sources* (`db`, `cas`,
 `url`, `local`, and experimentally `annex` for DataLad datasets);
 see [storage](storage.md).
@@ -47,7 +47,7 @@ see [storage](storage.md).
 ## Duplicates
 
 When an identifier (`doi`, `arxiv`, `indico`, ...) already appears in the
-KB, `kb add` refuses and names the existing record. Use `--force` only for
+KB, `kb add` refuses and names the existing item. Use `--force` only for
 a genuinely different document that happens to share it.
 
 ## Text extraction

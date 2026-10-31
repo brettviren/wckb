@@ -15,17 +15,17 @@ from .config import access_rank
 from .errors import KBError
 from .federation import Neighbor, neighbor, neighbors, open_store
 from .ids import parse_ref
-from .records import KB, Record
+from .items import Store, Item
 
 PROMOTE_TAG, HOLD_TAG = "promote", "no-promote"
 
 
-def ledger(kb: KB) -> list[dict]:
+def ledger(kb: Store) -> list[dict]:
     from .transfer import ledger as read
     return read(kb)
 
 
-def last_pushes(kb: KB, target: str) -> dict[str, dict]:
+def last_pushes(kb: Store, target: str) -> dict[str, dict]:
     """Item ID -> latest entry of transfers out to neighbor *target*."""
     out = {}
     for e in ledger(kb):
@@ -35,7 +35,7 @@ def last_pushes(kb: KB, target: str) -> dict[str, dict]:
     return out
 
 
-def _state(rec: Record) -> str:
+def _state(rec: Item) -> str:
     from .transfer import state
     return state(rec)
 
@@ -54,7 +54,7 @@ class Candidate:
         return self.__dict__.copy()
 
 
-def _blockers(kb: KB, rec: Record, target_access: str | None, nb: Neighbor) -> list[str]:
+def _blockers(kb: Store, rec: Item, target_access: str | None, nb: Neighbor) -> list[str]:
     out = []
     d = rec.data
     if target_access and access_rank(d.get("access", "group")) > access_rank(target_access):
@@ -70,18 +70,18 @@ def _blockers(kb: KB, rec: Record, target_access: str | None, nb: Neighbor) -> l
     return out
 
 
-def candidates(kb: KB, target: str, include_all: bool = False) -> list[Candidate]:
-    """Records worth pushing to *target*, best first, with the reasons."""
+def candidates(kb: Store, target: str, include_all: bool = False) -> list[Candidate]:
+    """Items worth pushing to *target*, best first, with the reasons."""
     nb = neighbor(kb, target)
     t_access = t_id = None
     if nb.available:
         tk = open_store(nb.location)
         t_access, t_id = tk.cfg.access, tk.cfg.id
     pushed = last_pushes(kb, target)
-    corrected = {parse_ref(r)[0] for rec in kb.records.values()
+    corrected = {parse_ref(r)[0] for rec in kb.items.values()
                  for r in rec.data.get("supersedes", []) + rec.data.get("retracts", [])}
     out = []
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         d = rec.data
         if not kb.is_current(rec.id):
             continue
@@ -138,7 +138,7 @@ def candidates(kb: KB, target: str, include_all: bool = False) -> list[Candidate
     return sorted(out, key=lambda c: (order[c.state], -c.score, c.id))
 
 
-def authorize(kb: KB, target: str, approved: str | None) -> str:
+def authorize(kb: Store, target: str, approved: str | None) -> str:
     """Who approved this push, or an error saying what is needed."""
     if not kb.cfg.is_agent:
         return approved or "human"
@@ -154,7 +154,7 @@ def authorize(kb: KB, target: str, approved: str | None) -> str:
     return "autonomy:auto" + (f" ({approved})" if approved else "")
 
 
-def edge_back(dst: KB, src: KB) -> Neighbor | None:
+def edge_back(dst: Store, src: Store) -> Neighbor | None:
     """The receiving store's own edge to the sender, if it declares one."""
     for n in neighbors(dst):
         if n.path is not None and n.path.resolve() == src.root.resolve():
@@ -162,14 +162,14 @@ def edge_back(dst: KB, src: KB) -> Neighbor | None:
     return None
 
 
-def make_kset(kb: KB, members: list[str], depth: str = "shallow", nested: str = "follow",
+def make_kset(kb: Store, members: list[str], depth: str = "shallow", nested: str = "follow",
               title: str | None = None, summary: str | None = None, purpose: str = "transfer",
-              allow_dangling: bool = False, save: bool = True) -> Record:
+              allow_dangling: bool = False, save: bool = True) -> Item:
     """A knowledge set in *kb* (or, with save=False, just the item, for writing with a transfer)."""
     from . import authoring
     if not members:
         raise KBError("a knowledge set needs at least one member")
-    levels = [kb.records[m].data.get("access", kb.cfg.access) for m in members if m in kb.records]
+    levels = [kb.items[m].data.get("access", kb.cfg.access) for m in members if m in kb.items]
     access = max(levels, key=access_rank) if levels else kb.cfg.access   # the list reveals no more than its members
     fields = {"title": title or f"{purpose.capitalize()} of {len(members)} item(s)", "access": access,
               "summary": summary or f"{depth.capitalize()} selection of {len(members)} item(s) for {purpose}.",
@@ -182,31 +182,31 @@ def make_kset(kb: KB, members: list[str], depth: str = "shallow", nested: str = 
     errors = validate(data)
     if errors:
         raise KBError("knowledge set not valid:\n  " + "\n  ".join(errors))
-    return Record(data, kb)
+    return Item(data, kb)
 
 
-def changed_items(src: KB, dst: KB, prefer: str = "theirs") -> list[str]:
+def changed_items(src: Store, dst: Store, prefer: str = "theirs") -> list[str]:
     """Current items of *src* that *dst* lacks or holds differently ("all" transfers)."""
     from .transfer import classify
     out = []
-    for rec in src.records.values():
+    for rec in src.items.values():
         if not src.is_current(rec.id) or rec.kind == "kset":
             continue
-        it = classify(rec.data, rec, dst.records.get(rec.id), src.cfg.id, prefer)
+        it = classify(rec.data, rec, dst.items.get(rec.id), src.cfg.id, prefer)
         if it.action != "same":
             out.append(rec.id)
     return out
 
 
-def _selection(kb: KB, refs: list[str], depth: str, nested: str, title: str | None) -> Record:
+def _selection(kb: Store, refs: list[str], depth: str, nested: str, title: str | None) -> Item:
     """An existing set (a single ks- ref held here) or a new one over *refs*."""
-    if len(refs) == 1 and refs[0].startswith("ks-") and refs[0] in kb.records:
+    if len(refs) == 1 and refs[0].startswith("ks-") and refs[0] in kb.items:
         return kb.get(refs[0])
     ids = [kb.get(parse_ref(r)[0]).id for r in refs]
     return make_kset(kb, ids, depth, nested, title)
 
 
-def push(kb: KB, target: str, refs: list[str], *, deep: bool = False, nested: str = "follow",
+def push(kb: Store, target: str, refs: list[str], *, deep: bool = False, nested: str = "follow",
          all_items: bool = False, access: str | None = None, mode: str | None = None,
          approved: str | None = None, dry_run: bool = False, message: str | None = None,
          title: str | None = None, with_deps: bool = False) -> dict:
@@ -242,7 +242,7 @@ def push(kb: KB, target: str, refs: list[str], *, deep: bool = False, nested: st
             raise KBError(f"name the items (or a knowledge set) to push to {target}; its edge is 'select'")
         if dry_run:
             members = [kb.get(parse_ref(r)[0]).id for r in refs]
-            fake = kb.records[members[0]].data if len(members) == 1 and members[0].startswith("ks-") else \
+            fake = kb.items[members[0]].data if len(members) == 1 and members[0].startswith("ks-") else \
                 {"id": "ks-dryrun000", "kind": "kset", "members": members, "depth": depth, "nested": nested}
             if tk is None:
                 return {"to": target, "dry_run": True, "note": "receiver not visible from here; it will review"}
@@ -271,13 +271,13 @@ def _log_out(kb, target, store_id, ks, b, who, land, extra=None):
     with kb.tx():
         kb.log_event("transfer-out", ks.id, {
             "to": target, "store": store_id, "land": land, "bundle": b["id"],
-            "items": [{"id": i["data"]["id"], "action": "sent", "state": state(Record(i["data"]))} for i in b["items"]]}
+            "items": [{"id": i["data"]["id"], "action": "sent", "state": state(Item(i["data"]))} for i in b["items"]]}
             | ({"pr": extra.get("pr", {}).get("url")} if extra else {}), approved=who)
 
 
-def pull(kb: KB, source: str, refs: list[str], *, deep: bool = False, nested: str = "follow",
+def pull(kb: Store, source: str, refs: list[str], *, deep: bool = False, nested: str = "follow",
          all_items: bool = False, approved: str | None = None, dry_run: bool = False,
-         land: str | None = None, message: str | None = None, src_kb: KB | None = None) -> dict:
+         land: str | None = None, message: str | None = None, src_kb: Store | None = None) -> dict:
     """Receive knowledge from neighbor *source* into this store (applied, or into the inbox for review)."""
     from . import bundle as bundles
     from .transfer import transfer
@@ -309,7 +309,7 @@ def pull(kb: KB, source: str, refs: list[str], *, deep: bool = False, nested: st
             raise KBError(f"name the items (or a set) to pull from {source}; its edge is 'select'")
         members, depth = [parse_ref(r)[0] for r in refs], ("deep" if deep else "shallow")
     land = land or ("inbox" if nb.accept == "review" else "apply")
-    if len(members) == 1 and members[0].startswith("ks-") and members[0] in src_kb.records:
+    if len(members) == 1 and members[0].startswith("ks-") and members[0] in src_kb.items:
         ks_rec, extra = src_kb.get(members[0]), []       # the sender's own set travels with the items
     else:
         if dry_run:
@@ -330,20 +330,20 @@ def pull(kb: KB, source: str, refs: list[str], *, deep: bool = False, nested: st
                     direction="pull", dry_run=dry_run, extra=extra, log_source=False) | {"land": "apply"}
 
 
-def _bundle_from(src: KB, ks_rec: Record, note, who) -> dict:
+def _bundle_from(src: Store, ks_rec: Item, note, who) -> dict:
     """A bundle of items in *src* selected by a set made elsewhere."""
     import base64
     from . import bundle as bundles
-    from .records import now
+    from .items import now
     from .transfer import expand
-    exp = expand(ks_rec.data, lambda i: src.records[i].data if i in src.records else None)
+    exp = expand(ks_rec.data, lambda i: src.items[i].data if i in src.items else None)
     items, blobs = [], {}
     for ident in exp.items:
-        if ident == ks_rec.id or ident not in src.records:
+        if ident == ks_rec.id or ident not in src.items:
             continue
-        rec = src.records[ident]
+        rec = src.items[ident]
         items.append({"data": rec.data, "updated_at": rec.updated_at})
-        from .records import blob_shas
+        from .items import blob_shas
         for sha in blob_shas(rec.data):
             data = src.blob(sha)
             if data is not None:
@@ -359,7 +359,7 @@ def _bundle_from(src: KB, ks_rec: Record, note, who) -> dict:
     return b
 
 
-def obtain(kb: KB, refs: list[str] | None = None, *, deep: bool = False, dangling: bool = False,
+def obtain(kb: Store, refs: list[str] | None = None, *, deep: bool = False, dangling: bool = False,
            approved: str | None = None, dry_run: bool = False) -> list[dict]:
     """Fetch items referenced here (or named) from the nearest reachable store that has them."""
     from .federation import reachable
@@ -367,13 +367,13 @@ def obtain(kb: KB, refs: list[str] | None = None, *, deep: bool = False, danglin
     wanted = [parse_ref(r)[0] for r in (refs or [])]
     if dangling:
         wanted += [parse_ref(r)[0] for _, r in find_dangling(kb)]
-    wanted = [w for w in dict.fromkeys(wanted) if w not in kb.records]
+    wanted = [w for w in dict.fromkeys(wanted) if w not in kb.items]
     if not wanted:
         return []
-    by_store: dict[str, tuple[KB, list[str]]] = {}
+    by_store: dict[str, tuple[Store, list[str]]] = {}
     left = list(wanted)
     for r in reachable(kb, 3, relations=("up", "peer", "down")):
-        hits = [w for w in left if w in r.kb.records]
+        hits = [w for w in left if w in r.kb.items]
         if hits:
             by_store[r.label] = (r.kb, hits)
             left = [w for w in left if w not in hits]

@@ -42,6 +42,8 @@ kb context detector/tpc              # what the KB knows, compactly
 
 ## Documentation
 
+- [docs/glossary.md](docs/glossary.md): the terms kb uses (store, item, rendition,
+  asset, knowledge set, bundle ...) and their names in the code.
 - [docs/design.md](docs/design.md): the design and the reasons for it.
 - [docs/plan.md](docs/plan.md): implementation plan and phases.
 - [docs/questions.md](docs/questions.md): open questions, with today's
@@ -52,7 +54,7 @@ kb context detector/tpc              # what the KB knows, compactly
   planned (TUI, web).
 - [docs/howto/](docs/howto/): task guides. Start with
   [getting-started](docs/howto/getting-started.md).
-- [docs/reference/schema.md](docs/reference/schema.md): every record field
+- [docs/reference/schema.md](docs/reference/schema.md): every item field
   (generated).
 - [docs/reference/cli.md](docs/reference/cli.md): every command (generated).
 

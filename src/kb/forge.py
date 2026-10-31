@@ -55,7 +55,7 @@ class ForgeConfig:
     @property
     def scopes(self) -> str:
         if self.type == "github":
-            return ("fine-grained token for the KB repositories: Contents read/write, "
+            return ("fine-grained token for the exchange repositories: Contents read/write, "
                     "Pull requests read/write, Metadata read")
         if self.type == "gogs":
             return "an access token (Gogs tokens are not scoped)"

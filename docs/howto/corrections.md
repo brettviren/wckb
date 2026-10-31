@@ -1,11 +1,11 @@
 # Corrections and how they propagate
 
 Sources (observations, documents, datasets, configs, snapshots, software)
-are never edited to say something else. A correction is a **new record**
-that supersedes the wrong one. The old record stays as history, and
+are never edited to say something else. A correction is a **new item**
+that supersedes the wrong one. The old item stays as history, and
 everything built on it becomes stale.
 
-## Correct a record
+## Correct an item
 
 ```
 kb supersede obs-7k2m9q4xha \
@@ -15,19 +15,19 @@ kb supersede obs-7k2m9q4xha \
   --text "Per elog 5521 the elevated coherent noise was during run 1243, not run 1234."
 ```
 
-The new record inherits the subject, access and other fields unless you
+The new item inherits the subject, access and other fields unless you
 override them. Attribution defaults to you unless `--by` is given. The old
-record disappears from `kb ls` (unless `--all`), and `kb context` shows it
+item disappears from `kb ls` (unless `--all`), and `kb context` shows it
 under "Superseded".
 
-## Withdraw a record
+## Withdraw an item
 
 ```
 kb retract obs-7k2m9q4xha --reason "Duplicate of obs-9x...; recorded twice."
 ```
 
 This writes a retraction observation. Nothing replaces the withdrawn
-record.
+item.
 
 ## When only our confidence changes
 

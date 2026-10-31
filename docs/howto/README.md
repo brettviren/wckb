@@ -21,3 +21,5 @@ Read these in order if you are new; later on, go straight to the task you need.
 | [policy](policy.md) | named, versioned instructions, skills and hooks; enactment; autonomy |
 | [ci](ci.md) | CI for exchange repositories; nightly builds and snapshots |
 | [schema-changes](schema-changes.md) | changing the schema: revisions and migrations (maintainers) |
+
+Terms are defined in the [glossary](../glossary.md).

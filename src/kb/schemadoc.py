@@ -1,6 +1,6 @@
 """Render the schemas as a markdown reference (docs/reference/schema.md)."""
 
-from .ids import KINDS, PREFIX, SOURCE_KINDS
+from .ids import KINDS, PREFIX, PRIMARY_KINDS
 from .schema import REVISION, load_schemas
 
 
@@ -30,24 +30,24 @@ def _rows(props: dict, required) -> list[str]:
 def render() -> str:
     s = load_schemas()
     lines = [
-        "# Record schema reference",
+        "# Item schema reference",
         "",
         f"Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision {REVISION}) by",
         "`kb schema --markdown`; a test keeps this file in sync. `kb schema KIND` prints",
         "the schema itself, which is authoritative.",
         "",
-        "## Fields common to every record",
+        "## Fields common to every item",
         "",
         "| field | required | type | description |",
         "|---|---|---|---|",
-        *_rows(s["record"]["properties"], s["record"]["required"]),
+        *_rows(s["item"]["properties"], s["item"]["required"]),
         "",
     ]
     for kind in KINDS:
         k = s[kind]
         props = {n: p for n, p in k["properties"].items() if n not in ("kind", "id")}
         lines += [f"## {kind}", "",
-                  f"ID prefix `{PREFIX[kind]}-`; {'a source (append-only)' if kind in SOURCE_KINDS else 'not a source (editable)'}.",
+                  f"ID prefix `{PREFIX[kind]}-`; {'a source (append-only)' if kind in PRIMARY_KINDS else 'not a source (editable)'}.",
                   "", k.get("description", ""), ""]
         if props or k.get("required"):
             lines += ["| field | required | type | description |", "|---|---|---|---|",

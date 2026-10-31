@@ -4,7 +4,7 @@ A rendition lists locations; each location's ``type`` names the source that
 serves it.  Sources resolve a location to a local file (fetching or
 materializing as needed), describe it for people, and say whether it is
 reachable.  New kinds of storage (a DataLad dataset, an S3 bucket, an
-institutional repository) are added by registering a Source subclass;
+institutional repository) are added by registering a LocationSource subclass;
 nothing else in kb needs to change.
 
     db     content held in the store's own database (small files)
@@ -31,7 +31,7 @@ def blob_path(root: Path, sha: str) -> Path:
     return root / "sha256" / sha[:2] / sha[2:4] / sha
 
 
-class Source:
+class LocationSource:
     type = ""
     label = ""
 
@@ -49,7 +49,7 @@ class Source:
         return None
 
 
-class DbSource(Source):
+class DbSource(LocationSource):
     type, label = "db", "in this store"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
@@ -77,23 +77,23 @@ class DbSource(Source):
         return "in this store" + (f" as {loc['filename']}" if loc.get("filename") else "")
 
 
-class CasSource(Source):
+class CasSource(LocationSource):
     type, label = "cas", "content-addressed store"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
         sha = rendition.get("sha256")
-        root = kb.cfg.stores.get(loc["store"])
+        root = kb.cfg.cas.get(loc["name"])
         if not sha or root is None:
             return None
         p = blob_path(root, sha)
         return p if p.is_file() else None
 
     def describe(self, kb, loc):
-        root = kb.cfg.stores.get(loc["store"])
-        return f"store {loc['store']}" + (f" ({root})" if root else " (not mounted here)")
+        root = kb.cfg.cas.get(loc["name"])
+        return f"content store {loc['name']}" + (f" ({root})" if root else " (not mounted here)")
 
 
-class UrlSource(Source):
+class UrlSource(LocationSource):
     type, label = "url", "on the web"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
@@ -102,7 +102,7 @@ class UrlSource(Source):
             return cache_path(kb, sha)
         if not fetch:
             return None
-        from .store import fetch as do_fetch
+        from .content import fetch as do_fetch
         path, got, _ = do_fetch(kb, loc["url"])
         if sha and got != sha:
             who = f"{rec.id}#{rendition['name']}" if rec is not None else rendition["name"]
@@ -120,7 +120,7 @@ class UrlSource(Source):
         return loc["url"]
 
 
-class LocalSource(Source):
+class LocalSource(LocationSource):
     type, label = "local", "on one machine"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
@@ -133,7 +133,7 @@ class LocalSource(Source):
         return f"only on {loc['host']}: {loc['path']}"
 
 
-class AnnexSource(Source):
+class AnnexSource(LocationSource):
     """A file in a DataLad dataset. The dataset's local clone is mapped in settings:
     ``datasets.<dataset id> = {path = "..."}``; content is fetched with ``datalad get``."""
     type, label = "annex", "DataLad dataset"
@@ -161,13 +161,13 @@ class AnnexSource(Source):
             ("" if root else " (no local clone mapped)")
 
 
-class AssetLocation(Source):
+class AssetLocation(LocationSource):
     """A rendition supplied by an asset (an abstract file or file set) at a version: see kb.assets."""
     type, label = "asset", "an asset"
 
     def resolve(self, kb, rec, rendition, loc, fetch):
         from .assets import resolve as resolve_asset
-        if loc["asset"] not in kb.records:
+        if loc["asset"] not in kb.items:
             return None
         try:
             res = resolve_asset(kb, loc["asset"], loc["version"], loc.get("path"), remote=fetch)
@@ -176,27 +176,27 @@ class AssetLocation(Source):
         p = next(iter(res.files.values()))
         sha = rendition.get("sha256")
         if sha:
-            from .store import sha256_file
+            from .content import sha256_file
             if sha256_file(p)[0] != sha:
                 return None          # the asset's file is not the bytes this rendition recorded
         return p
 
     def available(self, kb, rendition, loc):
-        return loc["asset"] in kb.records
+        return loc["asset"] in kb.items
 
     def describe(self, kb, loc):
-        rec = kb.records.get(loc["asset"])
+        rec = kb.items.get(loc["asset"])
         what = f"asset {loc['asset']}" + (f" ({rec.data.get('title')})" if rec else " (not in this store)")
         return f"{what}, version {loc['version']}" + (f", {loc['path']}" if loc.get("path") else "")
 
 
-REGISTRY: dict[str, Source] = {}
+REGISTRY: dict[str, LocationSource] = {}
 
 # Resolution order: cheapest and most local first; URLs (network) last.
 ORDER = ["db", "cas", "local", "asset", "annex", "url"]
 
 
-def register(source: Source, position: int | None = None) -> None:
+def register(source: LocationSource, position: int | None = None) -> None:
     REGISTRY[source.type] = source
     if source.type not in ORDER:
         ORDER.insert(len(ORDER) - 1 if position is None else position, source.type)
@@ -206,7 +206,7 @@ for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(),
     register(_s)
 
 
-def source(loc: dict) -> Source:
+def for_location(loc: dict) -> LocationSource:
     try:
         return REGISTRY[loc["type"]]
     except KeyError:
@@ -221,21 +221,21 @@ def resolve(kb, rec, rendition: dict, fetch: bool = True) -> Path | None:
     if sha and cache_path(kb, sha).is_file() and not any(l["type"] == "db" for l in locs):
         return cache_path(kb, sha)
     for loc in locs:
-        p = source(loc).resolve(kb, rec, rendition, loc, fetch=fetch and loc["type"] == "url")
+        p = for_location(loc).resolve(kb, rec, rendition, loc, fetch=fetch and loc["type"] == "url")
         if p is not None:
             return p
     if fetch:
         for loc in locs:
             if loc["type"] == "annex":
-                p = source(loc).resolve(kb, rec, rendition, loc, fetch=True)
+                p = for_location(loc).resolve(kb, rec, rendition, loc, fetch=True)
                 if p is not None:
                     return p
     return None
 
 
 def describe(kb, rendition: dict) -> list[str]:
-    return [source(l).describe(kb, l) for l in rendition.get("locations", [])]
+    return [for_location(l).describe(kb, l) for l in rendition.get("locations", [])]
 
 
 def links(rendition: dict) -> list[str]:
-    return [u for u in (source(l).link(l) for l in rendition.get("locations", [])) if u]
+    return [u for u in (for_location(l).link(l) for l in rendition.get("locations", [])) if u]

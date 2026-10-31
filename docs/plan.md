@@ -11,13 +11,13 @@ Deliverables:
 | item | where | status |
 |---|---|---|
 | JSON Schemas v1 for nine kinds | `src/kb/schemas/v1/` | done |
-| Record model, IDs, canonical JSON and digest | `src/kb/records.py`, `ids.py` | done |
+| Item model, IDs, canonical JSON and digest | `src/kb/items.py`, `ids.py` | done |
 | Configuration: store settings, user config, `.kb/local.toml`, `KB_*` env | `src/kb/config.py` | done |
-| The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `records.py` | done |
+| The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `items.py` | done |
 | Data sources (polymorphic): db, cas, url, local, annex (experimental) | `src/kb/sources.py`, `store.py` | done |
 | `kb check` (gate) and `kb lint` (advice) | `src/kb/checks.py`, `lint.py` | done |
 | Append-only in the database; consistency and tamper scan | `src/kb/db.py`, `checks.py` | done |
-| SQLite index, full-text search, faceted listing | `src/kb/index.py` | done |
+| Query tables, full-text search, faceted listing | `src/kb/query.py` | done |
 | Embeddings and semantic or hybrid search | `src/kb/embed.py`, `search.py` | done |
 | Transform registry with built-in transforms | `src/kb/transforms.py` | done |
 | Dependency graph, staleness, stamping | `src/kb/graph.py` | done |
@@ -29,15 +29,15 @@ Deliverables:
 | `kb init --scope`: project, home, group stores with scope defaults | `src/kb/scaffold.py` | done |
 | Federation: neighbors (up, peer, down), reachability, federated ls/search/context | `src/kb/federation.py`, `federated.py` | done |
 | Promotion: candidates, push (same IDs, origin, deps, access relabeling, modes), ledger | `src/kb/push.py` | done |
-| Policy as records: builtins, sources, resolve, draft/release/revise, enact, status, capture, diff | `src/kb/policy.py`, `src/kb/data/policies*` | done |
+| Policy as items: builtins, sources, resolve, draft/release/revise, enact, status, capture, diff | `src/kb/policy.py`, `src/kb/data/policies*` | done |
 | Autonomy: per-action levels, agent detection, `--approved` audit trail | `src/kb/config.py`, `push.py`, `policy.py` | done |
 | Claude Code hooks: check, recall, session | `src/kb/hooks.py` | done |
-| Knowledge sets (shallow/deep, follow/inherit) and the transfer engine: atomic copy, write/commit/branch/pr landing, multi-path reconciliation, ledgers | `src/kb/transfer.py` | done |
+| Knowledge sets (shallow/deep, follow/inherit) and the transfer engine: atomic copy, apply/inbox/pr landing, multi-path reconciliation, ledgers | `src/kb/transfer.py` | done |
 | Edge transfer forms (push/pull select/all/none, accept, prefer), pull, obtain, store-independent references | `src/kb/federation.py`, `push.py` | done |
 | Twins: item-level sync, newer wins | `src/kb/sync.py` | done |
 | Bundles, inbox, human and LLM reviews, accept autonomy | `src/kb/bundle.py` | done |
 | Rendering for people: view model; text, markdown, JSON | `src/kb/render.py` | done |
-| Checkout/checkin/edit, content, snapshots, history (`kb log`) | `src/kb/edit.py`, `records.py` | done |
+| Checkout/checkin/edit, content, snapshots, history (`kb log`) | `src/kb/edit.py`, `items.py` | done |
 | Exchange repositories: bundle pull requests; git hooks guarding bundles | `src/kb/exchange.py`, `githooks.py` | done |
 | Assets: abstract files/file sets, content-identified versions, bindings (kb, fs, url), scan/register/resolve, the `asset` rendition location | `src/kb/assets.py` | done |
 | Forges: GitHub, Gitea, Forgejo (Gogs: no PR API) pull requests | `src/kb/forge.py` | done |
@@ -58,12 +58,13 @@ has a first version (newer wins).
 
 Steps:
 
-1. Create the group KB repository with `kb init`. Configure a blob store and
-   a publish store on shared storage. Set up CI (`docs/howto/ci.md`) and
-   protect the main branch.
+1. Create the group store with `kb init --scope group` on its writer's local
+   disk. Configure a content store (`cas`) and a publish store on shared
+   storage, an exchange repository for pull requests (`kb exchange init`)
+   with CI (`docs/howto/ci.md`), and a nightly `kb snapshot` for members.
 2. Each pilot user installs `kb` with `uv tool install`, creates a home store
-   (`kb init ~/kb --scope home`), links the group clone as its `up`
-   neighbor, adds `[neighbors.home]` to their user config so every project
+   (`kb init ~/kb --scope home`), links the group store as its `up`
+   neighbor (its published snapshot, plus the exchange repository), adds `[neighbors.home]` to their user config so every project
    store sees it, and creates a project store (`kb init ./kb --scope project`)
    in one active project. Each sets up a forge token (`kb forge auth`), and
    the group store's edge lands pushes as pull requests (`--land pr`).
@@ -74,7 +75,7 @@ Steps:
    did the wrong thing, and every field nobody used or somebody missed.
 
 5. Try the routine behavior for real: does Claude consult and file without
-   being reminded? Is the recall hook useful or noise? How many records does
+   being reminded? Is the recall hook useful or noise? How many items does
    a week of `capture = auto` produce, and how many survive promotion? Feed
    the answers into [questions.md](questions.md) (D1–D3).
 
@@ -83,7 +84,7 @@ Steps:
 - At least one question was answered from the KB by someone who didn't add
   the material.
 - At least one correction propagated to a rebuilt view.
-- Records travelled project → home → group by promotion reviews, and the
+- Items travelled project → home → group by promotion reviews, and the
   human effort per review was a few minutes.
 - At least one policy was revised from daily use (`kb policy capture`),
   released and adopted by another member.
@@ -104,11 +105,11 @@ Planned, in rough priority order. Open design questions are tracked in
   path with one real breaking change, if the pilot calls for one, before
   the KB grows.
 - **Indico importer.** Event and contribution metadata become `document`
-  records. Reuse the orgface Indico access code rather than writing new code.
+  items. Reuse the orgface Indico access code rather than writing new code.
 - **arXiv source fetching**: prefer the LaTeX source over the PDF for text
   renditions.
 - **MCP server** exposing `ls`, `show`, `search`, `context` (federated),
-  `candidates` and `stale`, read only. Writes stay on git.
+  `candidates` and `stale`, read only.
 - **Policy evaluation**: scripted scenarios to compare policy versions
   (questions C2).
 - **Upstream news**: what happened in a parent to records this store pushed
@@ -126,17 +127,17 @@ Planned, in rough priority order. Open design questions are tracked in
 
 ## Phase 3: scale-out (only when needed)
 
-- Partial clone and sparse-checkout guidance becomes the default clone recipe.
-- Multi-repository index: archive repositories for closed periods.
+- Store compaction and archiving for closed periods (questions S6).
+- Searching many stores at once without opening each (a shared index of snapshots).
 - Service-account CI for verifying SSO-protected URLs.
 
 ## Risks
 
 | risk | mitigation |
 |---|---|
-| The KB fills with low-value captures | Capture goes through a merge request, the `kb-capture` skill is told to be selective, and `kb-curate` reviews old unverified claims. |
+| The KB fills with low-value captures | Promotion goes through review (the receiver's inbox or a pull request), the `kb-capture` skill is told to be selective, and `kb-curate` reviews old unverified claims. |
 | Schema friction stops people contributing | `kb new`/`kb add` write the plumbing; the hook explains errors; `x` is the escape hatch; schema revisions are cheap. |
-| Topics drift from their sources | Stamping with digests, `kb stale` in CI, and corrections and topic revisions in the same merge request. |
+| Topics drift from their sources | Stamping with digests, `kb stale` in CI, and corrections travel with the topic revisions they caused. |
 | External URLs rot or change | Hashes, `kb verify`, blob-store snapshots of important originals. |
 | Python start-up cost in tight LLM loops | Lazy imports; `kb context` gathers in one call what would otherwise be many calls; a compiled reader later if needed. |
 | Over-engineering | Phase gates; nothing in Phase 2 starts without a pilot user asking for it. |

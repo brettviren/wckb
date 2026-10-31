@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import KBError
-from .records import KB, Record, blob_shas, canonical, now
+from .items import Store, Item, blob_shas, canonical, now
 
 FORMAT = 1
 SUFFIX = ".kbundle.json"
@@ -37,20 +37,20 @@ class SenderInfo:
     user: str
 
 
-class BundleSource:
-    """A bundle seen as a sender store (what kb.transfer needs: records, blobs, cfg)."""
+class BundleSender:
+    """A bundle seen as a sender store (what kb.transfer needs: items, blobs, cfg)."""
 
     def __init__(self, b: dict):
         self.bundle = b
         f = b["from"]
         self.cfg = SenderInfo(f["store"], f.get("name", f["store"]), f.get("scope", "other"),
                               b["created"].get("by", "unknown"))
-        self.records = {}
+        self.items = {}
         for it in [{"data": b["set"], "updated_at": b.get("set_updated_at")}] + b["items"]:
-            rec = Record(it["data"], None, it.get("updated_at"))
-            self.records[rec.id] = rec
+            rec = Item(it["data"], None, it.get("updated_at"))
+            self.items[rec.id] = rec
         self._blobs = b.get("blobs", {})
-        self.people = {i: Record(d) for i, d in b.get("people", {}).items()}
+        self.people = {i: Item(d) for i, d in b.get("people", {}).items()}
 
     def blob(self, sha: str) -> bytes | None:
         v = self._blobs.get(sha)
@@ -61,20 +61,20 @@ def bundle_id(b: dict) -> str:
     return hashlib.sha256(canonical({k: v for k, v in b.items() if k != "id"})).hexdigest()
 
 
-def make(kb: KB, kset_ref: str, note: str | None = None, approved: str | None = None) -> dict:
+def make(kb: Store, kset_ref: str, note: str | None = None, approved: str | None = None) -> dict:
     """A bundle of the set *kset_ref* (held in *kb*) and everything it denotes there."""
     from .transfer import expand
     ks = kb.get(kset_ref)
     if ks.kind != "kset":
         raise KBError(f"{ks.id} is a {ks.kind}; bundles are made from knowledge sets (kb kset new)")
-    exp = expand(ks.data, lambda i: kb.records[i].data if i in kb.records else None)
+    exp = expand(ks.data, lambda i: kb.items[i].data if i in kb.items else None)
     if exp.missing_members:
         raise KBError("set members not in this store: " + ", ".join(i for _, i in exp.missing_members))
     items, blobs = [], {}
     for ident in exp.items:
         if ident == ks.id:
             continue
-        rec = kb.records[ident]
+        rec = kb.items[ident]
         items.append({"data": rec.data, "updated_at": rec.updated_at})
         for sha in blob_shas(rec.data):
             data = kb.blob(sha)
@@ -86,8 +86,8 @@ def make(kb: KB, kset_ref: str, note: str | None = None, approved: str | None = 
     people = {}
     for it in [{"data": ks.data}] + items:
         for who in _agents(it["data"]) + [kb.cfg.user]:
-            if who.startswith("per-") and who in kb.records and who not in people:
-                people[who] = kb.records[who].data
+            if who.startswith("per-") and who in kb.items and who not in people:
+                people[who] = kb.items[who].data
     b = {"kb_bundle": FORMAT, "created": {"at": now(), "by": kb.cfg.user},
          "from": {"store": kb.cfg.id, "name": kb.cfg.name, "scope": kb.cfg.scope},
          "set": ks.data, "set_updated_at": ks.updated_at, "items": items, "blobs": blobs,
@@ -135,13 +135,13 @@ def verify(b: dict, where: str = "bundle") -> dict:
 
 # -- checking against a store -------------------------------------------------------
 
-def check(kb: KB, b: dict) -> dict:
+def check(kb: Store, b: dict) -> dict:
     """Everything a reviewer needs to know mechanically: validity and what applying would do."""
     from .checks import check_data
     from .transfer import plan
-    src = BundleSource(b)
+    src = BundleSender(b)
     problems = []
-    for rec in src.records.values():
+    for rec in src.items.values():
         problems += [p.as_dict() for p in check_data(kb, rec.data) if p.level == "error" and p.code != "missing"]
     try:
         p = plan(src, kb, b["set"], prefer="ours")
@@ -154,11 +154,11 @@ def check(kb: KB, b: dict) -> dict:
     return out
 
 
-def apply(kb: KB, b: dict, approved: str = "human", access: str | None = None, prefer: str = "ours") -> dict:
+def apply(kb: Store, b: dict, approved: str = "human", access: str | None = None, prefer: str = "ours") -> dict:
     from .transfer import transfer
-    src = BundleSource(b)
+    src = BundleSender(b)
     extra = []
-    if b["set"]["id"] not in kb.records:
+    if b["set"]["id"] not in kb.items:
         extra = []   # the set travels as an item of its own transfer (see plan: sender holds it)
     return transfer(src, kb, b["set"], prefer=prefer, access=access, approved=approved,
                     edge=b["from"].get("name", ""), direction="bundle", extra=extra, log_source=False)
@@ -183,7 +183,7 @@ class Entry:
         return self.__dict__.copy()
 
 
-def receive(kb: KB, b: dict, note: str | None = None) -> Entry:
+def receive(kb: Store, b: dict, note: str | None = None) -> Entry:
     """Put a bundle into the store's inbox (once; receiving it again is a no-op)."""
     verify(b)
     with kb.tx():
@@ -195,7 +195,7 @@ def receive(kb: KB, b: dict, note: str | None = None) -> Entry:
     return get(kb, b["id"])
 
 
-def _entry(kb: KB, row) -> Entry:
+def _entry(kb: Store, row) -> Entry:
     e = Entry(row["bundle"], row["set_id"], row["sender"], row["sender_name"], row["received_at"],
               row["status"], row["decided_at"], row["decided_by"], row["note"])
     e.reviews = [dict(r) for r in kb.conn.execute("SELECT * FROM reviews WHERE bundle = ? ORDER BY seq",
@@ -203,7 +203,7 @@ def _entry(kb: KB, row) -> Entry:
     return e
 
 
-def _find(kb: KB, ref: str):
+def _find(kb: Store, ref: str):
     rows = kb.conn.execute("SELECT * FROM inbox WHERE bundle LIKE ? OR set_id = ?", (ref + "%", ref)).fetchall()
     if not rows:
         raise KBError(f"no inbox entry {ref!r} (kb inbox list)")
@@ -212,15 +212,15 @@ def _find(kb: KB, ref: str):
     return rows[0]
 
 
-def get(kb: KB, ref: str) -> Entry:
+def get(kb: Store, ref: str) -> Entry:
     return _entry(kb, _find(kb, ref))
 
 
-def bundle_of(kb: KB, ref: str) -> dict:
+def bundle_of(kb: Store, ref: str) -> dict:
     return json.loads(bytes(_find(kb, ref)["data"]))
 
 
-def entries(kb: KB, status: str | None = "pending") -> list[Entry]:
+def entries(kb: Store, status: str | None = "pending") -> list[Entry]:
     q, args = "SELECT * FROM inbox", []
     if status and status != "all":
         q += " WHERE status = ?"
@@ -228,7 +228,7 @@ def entries(kb: KB, status: str | None = "pending") -> list[Entry]:
     return [_entry(kb, r) for r in kb.conn.execute(q + " ORDER BY received_at", args)]
 
 
-def review(kb: KB, ref: str, verdict: str, text: str, reviewer: str | None = None, kind: str | None = None) -> Entry:
+def review(kb: Store, ref: str, verdict: str, text: str, reviewer: str | None = None, kind: str | None = None) -> Entry:
     """Record a review: by a person, or by an LLM (whose verdict is advice, never a decision)."""
     if verdict not in VERDICTS:
         raise KBError(f"verdict must be one of {', '.join(VERDICTS)}")
@@ -242,7 +242,7 @@ def review(kb: KB, ref: str, verdict: str, text: str, reviewer: str | None = Non
     return get(kb, row["bundle"])
 
 
-def _guard(kb: KB, approved: str | None) -> str:
+def _guard(kb: Store, approved: str | None) -> str:
     if not kb.cfg.is_agent:
         return approved or "human"
     level = kb.cfg.autonomy_for("accept")
@@ -254,7 +254,7 @@ def _guard(kb: KB, approved: str | None) -> str:
     return f"human: {approved}" if approved else "autonomy:auto"
 
 
-def accept(kb: KB, ref: str, approved: str | None = None, note: str | None = None, access: str | None = None,
+def accept(kb: Store, ref: str, approved: str | None = None, note: str | None = None, access: str | None = None,
            prefer: str = "ours") -> dict:
     row = _find(kb, ref)
     if row["status"] != "pending":
@@ -269,7 +269,7 @@ def accept(kb: KB, ref: str, approved: str | None = None, note: str | None = Non
     return report
 
 
-def reject(kb: KB, ref: str, reason: str, approved: str | None = None) -> Entry:
+def reject(kb: Store, ref: str, reason: str, approved: str | None = None) -> Entry:
     row = _find(kb, ref)
     if row["status"] != "pending":
         raise KBError(f"inbox entry {row['bundle'][:12]} is already {row['status']}")
@@ -281,7 +281,7 @@ def reject(kb: KB, ref: str, reason: str, approved: str | None = None) -> Entry:
     return get(kb, row["bundle"])
 
 
-def import_dir(kb: KB, directory: Path, accept_all: bool = False, approved: str | None = None) -> list[dict]:
+def import_dir(kb: Store, directory: Path, accept_all: bool = False, approved: str | None = None) -> list[dict]:
     """Receive every bundle file under *directory* (e.g. a merged exchange repository)."""
     out = []
     for p in sorted(directory.rglob(f"*{SUFFIX}")):

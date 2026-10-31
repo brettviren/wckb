@@ -16,7 +16,7 @@ The inline limit is the store setting `limits.max_inline_bytes`
 (`kb config get limits`), and `kb check` enforces it.
 
 Each location type is served by a **data source**, an interface in
-`kb.sources`. Sources resolve a location to a local file (fetching or
+`kb.locations`. Sources resolve a location to a local file (fetching or
 materializing as needed) and describe it for people. New kinds of storage
 plug in there.
 
@@ -41,12 +41,12 @@ written once and never changed, so EOS and NFS are fine for them.
 Declare a store for everyone, then give its path as mounted on each machine:
 
 ```
-kb config set stores.default '{"path": "/eos/experiment/group/kb-cas"}'
+kb config set cas.default '{"path": "/eos/experiment/group/kb-cas"}'
 ```
 
 ```toml
 # .kb/local.toml on a laptop that mounts EOS elsewhere
-[stores.default]
+[cas.default]
 path = "/Volumes/eos/experiment/group/kb-cas"
 ```
 
@@ -62,7 +62,7 @@ somewhere others can reach. Add a mirror. This is allowed even on sources,
 because the content must match the recorded hash:
 
 ```
-kb rendition locate dat-...#original --store default     # copy into the content store
+kb rendition locate dat-...#original --cas default     # copy into the content store
 kb rendition locate dat-...#original --url https://...   # or point at an upload
 ```
 

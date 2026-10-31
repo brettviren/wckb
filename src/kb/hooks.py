@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .config import find_root
 from .errors import KBError
-from .records import KB
+from .items import Store
 
 STOP = set("""a an and are as at be but by can could did do does for from had has have how i if in into is it
 its me my no not of on or our please should so than that the their them then there these they this to us
@@ -20,12 +20,12 @@ was we were what when where which who why will with would you your about also an
 some more need want know tell show give let new one two""".split())
 
 
-def _open(event: dict, root: Path | None) -> KB | None:
+def _open(event: dict, root: Path | None) -> Store | None:
     try:
         if root:
-            return KB.open(root, readonly=True)
+            return Store.open(root, readonly=True)
         cwd = event.get("cwd")
-        return KB.open(find_root(Path(cwd) if cwd else None), readonly=True)
+        return Store.open(find_root(Path(cwd) if cwd else None), readonly=True)
     except KBError:
         return None
 
@@ -45,7 +45,7 @@ def check(event: dict, root: Path | None = None) -> tuple[int, str]:
     import json as _json
     try:
         mark = _json.loads((d / CHECKOUT_MARK).read_text())
-        kb = KB.open(Path(mark["store"]), readonly=True)
+        kb = Store.open(Path(mark["store"]), readonly=True)
         checkin(kb, d, dry_run=True)
     except KBError as exc:
         return 2, (f"kb: the checkout {d} would not check in:\n  {exc}\n"
@@ -68,12 +68,12 @@ def keywords(prompt: str, limit: int = 8) -> list[str]:
 
 
 def recall(event: dict, root: Path | None = None, limit: int = 5) -> str:
-    """A handful of current records that share at least two key words with the prompt."""
+    """A handful of current items that share at least two key words with the prompt."""
     prompt = event.get("prompt", "")
     if len(prompt) < 15 or prompt.lstrip().startswith("/"):
         return ""
     kb = _open(event, root)
-    if kb is None or not kb.records:
+    if kb is None or not kb.items:
         return ""
     words = keywords(prompt)
     if not words:
@@ -111,9 +111,9 @@ def session(event: dict, root: Path | None = None) -> str:
     kb = _open(event, root)
     if kb is None:
         return ""
-    recs = kb.records
+    recs = kb.items
     topics = sum(r.kind == "topic" for r in recs.values())
-    parts = [f"KB store {kb.cfg.name} ({kb.cfg.scope}): {len(recs)} records, {topics} topics."]
+    parts = [f"KB store {kb.cfg.name} ({kb.cfg.scope}): {len(recs)} items, {topics} topics."]
     for n in neighbors(kb):
         if n.relation == "up" and n.writable:
             try:
@@ -122,7 +122,7 @@ def session(event: dict, root: Path | None = None) -> str:
                 continue
             marked = sum(any("marked" in r or "corrects" in r for r in c.reasons) for c in cs)
             if marked:
-                parts.append(f"{marked} record(s) marked or correcting pushed ones await promotion to {n.name} "
+                parts.append(f"{marked} item(s) marked or correcting pushed ones await promotion to {n.name} "
                              f"(kb candidates --to {n.name}).")
     try:
         st = graph.stale(kb)

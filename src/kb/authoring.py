@@ -1,7 +1,7 @@
-"""Making records: new, add, supersede, retract.
+"""Making items: new, add, supersede, retract.
 
 These functions write the plumbing (ID, timestamps, hashes, locations) so
-that people and LLMs only supply meaning.  Every record is validated before
+that people and LLMs only supply meaning.  Every item is validated before
 it is written, in one transaction with its content; nothing invalid reaches
 the store through them.
 """
@@ -10,10 +10,10 @@ import json
 import re
 from pathlib import Path
 
-from . import schema, store
+from . import schema, content
 from .errors import KBError
 from .ids import new_id, parse_ref
-from .records import KB, Record, now
+from .items import Store, Item, now
 
 CONTENT_NAME = {"topic": "page"}  # content rendition name; "note" otherwise
 
@@ -94,7 +94,7 @@ def fields_from_options(*, title=None, summary=None, subject=(), tags=(), runs=(
 
 # -- helpers ---------------------------------------------------------------
 
-def _skeleton(kb: KB, kind: str, slug: str | None = None, via: str | None = None) -> dict:
+def _skeleton(kb: Store, kind: str, slug: str | None = None, via: str | None = None) -> dict:
     data = {
         "schema_version": schema.MAJOR,
         "id": new_id(kind, slug),
@@ -109,15 +109,15 @@ def _skeleton(kb: KB, kind: str, slug: str | None = None, via: str | None = None
     return data
 
 
-def _content_rendition(kb: KB, kind: str, text: str, content: tuple[str, str] | None = None) -> dict:
-    name, filename = content or (CONTENT_NAME.get(kind, "note"), f"{CONTENT_NAME.get(kind, 'note')}.md")
+def _content_rendition(kb: Store, kind: str, text: str, content_file: tuple[str, str] | None = None) -> dict:
+    name, filename = content_file or (CONTENT_NAME.get(kind, "note"), f"{CONTENT_NAME.get(kind, 'note')}.md")
     data = (text if text.endswith("\n") else text + "\n").encode()
-    locs, sha, size = store.place_bytes(kb, data, filename)
-    return {"name": name, "role": "content", "media_type": store.media_type(filename),
+    locs, sha, size = content.place_bytes(kb, data, filename)
+    return {"name": name, "role": "content", "media_type": content.media_type(filename),
             "sha256": sha, "size": size, "locations": locs}
 
 
-def _known(kb: KB, ref: str) -> bool:
+def _known(kb: Store, ref: str) -> bool:
     """In this store, or in a store it can reach (references are store-independent)."""
     if kb.exists(ref):
         return True
@@ -126,15 +126,15 @@ def _known(kb: KB, ref: str) -> bool:
     return locate(kb, parse_ref(ref)[0]) is not None
 
 
-def _finish(kb: KB, data: dict, allow_dangling: bool = False) -> Record:
+def _finish(kb: Store, data: dict, allow_dangling: bool = False) -> Item:
     """Validate and write a brand-new item."""
     data.setdefault("summary", data.get("title", ""))
     errors = schema.validate(data)
     if not allow_dangling:
-        errors += [f"{field}: no record {ref} here or in any reachable store (--allow-dangling if intended)"
+        errors += [f"{field}: no item {ref} here or in any reachable store (--allow-dangling if intended)"
                    for field, ref in _refs(data) if not _known(kb, ref)]
     if errors:
-        raise KBError("record not written:\n  " + "\n  ".join(errors))
+        raise KBError("item not written:\n  " + "\n  ".join(errors))
     return kb.write_new(data)
 
 
@@ -149,18 +149,18 @@ def _refs(data: dict):
             yield "evidence", ev
 
 
-def new(kb: KB, kind: str, fields: dict, text: str | None = None, slug: str | None = None,
-        via: str | None = None, content: tuple[str, str] | None = None,
-        allow_dangling: bool = False) -> Record:
+def new(kb: Store, kind: str, fields: dict, text: str | None = None, slug: str | None = None,
+        via: str | None = None, content_file: tuple[str, str] | None = None,
+        allow_dangling: bool = False) -> Item:
     """An item from *fields*, with *text* as its content rendition
-    (named and filed as *content* = (name, filename) if given)."""
+    (named and filed as *content_file* = (name, filename) if given)."""
     data = deep_merge(_skeleton(kb, kind, slug, via), fields)
     for k in ("id", "kind", "schema_version"):
         if k in fields and fields[k] != data[k]:
             raise KBError(f"{k} is assigned by kb and cannot be given")
     with kb.tx():
         if text is not None:
-            data.setdefault("renditions", []).insert(0, _content_rendition(kb, kind, text, content))
+            data.setdefault("renditions", []).insert(0, _content_rendition(kb, kind, text, content_file))
         return _finish(kb, data, allow_dangling)
 
 
@@ -169,19 +169,19 @@ def _safe_name(name: str) -> str:
     return name or "file"
 
 
-def find_by_identifier(kb: KB, identifiers: dict) -> list[str]:
+def find_by_identifier(kb: Store, identifiers: dict) -> list[str]:
     hits = []
-    for rec in kb.records.values():
+    for rec in kb.items.values():
         theirs = rec.data.get("identifiers", {})
         if any(theirs.get(k) == v for k, v in identifiers.items() if k != "url"):
             hits.append(rec.id)
     return hits
 
 
-def add(kb: KB, kind: str, sources: list[str], fields: dict, *, mode: str = "auto",
-        store_name: str | None = None, url: str | None = None, fetch: bool = True,
-        force: bool = False, via: str | None = None) -> Record:
-    """A source item whose originals are *sources* (paths or URLs)."""
+def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "auto",
+        cas_name: str | None = None, url: str | None = None, fetch: bool = True,
+        force: bool = False, via: str | None = None) -> Item:
+    """A primary item whose originals are *sources* (paths or URLs)."""
     if not sources:
         raise KBError("nothing to add: give one or more files or URLs")
     if url and len(sources) != 1:
@@ -190,7 +190,7 @@ def add(kb: KB, kind: str, sources: list[str], fields: dict, *, mode: str = "aut
     if ids and not force:
         dup = find_by_identifier(kb, ids)
         if dup:
-            raise KBError(f"already in the KB as {', '.join(dup)} (same identifier); use --force to add anyway")
+            raise KBError(f"already in this store as {', '.join(dup)} (same identifier); use --force to add anyway")
     data = deep_merge(_skeleton(kb, kind, via=via), fields)
     with kb.tx():
         renditions = []
@@ -202,24 +202,24 @@ def add(kb: KB, kind: str, sources: list[str], fields: dict, *, mode: str = "aut
             while name in used:
                 name += "_"
             used.add(name)
-            r = {"name": name, "role": "original", "media_type": store.media_type(filename), "locations": []}
+            r = {"name": name, "role": "original", "media_type": content.media_type(filename), "locations": []}
             if is_url:
-                r["locations"].append(store.url_location(src, retrieved=fetch))
+                r["locations"].append(content.url_location(src, retrieved=fetch))
                 if fetch:
-                    path, sha, size = store.fetch(kb, src)
+                    path, sha, size = content.fetch(kb, src)
                     m = mode if mode != "auto" else ("db" if size <= kb.cfg.max_inline_bytes
-                                                      else ("cas" if store_name else "none"))
-                    locs, sha, size = store.place(kb, path, filename, m, store_name)
+                                                      else ("cas" if cas_name else "none"))
+                    locs, sha, size = content.place(kb, path, filename, m, cas_name)
                     r.update(sha256=sha, size=size)
                     r["locations"] += locs
             else:
                 path = Path(src).expanduser()
                 if not path.is_file():
                     raise KBError(f"no such file: {src}")
-                locs, sha, size = store.place(kb, path, filename, mode, store_name)
+                locs, sha, size = content.place(kb, path, filename, mode, cas_name)
                 r.update(sha256=sha, size=size, locations=locs)
                 if url:
-                    r["locations"].append(store.url_location(url, retrieved=False))
+                    r["locations"].append(content.url_location(url, retrieved=False))
             if not r["locations"]:
                 raise KBError(f"{src}: store mode 'none' needs a URL (--url) to say where it lives")
             renditions.append(r)
@@ -231,9 +231,9 @@ _NOT_INHERITED = {"id", "created", "renditions", "summary", "status", "supersede
                   "evidence", "derived_from", "asserted_by", "schema_version", "origin"}
 
 
-def supersede(kb: KB, old_ref: str, fields: dict, text: str | None = None,
-              via: str | None = None) -> Record:
-    """A corrected version of a record; the old one stops being current."""
+def supersede(kb: Store, old_ref: str, fields: dict, text: str | None = None,
+              via: str | None = None) -> Item:
+    """A corrected version of an item; the old one stops being current."""
     old = kb.get(old_ref)
     if not kb.is_current(old.id):
         raise KBError(f"{old.id} is already superseded by {', '.join(kb.superseded_by[old.id])}; "
@@ -249,8 +249,8 @@ def supersede(kb: KB, old_ref: str, fields: dict, text: str | None = None,
     return new(kb, old.kind, fields, text=text, via=via)
 
 
-def retract(kb: KB, old_ref: str, reason: str, fields: dict, via: str | None = None) -> Record:
-    """An observation withdrawing a record without replacing it."""
+def retract(kb: Store, old_ref: str, reason: str, fields: dict, via: str | None = None) -> Item:
+    """An observation withdrawing an item without replacing it."""
     old = kb.get(old_ref)
     base = {
         "title": f"Retraction: {old.data['title']}"[:200],
@@ -264,8 +264,8 @@ def retract(kb: KB, old_ref: str, reason: str, fields: dict, via: str | None = N
     return new(kb, "observation", deep_merge(base, fields), text=reason, via=via)
 
 
-def from_json(kb: KB, payload: dict, text: str | None = None, via: str | None = None) -> Record:
-    """A record from a partial JSON object (kind required); kb fills the plumbing."""
+def from_json(kb: Store, payload: dict, text: str | None = None, via: str | None = None) -> Item:
+    """An item from a partial JSON object (kind required); kb fills the plumbing."""
     payload = dict(payload)
     kind = payload.pop("kind", None)
     if not kind:

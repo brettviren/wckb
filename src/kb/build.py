@@ -17,15 +17,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import __version__, store
+from . import __version__, content
 from .errors import KBError
 from .ids import parse_ref
-from .records import KB, Record, canonical, now
+from .items import Store, Item, canonical, now
 
 MANIFEST = "manifest"
 
 
-def source_files(rec: Record) -> dict[str, str]:
+def source_files(rec: Item) -> dict[str, str]:
     """Hashes of a view's source files, by file name."""
     out = {}
     for r in rec.renditions:
@@ -35,19 +35,19 @@ def source_files(rec: Record) -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
-def read_manifest(rec: Record) -> dict | None:
+def read_manifest(rec: Item) -> dict | None:
     if not rec.has_rendition(MANIFEST):
         return None
     text = rec.text(MANIFEST)
     return json.loads(text) if text else None
 
 
-def _view_digest(rec: Record) -> str:
+def _view_digest(rec: Item) -> str:
     data = {k: v for k, v in rec.data.items() if k != "renditions"}
     return hashlib.sha256(canonical(data)).hexdigest()
 
 
-def view_staleness(kb: KB, rec: Record) -> list[str]:
+def view_staleness(kb: Store, rec: Item) -> list[str]:
     man = read_manifest(rec)
     if man is None:
         return ["never built"]
@@ -70,14 +70,14 @@ def view_staleness(kb: KB, rec: Record) -> list[str]:
     if man.get("sources") != source_files(rec):
         reasons.append("view sources changed since built")
     if man.get("view_digest") != _view_digest(rec):
-        reasons.append("view record changed since built")
+        reasons.append("view item changed since built")
     return reasons
 
 
-def resolve_inputs(kb: KB, rec: Record) -> dict:
-    """ref -> {record, renditions: {name: path or None}}; named renditions are fetched."""
+def resolve_inputs(kb: Store, rec: Item) -> dict:
+    """ref -> {item (a JSON file), renditions: {name: path or None}}; named renditions are fetched."""
     out = {}
-    area = kb.cfg.build_dir / rec.id / "records"
+    area = kb.cfg.build_dir / rec.id / "items"
     area.mkdir(parents=True, exist_ok=True)
     for ref in rec.inputs():
         ident, name = parse_ref(ref)
@@ -87,15 +87,15 @@ def resolve_inputs(kb: KB, rec: Record) -> dict:
         rends = {}
         for r in dep.renditions:
             wanted = name == r["name"]
-            path = store.resolve(kb, dep, r, fetch_urls=wanted)
+            path = content.resolve(kb, dep, r, fetch_urls=wanted)
             if wanted and path is None:
                 raise KBError(f"{rec.id}: input {ref} is not reachable from here")
             rends[r["name"]] = str(path) if path else None
-        out[ref] = {"record": str(rp), "renditions": rends}
+        out[ref] = {"item": str(rp), "renditions": rends}
     return out
 
 
-def _tool_argv(rec: Record, out: Path, inputs_json: Path, work: Path) -> list[list[str]]:
+def _tool_argv(rec: Item, out: Path, inputs_json: Path, work: Path) -> list[list[str]]:
     b = rec.data["build"]
     tool, target = b["tool"], b.get("target")
     if tool == "make":
@@ -123,14 +123,14 @@ def _tool_version(tool: str) -> str:
     return lines[0] if lines else ""
 
 
-def materialize(kb: KB, rec: Record, work: Path) -> None:
+def materialize(kb: Store, rec: Item, work: Path) -> None:
     for r in rec.renditions:
         if r["role"] != "source":
             continue
         fn = next((l.get("filename") for l in r["locations"] if l["type"] == "db"), None) or r["name"]
         data = rec.content(r["name"])
         if data is None:
-            p = store.resolve(kb, rec, r)
+            p = content.resolve(kb, rec, r)
             if p is None:
                 raise KBError(f"{rec.id}: source {fn} is not reachable")
             data = p.read_bytes()
@@ -141,7 +141,7 @@ def materialize(kb: KB, rec: Record, work: Path) -> None:
             dest.chmod(0o755)
 
 
-def build(kb: KB, ident: str, log=None) -> dict:
+def build(kb: Store, ident: str, log=None) -> dict:
     rec = kb.get(ident)
     if rec.kind != "view":
         raise KBError(f"{rec.id} is a {rec.kind}, not a view")
@@ -173,7 +173,7 @@ def build(kb: KB, ident: str, log=None) -> dict:
     outputs = {}
     for p in sorted(out.rglob("*")):
         if p.is_file():
-            sha, size = store.sha256_file(p)
+            sha, size = content.sha256_file(p)
             outputs[str(p.relative_to(out))] = {"sha256": sha, "size": size}
     if not outputs:
         raise KBError(f"build of {rec.id} wrote nothing to $KB_OUT ({out})")
@@ -185,11 +185,11 @@ def build(kb: KB, ident: str, log=None) -> dict:
     }
     data = copy.deepcopy(rec.data)
     with kb.tx():
-        locs, sha, size = store.place_bytes(kb, (json.dumps(manifest, indent=2) + "\n").encode(), "manifest.json")
+        locs, sha, size = content.place_bytes(kb, (json.dumps(manifest, indent=2) + "\n").encode(), "manifest.json")
         data["renditions"] = [r for r in data.get("renditions", []) if r["name"] != MANIFEST] + [
             {"name": MANIFEST, "role": "metadata", "media_type": "application/json", "sha256": sha, "size": size,
              "locations": locs}]
-        kb.save(Record(data, kb), "build", {"outputs": len(outputs)})
+        kb.save(Item(data, kb), "build", {"outputs": len(outputs)})
     return manifest
 
 
@@ -198,7 +198,7 @@ def manifest_version(manifest: dict) -> str:
     return hashlib.sha256(canonical(core)).hexdigest()[:12]
 
 
-def publish(kb: KB, ident: str) -> dict:
+def publish(kb: Store, ident: str) -> dict:
     rec = kb.get(ident)
     if kb.cfg.publish_path is None:
         raise KBError("no publish path: kb config set views '{\"publish_path\": ...}' (or .kb/local.toml)")
@@ -211,7 +211,7 @@ def publish(kb: KB, ident: str) -> dict:
     out = kb.cfg.build_dir / rec.id / "out"
     for rel, meta in man["outputs"].items():
         p = out / rel
-        if not p.is_file() or store.sha256_file(p)[0] != meta["sha256"]:
+        if not p.is_file() or content.sha256_file(p)[0] != meta["sha256"]:
             raise KBError(f"build output {rel} does not match the manifest; rebuild {rec.id}")
     version = manifest_version(man)
     dest = kb.cfg.publish_path / rec.id / version
@@ -234,11 +234,11 @@ def publish(kb: KB, ident: str) -> dict:
     return entry | {"at": now(), "by": kb.cfg.user}
 
 
-def publications(kb: KB, rec: Record) -> list[dict]:
+def publications(kb: Store, rec: Item) -> list[dict]:
     return [e["detail"] | {"at": e["at"], "by": e["actor"]} for e in kb.events(rec.id, "publish")]
 
 
-def world(kb: KB, log=lambda m: None, publish_too: bool = False) -> dict:
+def world(kb: Store, log=lambda m: None, publish_too: bool = False) -> dict:
     """Re-extract stale renditions, then rebuild stale views in dependency order."""
     from . import graph, transforms
     report = {"extracted": [], "built": [], "published": [], "failed": []}
@@ -251,7 +251,7 @@ def world(kb: KB, log=lambda m: None, publish_too: bool = False) -> dict:
             log(f"extracted {s.id}#{s.rendition}")
         except KBError as exc:
             report["failed"].append({"id": f"{s.id}#{s.rendition}", "error": str(exc)})
-    views = [r.id for r in kb.records.values() if r.kind == "view" and view_staleness(kb, r)]
+    views = [r.id for r in kb.items.values() if r.kind == "view" and view_staleness(kb, r)]
     for vid in graph.topo_order(kb, views):
         try:
             build(kb, vid, log)

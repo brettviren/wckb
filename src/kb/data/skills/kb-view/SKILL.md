@@ -9,8 +9,8 @@ A view is an item whose `source` renditions are its files: a document plus
 any scripts. `kb build` materializes them in a work area, runs the tool, and
 pins every input in a manifest.
 
-1. **Gather.** Run `kb context <subject>` and pick the input records.
-   Prefer topics and current, verified records. Ask the user who the audience
+1. **Gather.** Run `kb context <subject>` and pick the input items.
+   Prefer topics and current, verified items. Ask the user who the audience
    is and which format they want (html, pdf).
 2. **Scaffold:**
 
@@ -22,9 +22,9 @@ pins every input in a manifest.
 
    Then write its source files: `kb checkout VIEW DIR`, create the files in
    DIR, and `kb checkin DIR` (files added there become sources):
-   - `index.qmd` or `index.md`: the document. Cite record IDs.
+   - `index.qmd` or `index.md`: the document. Cite item IDs.
    - `scripts/*.py` to make figures and tables. Read inputs through
-     `$KB_INPUTS`, a JSON map of ref to `{record, renditions: {name: path}}`,
+     `$KB_INPUTS`, a JSON map of ref to `{item, renditions: {name: path}}`,
      never through hard-coded paths. Write outputs under `$KB_OUT`
      (`$KB_WORK` is the work area holding the sources).
    - Pin the environment (`pixi.toml`, `uv.lock` or `environment.yml`) if

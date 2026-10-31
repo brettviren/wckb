@@ -68,7 +68,7 @@ go back to Claude in the same turn.
 - "Ingest these slides from Indico <URL>; I have a copy at ~/Downloads/x.pdf."
   The `kb-ingest` skill handles the SSO case with `--url`.
 - "The noise was actually in run 1243 (elog 5521). Correct the KB." The
-  `kb-correct` skill supersedes the record and revises the topics.
+  `kb-correct` skill supersedes the item and revises the topics.
 - "Make a one-page PDF on TPC noise for Thursday." This uses `kb-view`.
 - "Curate the KB." This uses `kb-curate`, which handles overlaps, stale
   topics and old unverified claims.

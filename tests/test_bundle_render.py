@@ -8,7 +8,7 @@ from kb import authoring, bundle, render
 from kb.cli import main
 from kb.errors import KBError
 from kb.push import make_kset
-from kb.records import KB
+from kb.items import Store
 
 from conftest import make_store, observation
 
@@ -58,14 +58,14 @@ def test_bundle_check_against_another_store(kb, material, tmp_path):
     assert out["ok"] and len(out["plan"]["new"]) == 6 and out["plan"]["conflict"] == []
     rep = bundle.apply(other, b)
     assert set(rep["items"]["new"]) == set(out["plan"]["new"])
-    assert KB.open(other.root).get(material["o1"].id).text("note").startswith("Coherent noise peaked")
+    assert Store.open(other.root).get(material["o1"].id).text("note").startswith("Coherent noise peaked")
 
 
 def test_render_is_for_people(kb, material, tmp_path):
     other = make_store(tmp_path / "other", "group", "other")
     other.set_setting("links", {"indico": "https://indico.example"})
     b = bundle.make(kb, material["outer"].id, note="Please review before Thursday")
-    text = render.bundle_text(render.bundle_view(b, KB.open(other.root)))
+    text = render.bundle_text(render.bundle_view(b, Store.open(other.root)))
     assert "from test" in text and "Please review before Thursday" in text
     assert "What accepting it would do" in text and "6 new" in text
     assert "Ann Example" in text                                  # person resolved, not per-ann
@@ -79,7 +79,7 @@ def test_render_is_for_people(kb, material, tmp_path):
     assert not re.search(r"\b[0-9a-f]{64}\b", text)               # no hashes
     tree = text[text.index("Contents"):]
     assert "TPC noise findings" in tree and "└─" in tree and "The observations" in tree
-    md = render.bundle_text(render.bundle_view(b, KB.open(other.root)), md=True)
+    md = render.bundle_text(render.bundle_view(b, Store.open(other.root)), md=True)
     assert md.startswith("# Bundle") and "[arxiv](https://arxiv.org/abs/2601.01234)" in md
     v = json.loads(render.to_json(render.bundle_view(b)))         # a view model for programs and LLMs
     assert v["tree"]["children"][1]["children"][0]["id"] == material["o1"].id
@@ -90,8 +90,8 @@ def test_render_changes_and_conflicts(kb, material, tmp_path):
     other = make_store(tmp_path / "other", "group", "other")
     bundle.apply(other, bundle.make(kb, material["outer"].id))
     set_fields(kb, material["o2"].id, ["status=disputed"])
-    ks = make_kset(KB.open(kb.root), [material["o2"].id])
-    v = render.bundle_view(bundle.make(KB.open(kb.root), ks.id), KB.open(other.root))
+    ks = make_kset(Store.open(kb.root), [material["o2"].id])
+    v = render.bundle_view(bundle.make(Store.open(kb.root), ks.id), Store.open(other.root))
     changed = [g for g in v["groups"] if g["action"] == "update"][0]["items"][0]
     assert any("status: unverified → disputed" in c for c in changed["changes"])
 
@@ -102,17 +102,17 @@ def test_review_flow_with_llm_and_human(kb, material, tmp_path, monkeypatch):
     e = bundle.receive(group, b)
     assert e.status == "pending" and bundle.receive(group, b).bundle == e.bundle   # receiving twice is a no-op
     monkeypatch.setenv("KB_AGENT", "1")
-    bundle.review(KB.open(group.root), e.bundle, "accept", "Attributed, cited, no conflicts.")
+    bundle.review(Store.open(group.root), e.bundle, "accept", "Attributed, cited, no conflicts.")
     with pytest.raises(KBError, match="reserved for the human"):                     # group: accept = never
-        bundle.accept(KB.open(group.root), e.bundle, approved="the human said ok")
+        bundle.accept(Store.open(group.root), e.bundle, approved="the human said ok")
     monkeypatch.delenv("KB_AGENT")
-    g = KB.open(group.root)
+    g = Store.open(group.root)
     bundle.review(g, e.bundle, "comment", "Agree with Claude.")
     assert [(r["reviewer"], r["reviewer_kind"]) for r in bundle.get(g, e.bundle).reviews] == \
         [("claude", "llm"), ("per-tester", "human")]
     bundle.accept(g, e.bundle)
-    assert material["top"].id in KB.open(group.root).records
-    assert [ev["action"] for ev in KB.open(group.root).events(material["outer"].id)][:2] == \
+    assert material["top"].id in Store.open(group.root).items
+    assert [ev["action"] for ev in Store.open(group.root).events(material["outer"].id)][:2] == \
         ["inbox-receive", "review"]
 
 
@@ -140,8 +140,8 @@ def test_cli_bundle_and_review(kb, material, tmp_path):
 
 def test_cli_config(root):
     run = lambda *a: CliRunner().invoke(main, ["-C", str(root), *a], catch_exceptions=False)  # noqa: E731
-    run("config", "set", "stores.default", '{"path": "/tmp/somewhere"}')
-    assert json.loads(run("config", "get", "stores").output) == {"default": {"path": "/tmp/somewhere"}}
-    assert KB.open(root).cfg.stores["default"].as_posix() == "/tmp/somewhere"
+    run("config", "set", "cas.default", '{"path": "/tmp/somewhere"}')
+    assert json.loads(run("config", "get", "cas").output) == {"default": {"path": "/tmp/somewhere"}}
+    assert Store.open(root).cfg.cas["default"].as_posix() == "/tmp/somewhere"
     r = CliRunner().invoke(main, ["-C", str(root), "config", "set", "autonomy", "{}"])
     assert r.exit_code != 0 and "managed by kb policy" in r.output
