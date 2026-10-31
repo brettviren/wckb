@@ -37,7 +37,7 @@ What `kb doctor` knows today (`kb doctor --list` is authoritative):
 | `query-tables` | search tables out of step with the items | `kb store reindex` (auto) |
 | `gitignore` | a store inside a git working tree is not ignored, or `kb.sqlite` is tracked | write `.gitignore` (auto); untrack (advice) |
 | `kb-on-path` | `kb` is not on PATH, so hooks and LLM sessions can't run it | install it as a uv tool (advice) |
-| `user` | items are attributed to your login name | set `user` in config.toml (advice) |
+| `user` | items are attributed to your login name | make your person item (advice); then set `user` in config.toml (ask) |
 | `policy` | policy not enacted, outdated, or edited by hand | `kb policy enact` (auto, unless hand edits would be lost: then advice) |
 | `cas` | a content store holding renditions has no path here, or isn't mounted | set its path in `.kb/local.toml` (advice) |
 | `edges` | a neighbor can't be reached | `kb edge fetch` for snapshot neighbors (auto); otherwise advice |

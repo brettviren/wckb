@@ -68,6 +68,22 @@ def _read(path: Path) -> dict:
         raise KBError(f"{path}: {exc}") from exc
 
 
+def set_user(person: str) -> Path:
+    """Write ``user = PERSON`` as a top-level key of the user's config.toml (other content is kept)."""
+    import re
+    f = user_config_path()
+    text = f.read_text() if f.exists() else ""
+    head, sep, rest = text.partition("\n[")          # top-level keys come before the first table
+    line = f'user = "{person}"'
+    if re.search(r"(?m)^user\s*=.*$", head):
+        head = re.sub(r"(?m)^user\s*=.*$", line, head)
+    else:
+        head = line + ("\n" + head if head else "")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(head + sep + rest if sep else head + ("" if head.endswith("\n") else "\n"))
+    return f
+
+
 def user_config_path() -> Path:
     env = os.environ.get("KB_CONFIG")
     if env:

@@ -34,8 +34,8 @@ KINDS = tuple(PREFIX)
 PRIMARY_KINDS = frozenset({"observation", "document", "dataset", "config", "snapshot", "software", "kset"})
 
 _ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz"  # Crockford base32, lower case
-_ID = re.compile(r"^(%s)-[a-z0-9][a-z0-9-]{2,62}$" % "|".join(KIND))
-_REF = re.compile(r"^(?P<id>(%s)-[a-z0-9][a-z0-9-]{2,62})(#(?P<rendition>[A-Za-z0-9_.-]+))?$" % "|".join(KIND))
+_ID = re.compile(r"^(%s)-[a-z0-9][a-z0-9-]{1,62}$" % "|".join(KIND))
+_REF = re.compile(r"^(?P<id>(%s)-[a-z0-9][a-z0-9-]{1,62})(#(?P<rendition>[A-Za-z0-9_.-]+))?$" % "|".join(KIND))
 
 
 def new_id(kind: str, slug: str | None = None) -> str:
@@ -49,7 +49,8 @@ def new_id(kind: str, slug: str | None = None) -> str:
             raise KBError("only person items take a readable slug")
         ident = f"{prefix}-{slug}"
         if not _ID.match(ident):
-            raise KBError(f"bad person slug {slug!r}: use 3-63 of a-z, 0-9 and -")
+            raise KBError(f"person slug {slug!r}: use 2 to 63 characters of a-z, 0-9 and '-', "
+                          "starting with a letter or digit (e.g. your initials or login name)")
         return ident
     return prefix + "-" + "".join(secrets.choice(_ALPHABET) for _ in range(10))
 

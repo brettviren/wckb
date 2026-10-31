@@ -60,6 +60,9 @@ def validate(data: dict) -> list[str]:
         return [f"schema_version: {version!r}, but this kb implements {MAJOR} (run kb store migrate, or upgrade kb)"]
     validator = _validators(MAJOR)[kind]
     errors = sorted(validator.iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
+    if any(e.validator != "unevaluatedProperties" for e in errors):
+        # A failing allOf part leaves its properties "unevaluated": noise next to the real error.
+        errors = [e for e in errors if e.validator != "unevaluatedProperties"]
     return [_describe(e) for e in errors]
 
 

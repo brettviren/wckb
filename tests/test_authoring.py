@@ -160,3 +160,16 @@ def test_locate_mirror_on_frozen_source(root, tmp_path):
     other.write_bytes(b"different")
     with pytest.raises(KBError, match="records"):
         edit.add_location(kb, f"{rec.id}#original", "default", file=other)
+
+
+def test_person_from_a_name_and_short_slugs(kb):
+    rec = authoring.new(kb, "person", authoring.fields_from_options(sets=["name=Brett Viren"]), slug="bv")
+    assert rec.id == "per-bv" and rec.data["title"] == "Brett Viren" and rec.data["summary"] == "Brett Viren."
+    with pytest.raises(KBError, match="2 to 63 characters"):
+        authoring.new(kb, "person", {"name": "X"}, slug="b")
+
+
+def test_schema_errors_are_not_buried_in_noise(kb):
+    with pytest.raises(KBError) as e:
+        authoring.new(kb, "document", {"title": "T", "summary": "S"}, text="x")
+    assert "Unevaluated" not in str(e.value) and "doctype" in str(e.value)

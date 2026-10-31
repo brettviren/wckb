@@ -187,14 +187,37 @@ def _kb_on_path(kb):
                     "install it as a tool: uv tool install --editable <path to wckb> (or put its bin on PATH)")]
 
 
+def _login_slug() -> str:
+    import getpass
+    import re
+    try:
+        login = getpass.getuser()
+    except Exception:          # no login name in this environment
+        login = "yourname"
+    return re.sub(r"[^a-z0-9-]+", "-", login.lower()).strip("-") or "yourname"
+
+
 @remedy("user", "Who is making items is not configured")
 def _user(kb):
     from .config import user_config_path
     if os.environ.get("KB_USER") or kb.cfg.raw.get("user"):
         return []
-    return [Finding("user", f"items are attributed to the login name {kb.cfg.user!r}",
-                    f'say who you are in {user_config_path()}: user = "per-yourname" '
-                    "(a person item: kb new person --slug yourname --set name=\"Your Name\")")]
+    slug = _login_slug()
+    login = kb.cfg.user
+    mine = [r.id for r in kb.items.values() if r.kind == "person"
+            and (r.id == f"per-{slug}" or r.data.get("created", {}).get("by") == login)]
+    if len(mine) == 1:
+        return [Finding("user", f"items are attributed to the login name {login!r}, not to a person item",
+                        f'set user = "{mine[0]}" in {user_config_path()}', "ask", mine[0])]
+    return [Finding("user", f"items are attributed to the login name {login!r}, not to a person item",
+                    f'make your person item: kb new person --slug {slug} --set name="Your Name"; '
+                    f"then kb doctor user --fix sets user = \"per-{slug}\" in {user_config_path()}")]
+
+
+@_user.fixer
+def _set_user(kb, f):
+    from .config import set_user
+    return f"user = \"{f.where}\" in {set_user(f.where)}"
 
 
 @remedy("policy", "Policy not enacted, outdated or edited by hand", action="policy")

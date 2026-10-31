@@ -162,3 +162,23 @@ def test_cli_status_and_doctor(kb):
     assert "query-tables" in run("doctor", "--list").output
     assert json.loads(run("status", "--json").output)["attention"] == []
     assert "no remedy" in run("doctor", "nonsense").output
+
+
+def test_user_is_set_up_in_two_steps(kb, tmp_path, monkeypatch):
+    from kb import authoring
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('[forges.gh]\ntype = "github"\nhost = "github.com"\n')
+    monkeypatch.setenv("KB_CONFIG", str(cfg))
+    monkeypatch.delenv("KB_USER")
+    monkeypatch.setattr("getpass.getuser", lambda: "bv")
+    kb = Store.open(kb.root)
+    f = doctor.diagnose(kb, ["user"])
+    assert [x.mode for x in f] == ["manual"] and "--slug bv" in f[0].fix
+    authoring.new(kb, "person", {"title": "Brett", "summary": "Brett.", "name": "Brett Viren"}, slug="bv")
+    f = doctor.diagnose(Store.open(kb.root), ["user"])
+    assert [(x.mode, x.where) for x in f] == [("ask", "per-bv")]
+    assert doctor.treat(Store.open(kb.root), f, yes)[0]["result"] == "fixed"
+    import tomllib
+    conf = tomllib.loads(cfg.read_text())
+    assert conf["user"] == "per-bv" and conf["forges"]["gh"]["host"] == "github.com"
+    assert doctor.diagnose(Store.open(kb.root), ["user"]) == []

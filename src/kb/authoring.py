@@ -155,6 +155,11 @@ def new(kb: Store, kind: str, fields: dict, text: str | None = None, slug: str |
     """An item from *fields*, with *text* as its content rendition
     (named and filed as *content_file* = (name, filename) if given)."""
     data = deep_merge(_skeleton(kb, kind, slug, via), fields)
+    if kind == "person" and data.get("name"):      # a person needs little more than a name
+        if not data.get("title"):
+            data["title"] = data["name"]
+        if not data.get("summary"):
+            data["summary"] = data["name"] + (f", {data['affiliation']}." if data.get("affiliation") else ".")
     for k in ("id", "kind", "schema_version"):
         if k in fields and fields[k] != data[k]:
             raise KBError(f"{k} is assigned by kb and cannot be given")
