@@ -21,6 +21,7 @@ Deliverables:
 | The content dataset: large content's default home (a datalad source) | `src/kb/content.py` | done |
 | OCR (tesseract, configured engines); PDF text by page; sqlite-vec; `reindex --fetch` | `src/kb/ocr.py`, `transforms.py`, `embed.py` | done |
 | Typed links and back links (knowledge graph); qualified dates; fetch failures recorded; readability for web pages; kinds' fields in `--help` | `src/kb/graph.py`, `content.py`, `readability.py`, `schema.py` | done |
+| Artifacts phase 1: doctypes and provenance, co-authors on every write, LLM summary renditions, inputs pinned at creation, HTML artifacts opened in their source, `kb artifact list` | `src/kb/artifacts.py`, `edit.py`, `opener.py`, `hooks.py` | done |
 | `kb-research` skill: research recorded as sources, one-claim observations and a topic | `src/kb/data/skills/kb-research/` | done |
 | `kb open`: an item's file (original or text) in the desktop's application | `src/kb/opener.py` | done |
 | Shared sources on one computer: shared datasets, shared clones (`--shared`, `kb source share`) | `src/kb/sharing.py` | done |

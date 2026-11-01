@@ -29,10 +29,14 @@ def test_end_to_end(root, tmp_path):
     r = run(root, "new", "topic", "--title", "Noise", "--summary", "About noise.", "--subject", "detector/tpc",
             "--derived-from", nid, "--text", f"Run 1243 [{nid}].")
     tid = r.output.split()[0]
-    assert "topic" in run(root, "item", "stale").output
+    assert run(root, "item", "stale").output == ""                 # made from its inputs as they are: pinned
+    r = run(root, "item", "supersede", nid, "--runs", "1244", "--text", "Was 1244.")
+    assert "topic" in run(root, "item", "stale").output             # an input was corrected
+    newest = r.output.split()[0]
+    run(root, "item", "set", tid, "--replace-ref", f"{nid}={newest}")
     run(root, "item", "stamp", tid)
     assert run(root, "item", "stale").output == ""
-    assert run(root, "item", "deps", "-r", nid).output.startswith(tid)
+    assert run(root, "item", "deps", "-r", newest).output.startswith(tid)
 
 
 def test_errors_are_one_line(root):

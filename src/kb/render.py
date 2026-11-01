@@ -167,6 +167,8 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
             f.append(("asserted by", ", ".join(x for x in (look.name(a["who"]), a.get("how"), when(a.get("when"))) if x)))
     if d.get("creators"):
         f.append(("by", ", ".join(look.name(c) for c in d["creators"])))
+    if (d.get("created") or {}).get("with"):
+        f.append(("made with", ", ".join(d["created"]["with"])))
     if d.get("date"):
         f.append(("dated", when(d["date"])))
     for q, v in (d.get("dates") or {}).items():

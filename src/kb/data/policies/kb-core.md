@@ -47,6 +47,8 @@ Rules:
    Say how items relate with typed links (`--link supports=ID`,
    `kb item link ID RELATION OTHER`); `kb item links ID` shows an item's
    links both ways. `kb new KIND --help` lists a kind's fields and values.
+   What you write is recorded with you as co-author (`KB_COAUTHOR`, set by
+   the session hook, or `--coauthor`).
 3. **`verified` needs evidence** from an authoritative source. Hearsay is
    `unverified`, and a model's reading of a figure is not evidence.
 4. **Write the summary for the next LLM:** one to three sentences, not the
@@ -54,11 +56,16 @@ Rules:
 5. **Set `subject` and `valid`.** Reuse subject paths (`kb ls --subjects`).
    Give run ranges or time windows whenever the claim has them.
 6. **Cite in topics:** `[ID]` for every factual sentence, with every cited
-   item in `derived_from`. Then run `kb item stamp ID`. Change a topic's text
-   with `kb item content ID --file page.md`.
+   item in `derived_from` (kb pins them when the topic is made). Change a
+   topic's text with `kb item content ID --file page.md`, then run
+   `kb item stamp ID`.
 7. **Store data and scripts, not pictures of plots.** `kb add` decides where
    large files go.
 8. **Respect `access`.** Never move content to a more open level than its
    inputs.
 9. **Run `kb check` when you finish a batch of changes.** Mention `kb lint`
    findings.
+10. **Artifacts you make** (technotes, demos, notebooks) are documents with
+    the items they present as `--derived-from`; see `kb artifact list`. A
+    summary you write of any document is registered with
+    `kb rendition summary ID FILE`.

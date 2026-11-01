@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.9) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.10) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -55,7 +55,8 @@ A paper, preprint, technote, presentation, thesis, minutes or similar. The origi
 
 | field | required | type | description |
 |---|---|---|---|
-| `doctype` | yes | `paper` \| `preprint` \| `technote` \| `presentation` \| `poster` \| `thesis` \| `minutes` \| `report` \| `manual` \| `proposal` \| `book` \| `other` |  |
+| `doctype` | yes | `paper` \| `preprint` \| `technote` \| `presentation` \| `poster` \| `thesis` \| `minutes` \| `report` \| `manual` \| `proposal` \| `book` \| `demo` \| `notebook` \| `prompt` \| `other` |  |
+| `provenance` |  | `cited` \| `recorded` \| `rebuildable` | For an artifact (a technote, demo or notebook made here): how much of its making is recorded. cited: the items it presents (derived_from); recorded: also the steps that made it; rebuildable: a view remakes it. |
 | `event` |  | object |  |
 | `venue` |  | string | Journal, conference or series. |
 | `version` |  | string |  |

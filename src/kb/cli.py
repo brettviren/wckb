@@ -90,7 +90,7 @@ SECTIONS = [
     ("Everyday", ["init", "status", "add", "new", "show", "open", "ls", "search", "context", "log"]),
     ("Keeping a store sound", ["check", "lint", "doctor", "config"]),
     ("Moving knowledge between stores", ["push", "pull", "sync"]),
-    ("Commands by thing (kb THING --help)", ["item", "rendition", "asset", "source", "kset", "edge", "bundle",
+    ("Commands by thing (kb THING --help)", ["item", "rendition", "artifact", "asset", "source", "kset", "edge", "bundle",
                                              "inbox", "view", "data", "policy", "store"]),
     ("Integration", ["exchange", "forge", "secret"]),
 ]
@@ -148,9 +148,12 @@ class TopGroup(Group):
 @click.option("-L", "--log-sink", metavar="SINK",
               help="Log to this file (appended to), or stdout or stderr (default: ~/.cache/kb/logs/kb-DATE.log).")
 @click.option("--debug", is_flag=True, help="Log everything to stdout: -l debug -L stdout.")
+@click.option("--coauthor", "coauthors", multiple=True, metavar="NAME",
+              help="Who takes part in what this command writes, besides you (repeatable), as git's "
+                   "Co-Authored-By: e.g. 'claude-opus-5-5 (Claude Code)'. Default: $KB_COAUTHOR.")
 @click.version_option(__version__, prog_name="kb")
 @click.pass_context
-def main(ctx, root, context_name, config_file, no_init_file, log_level, log_sink, debug):
+def main(ctx, root, context_name, config_file, no_init_file, log_level, log_sink, debug, coauthors):
     """kb: knowledge stores shared by people and their LLMs.
 
     \b
@@ -166,7 +169,8 @@ def main(ctx, root, context_name, config_file, no_init_file, log_level, log_sink
     """
     from . import config, logs
     logs.setup("debug" if debug else (log_level or logs.DEFAULT_LEVEL), "stdout" if debug else log_sink)
-    config.INVOCATION = config.Invocation(context=context_name, config=config_file, no_init_file=no_init_file)
+    config.INVOCATION = config.Invocation(context=context_name, config=config_file, no_init_file=no_init_file,
+                                          coauthors=tuple(coauthors))
     ctx.obj = Ctx(root)
 
 
@@ -181,7 +185,9 @@ item_grp = group("item", "Items: change, correct, withdraw, link, edit, inspect 
                  order=["set", "link", "links", "edit", "supersede", "retract", "content", "checkout", "checkin",
                         "deps", "graph", "stale", "stamp", "schema"])
 rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract text, get a file, verify.",
-                      order=["path", "add", "extract", "transforms", "locate", "verify"])
+                      order=["path", "add", "extract", "summary", "transforms", "locate", "verify"])
+artifact_grp = group("artifact", "Artifacts: technotes, demos and notebooks made here to present knowledge.",
+                     order=["list"])
 asset_grp = group("asset", "Assets: abstract files and file sets, their versions, and the sources that supply them.")
 source_grp = group("source", "Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.",
                    order=["list", "show", "add", "share", "clone", "link", "types"])
@@ -536,6 +542,59 @@ def rendition_add_cmd(c, ref, file, name, role, fidelity, source, tool, media_ty
     from .edit import add_rendition
     r = add_rendition(c.kb, ref, file, name, role, fidelity, source, tool, media_type, notes)
     click.echo(f"{c.kb.get(ref).id}#{r['name']}")
+
+
+@command(artifact_grp, "list")
+@click.option("--doctype", "doctypes", multiple=True, type=click.Choice(["technote", "demo", "notebook"]),
+              help="Only these doctypes (repeatable).")
+@click.option("--stale", "stale_only", is_flag=True, help="Only those whose inputs changed.")
+@click.option("--all", "include_old", is_flag=True, help="Include superseded versions.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def artifact_list_cmd(c, doctypes, stale_only, include_old, json_out):
+    """The store's artifacts: what each is, how much of its making is recorded, its inputs, and whether
+    it is stale (an input changed since it was made).
+
+    An artifact is a document of doctype technote, demo or notebook, made
+    here, with the items it presents as its inputs:
+
+    \b
+      kb add note.pdf --set doctype=technote --set provenance=cited --derived-from obs-… --derived-from dat-… ...
+      kb artifact list --stale
+      kb open doc-…                     # a demo opens in your browser, from its source
+    """
+    from .artifacts import listing
+    rows = listing(c.kb, doctypes, stale_only, include_old)
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        flag = "STALE " if r["stale"] else ""
+        click.echo(f"{r['id']:<16} {r['doctype'] or '-':<9} {r['provenance']:<11} {flag}{r['title']}")
+        extra = [f"{r['inputs']} input(s)"] + ([f"made with {', '.join(r['made_with'])}"] if r["made_with"] else [])
+        click.echo(f"{'':<16} {'; '.join(extra)}" + (f"; {r['stale'][0]}" if r["stale"] else ""))
+    if not rows:
+        ui.info("no artifacts (documents of doctype technote, demo or notebook)")
+
+
+@command(rendition_grp, "summary", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("file", type=click.Path(dir_okay=False, exists=True, path_type=Path))
+@click.option("--model", help="The model that wrote it (default: the co-author, $KB_COAUTHOR).")
+@pass_ctx
+def rendition_summary_cmd(c, ref, file, model):
+    """Record FILE, an LLM's summary of an item, as its rendition 'summary' (replacing an earlier one).
+
+    REF is ID (its original, else its content) or ID#NAME. The summary is
+    indexed like extracted text (a hit says in #summary), and goes stale
+    when what it summarizes changes; kb doctor then asks for a new one.
+    kb writes no summaries itself: an LLM does, and registers it here.
+
+    \b
+      kb rendition summary doc-… summary.md --model claude-opus-5-5
+    """
+    from .edit import set_summary
+    r = set_summary(c.kb, ref, file, model)
+    click.echo(f"{c.kb.get(ref.split('#')[0]).id}#{r['name']}")
 
 
 @command(rendition_grp, "locate", no_args_is_help=True)
@@ -1518,7 +1577,8 @@ def log_cmd(c, ref, action, limit, json_out):
         appr = f"  (approved: {e['approved']})" if e.get("approved") else ""
         det = e.get("detail") or {}
         brief = ", ".join(f"{k}={v}" for k, v in det.items() if isinstance(v, (str, int)) and k not in ("from",))[:80]
-        click.echo(f"{e['at'][:19]}  {e['action']:<13} {e['item'] or '':<16} {e['actor']}{appr}  {brief}")
+        who = e["actor"] + (f" with {', '.join(det['with'])}" if det.get("with") else "")
+        click.echo(f"{e['at'][:19]}  {e['action']:<13} {e['item'] or '':<16} {who}{appr}  {brief}")
 
 
 # -- assets: abstract files and file sets ------------------------------------------------

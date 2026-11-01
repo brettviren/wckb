@@ -254,6 +254,28 @@ to be right; please fix the other place.
   model's wrapper, say). Its text has fidelity `ocr`. *Code:* `kb.ocr`
   (`Engine`, `engines`, `engine`, `read`), the `ocr` transform.
 
+**artifact**
+: A document made here to present knowledge: doctype `technote`, `demo`
+  or `notebook` (or any document with a `provenance` level). Its inputs
+  (the items it presents) are in `derived_from`, pinned when it is made, so
+  it goes stale when they change. `provenance`: `cited`, `recorded`,
+  `rebuildable`. An HTML artifact lives in a source and opens there.
+  *Code:* `kb.artifacts`, `graph.is_artifact`, `kb artifact list`;
+  decisions/0004.
+
+**co-author**
+: Who took part in a write besides the person (`created.by`): an LLM
+  (`claude-opus-5-5 (Claude Code)`) or another person, as git's
+  `Co-Authored-By`. Kept in `created.with` and in every event's detail.
+  *Code:* `config.coauthors`, `--coauthor`, `KB_COAUTHOR` (set by the
+  session hook).
+
+**LLM summary**
+: A `summary` rendition of a document (role `derived`, fidelity `llm`,
+  the model as its transform), written by an LLM and registered with
+  `kb rendition summary`; indexed, and stale when what it summarizes
+  changes. *Code:* `edit.set_summary`.
+
 **link** (typed link, knowledge graph)
 : A typed relation from one item to another (field `links`: `supports`,
   `contradicts`, `refines`, `alternative-to`, `compares-with`, `uses`,

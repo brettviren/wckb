@@ -71,9 +71,18 @@ class Invocation:
     context: str | None = None
     config: Path | None = None
     no_init_file: bool = False
+    #: Who takes part in what this command writes, besides the user (--coauthor).
+    coauthors: tuple[str, ...] = ()
 
 
 INVOCATION = Invocation()
+
+
+def coauthors() -> list[str]:
+    """The co-authors of what is written now: --coauthor, else $KB_COAUTHOR (several separated by ';'), as
+    git's Co-Authored-By.  kb's SessionStart hook sets KB_COAUTHOR for an LLM session."""
+    given = list(INVOCATION.coauthors) or [x.strip() for x in os.environ.get("KB_COAUTHOR", "").split(";")]
+    return [x for x in dict.fromkeys(given) if x]
 
 
 @dataclass

@@ -364,6 +364,14 @@ and is then revised by an LLM, never silently.
 by the manifest hash, and logs a `publish` event. Published versions are
 never overwritten.
 
+**Artifacts.** A technote, demo or notebook made here is a document whose
+inputs (`derived_from`) are pinned when it is made; it goes stale like a
+topic when they change, and is remade (a new version supersedes it) or
+re-pinned (`kb item stamp`). Every item's inputs are pinned at creation. An
+HTML artifact lives in a source and opens there. Co-authors are recorded
+on every write, and an LLM's `summary` of any document is a rendition,
+indexed and going stale with what it summarizes. See decisions/0004.
+
 **Staleness and the world.** `kb item stale` lists derived renditions whose
 source changed, topics with changed or superseded inputs, and views whose
 manifest no longer matches. `kb view build --world` re-extracts, then rebuilds

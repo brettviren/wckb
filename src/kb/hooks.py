@@ -102,11 +102,35 @@ def recall(event: dict, root: Path | None = None, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def coauthor(event: dict) -> str:
+    """Who an LLM session is, for KB_COAUTHOR: the model (if the event says) and the tool."""
+    model = event.get("model")
+    if isinstance(model, dict):
+        model = model.get("id") or model.get("display_name")
+    return f"{model} (Claude Code)" if model else "Claude Code"
+
+
+def _set_coauthor(event: dict) -> None:
+    """Give every command of the session KB_COAUTHOR, through Claude Code's session environment file
+    (unless the person set one)."""
+    import os
+    import shlex
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if not env_file or os.environ.get("KB_COAUTHOR"):
+        return
+    try:
+        with open(env_file, "a") as f:
+            f.write(f"export KB_COAUTHOR={shlex.quote(coauthor(event))}\n")
+    except OSError:
+        pass
+
+
 def session(event: dict, root: Path | None = None) -> str:
-    """One short status note at session start."""
+    """One short status note at session start; and the session's co-author for what it writes."""
     from . import graph, policy
     from .federation import neighbors
     from .push import candidates
+    _set_coauthor(event)
     kb = _open(event, root)
     if kb is None:
         return ""

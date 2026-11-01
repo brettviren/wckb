@@ -124,6 +124,9 @@ def _skeleton(kb: Store, kind: str, slug: str | None = None, via: str | None = N
     }
     if via:
         data["created"]["via"] = via
+    from .config import coauthors
+    if coauthors():
+        data["created"]["with"] = coauthors()
     if kind == "observation":
         data["status"] = "unverified"
     return data
@@ -147,8 +150,11 @@ def _known(kb: Store, ref: str) -> bool:
 
 
 def _finish(kb: Store, data: dict, allow_dangling: bool = False) -> Item:
-    """Validate and write a brand-new item."""
+    """Validate and write a brand-new item; its inputs are pinned as they are now (a view's by its build)."""
     data.setdefault("summary", data.get("title", ""))
+    if data.get("derived_from") and data.get("kind") != "view":
+        from .graph import pin
+        data["derived_from"] = pin(kb, data["derived_from"])
     errors = schema.validate(data)
     if not allow_dangling:
         errors += [f"{field}: no item {ref} here or in any reachable store (--allow-dangling if intended)"

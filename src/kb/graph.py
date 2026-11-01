@@ -41,6 +41,23 @@ REF_LABELS = {
 }
 
 
+#: Doctypes of documents made here to present knowledge (decisions/0004).
+ARTIFACT_DOCTYPES = ("technote", "demo", "notebook")
+
+
+def is_artifact(data: dict) -> bool:
+    return data.get("kind") == "document" and (data.get("doctype") in ARTIFACT_DOCTYPES or "provenance" in data)
+
+
+def pin(kb: Store, inputs: list) -> list:
+    """Inputs pinned by the digest they have now (those not in this store stay as they are)."""
+    out = []
+    for x in inputs:
+        ref = x["ref"] if isinstance(x, dict) else x
+        out.append({"ref": ref, "digest": kb.ref_digest(ref)} if kb.exists(ref) else x)
+    return out
+
+
 def label(rel: str, outgoing: bool) -> str:
     if rel in RELATIONS:
         return rel if outgoing else RELATIONS[rel][0]
@@ -223,7 +240,8 @@ def stale(kb: Store) -> list[Stale]:
         elif rec.data.get("derived_from"):
             reasons = topic_staleness(kb, rec)
             if reasons:
-                out.append(Stale(rec.id, rec.kind, "topic" if rec.kind == "topic" else "item", reasons))
+                what = "topic" if rec.kind == "topic" else "artifact" if is_artifact(rec.data) else "item"
+                out.append(Stale(rec.id, rec.kind, what, reasons))
     return out
 
 
@@ -231,8 +249,9 @@ def stamp(kb: Store, ident: str) -> Item:
     """Pin a derived item's inputs by digest (after revising it)."""
     import copy
     rec = kb.get(ident)
-    if rec.frozen:
+    if rec.frozen and rec.kind != "document":
         raise KBError(f"{rec.id} is frozen; frozen items are not stamped")
+    # a document (an artifact) is frozen in what it says, not in which versions of its inputs it presents
     if rec.kind == "view":
         raise KBError("views are pinned by kb view build, which records a manifest")
     missing = [ref for ref in rec.inputs() if not kb.exists(ref)]

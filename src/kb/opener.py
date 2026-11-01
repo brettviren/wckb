@@ -6,9 +6,12 @@ itself when that is text, else the text extracted from it), or a rendition
 named ``ID#NAME``.  Content not here is fetched or got first (a URL
 downloaded, ``datalad get`` in a dataset).
 
-Files kept by hash (a content store, the download cache) have no name; the
-application is given a link with the file's own name, so it can tell the
-type.  The application is ``open.command`` (a list; ``{path}`` is replaced,
+A file in a source (a DataLad dataset, a git or filesystem tree) is opened
+where it is in that tree, so a web page finds its scripts, styles and data
+by their relative paths (an HTML artifact: decisions/0004); for a web page in
+a DataLad dataset, its whole directory is got first.  Files kept by hash (a
+content store, the download cache) have no name; the application is given a
+link with the file's own name, so it can tell the type.  The application is ``open.command`` (a list; ``{path}`` is replaced,
 else the path is appended), else ``xdg-open`` (Linux), ``open`` (macOS) or
 the Windows association.
 """
@@ -72,7 +75,7 @@ def path(kb: Store, ref: str, text: bool = False, fetch: bool = True) -> tuple[I
     ident, name = parse_ref(ref)
     rec = kb.get(ident)
     r = choose(rec, name, text)
-    p = content.resolve(kb, rec, r, fetch_urls=fetch)
+    p = in_place(kb, r, fetch) or content.resolve(kb, rec, r, fetch_urls=fetch)
     if p is None:
         raise KBError(f"{rec.id}#{r['name']} is not reachable from here"
                       + ("" if fetch else " without fetching"))
@@ -85,6 +88,47 @@ def path(kb: Store, ref: str, text: bool = False, fetch: bool = True) -> tuple[I
         link.symlink_to(p.resolve())
         p = link
     return rec, r, p
+
+
+def in_place(kb: Store, r: dict, fetch: bool) -> Path | None:
+    """The rendition's file where it is in a source's tree (with its neighbours), if it is in one here."""
+    from .sources import TYPES
+    for loc in r.get("locations", []):
+        if loc["type"] not in ("datalad", "source") or loc.get("source") not in kb.items:
+            continue
+        src = kb.items[loc["source"]]
+        t = TYPES.get(src.data.get("source_type"))
+        root = t.locate(kb, src) if t else None
+        if root is None and fetch and loc["type"] == "datalad":
+            from . import datasets
+            root = datasets.locate(kb, src, clone=True)
+        if root is None:
+            continue
+        p = Path(root) / loc["path"]
+        if loc["type"] == "datalad" and fetch and r.get("media_type") in ("text/html", "application/xhtml+xml"):
+            _get(Path(root), p.parent)             # the page and what it loads from beside it
+        elif loc["type"] == "datalad" and fetch and not p.exists():
+            from . import datasets
+            datasets.get(Path(root), loc["path"])
+        if p.exists():
+            sha = r.get("sha256")
+            if sha and content.sha256_file(p)[0] != sha:
+                continue                            # the tree has other bytes there now
+            return p
+    return None
+
+
+def _get(root: Path, directory: Path) -> None:
+    """datalad get a directory of a dataset (all of it), quietly; what can't be got is left."""
+    from . import datasets
+    if datasets.available() is not None:
+        return
+    import datalad.api as dl
+    try:
+        dl.get(path=str(directory), dataset=str(root), recursive=True, result_renderer="disabled",
+               on_failure="ignore")
+    except Exception as exc:                        # DataLad's own errors: open what is there
+        log.warning("datalad get %s: %s", directory, exc)
 
 
 def command(kb: Store, file: Path) -> list[str] | None:

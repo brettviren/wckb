@@ -81,6 +81,14 @@
         "via": {
           "description": "Tool or session that made the item, e.g. claude-code, kb add.",
           "type": "string"
+        },
+        "with": {
+          "description": "Co-authors of the item: LLMs and people who took part with `by` (as git's Co-Authored-By), e.g. 'claude-opus-5-5 (Claude Code)'.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
         }
       },
       "required": [

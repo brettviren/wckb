@@ -20,6 +20,8 @@ def _isolate(monkeypatch, tmp_path_factory):
     monkeypatch.setattr(config, "INVOCATION", config.Invocation())
     monkeypatch.setattr(metadata, "LOOKUP", False)      # no arXiv from tests, unless a test serves a fake
     monkeypatch.delenv("KB_CONTEXT", raising=False)
+    monkeypatch.delenv("KB_COAUTHOR", raising=False)        # the session hook sets it in Claude Code
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
     monkeypatch.setenv("XDG_DATA_HOME", str(home / "data"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home / ".claude"))
     monkeypatch.setenv("KB_USER", "per-tester")

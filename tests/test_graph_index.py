@@ -14,6 +14,9 @@ def topic(kb, inputs, text="Summary page."):
 def test_stamp_and_staleness_propagation(kb):
     o = observation(kb)
     t = topic(kb, [o.id], f"Run 1234 was noisy [{o.id}].")
+    assert graph.stale(kb) == []                       # made from its inputs as they are now: pinned
+    from kb.edit import set_fields as set_
+    set_(kb, t.id, sets=[f'derived_from=["{o.id}"]'])   # unpinned by hand
     assert [s.reasons for s in graph.stale(kb)] == [[f"input {o.id} not stamped"]]
     graph.stamp(kb, t.id)
     assert graph.stale(kb) == []

@@ -115,6 +115,40 @@ def add_rendition(kb: Store, ident: str, path: Path, name: str | None = None, ro
     return r
 
 
+def summary_name(source: str) -> str:
+    """The name of an LLM summary of rendition SOURCE: ``summary`` for the original, else SOURCE-summary."""
+    return "summary" if source == "original" else f"{source}-summary"
+
+
+def set_summary(kb: Store, ref: str, path: Path, model: str | None = None) -> dict:
+    """Record PATH, an LLM's summary of a rendition of an item (REF is ID, or ID#RENDITION; default: its
+    original, else its content), as the derived rendition ``summary`` (fidelity llm), replacing an
+    earlier one.  It is indexed like extracted text, and goes stale when what it summarizes changes."""
+    from .config import coauthors
+    from .opener import choose
+    ident, name = parse_ref(ref)
+    rec = kb.get(ident)
+    source = choose(rec, name)["name"]
+    if not path.is_file():
+        raise KBError(f"no such file: {path}")
+    model = model or next(iter(coauthors()), None)
+    if not model:
+        raise KBError("which model wrote it? Give --model (or set KB_COAUTHOR, as kb's session hook does)")
+    target = "summary" if name is None else summary_name(source)    # the item's main text: plainly "summary"
+    src = rec.rendition(source)
+    data = copy.deepcopy(rec.data)
+    with kb.tx():
+        locs, sha, size = content.place(kb, path, f"{target}{path.suffix or '.md'}")
+        r = {"name": target, "role": "derived", "media_type": content.media_type(path.name if path.suffix else "x.md"),
+             "sha256": sha, "size": size, "locations": locs, "derived_from": source, "fidelity": "llm",
+             "transform": {"name": "llm", "version": model}}
+        if src.get("sha256"):
+            r["source_sha256"] = src["sha256"]
+        data["renditions"] = [x for x in data.get("renditions", []) if x["name"] != target] + [r]
+        kb.save(Item(data, kb), "rendition", {"summary": target, "of": source, "model": model})
+    return r
+
+
 def add_location(kb: Store, ref: str, cas: str | None = None, url: str | None = None,
                  file: Path | None = None) -> dict:
     """Add a mirror to a rendition: a content-store (cas) copy or a URL. Allowed on frozen items,

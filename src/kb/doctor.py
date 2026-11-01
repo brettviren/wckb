@@ -325,7 +325,11 @@ def _stale(kb):
     out = []
     for s in graph.stale(kb):
         why = "; ".join(s.reasons)
-        if s.what == "rendition":
+        if s.what == "rendition" and kb.get(s.id).rendition(s.rendition).get("fidelity") == "llm":
+            out.append(Finding("stale", f"{s.id}#{s.rendition}: {why}",
+                               f"an LLM writes it again from the new {kb.get(s.id).rendition(s.rendition)['derived_from']}, "
+                               f"then kb rendition summary {s.id} FILE", where=f"{s.id}#{s.rendition}"))
+        elif s.what == "rendition":
             out.append(Finding("stale", f"{s.id}#{s.rendition}: {why}", "re-extract it with its transform", "auto",
                                f"{s.id}#{s.rendition}", {"what": "rendition", "id": s.id, "rendition": s.rendition}))
         elif s.what == "view":

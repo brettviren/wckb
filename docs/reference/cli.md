@@ -32,6 +32,9 @@ Options:
   -L, --log-sink SINK             Log to this file (appended to), or stdout or stderr (default:
                                   ~/.cache/kb/logs/kb-DATE.log).
   --debug                         Log everything to stdout: -l debug -L stdout.
+  --coauthor NAME                 Who takes part in what this command writes, besides you
+                                  (repeatable), as git's Co-Authored-By: e.g. 'claude-opus-5-5
+                                  (Claude Code)'. Default: $KB_COAUTHOR.
   --version                       Show the version and exit.
   -h, --help                      Show this message and exit.
 
@@ -66,6 +69,7 @@ Moving knowledge between stores:
 Commands by thing (kb THING --help):
   item       Items: change, correct, withdraw, link, edit, inspect derivation, schemas.
   rendition  Renditions of an item: add, mirror, extract text, get a file, verify.
+  artifact   Artifacts: technotes, demos and notebooks made here to present knowledge.
   asset      Assets: abstract files and file sets, their versions, and the sources that supply them.
   source     Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items
              use.
@@ -829,6 +833,8 @@ Commands:
   add         Register FILE as a rendition of REF (held in the store if small, else in the content
               store).
   extract     Derive a text (or summary) rendition from REF's original.
+  summary     Record FILE, an LLM's summary of an item, as its rendition 'summary' (replacing an
+              earlier one).
   transforms  List transforms and whether they are available here.
   locate      Add a mirror (content-store copy or URL) to rendition REF = ID#NAME; content must
               match its hash.
@@ -882,6 +888,24 @@ Options:
   -h, --help        Show this message and exit.
 ```
 
+## kb rendition summary
+
+```
+Usage: kb rendition summary [OPTIONS] REF FILE
+
+  Record FILE, an LLM's summary of an item, as its rendition 'summary' (replacing an earlier one).
+
+  REF is ID (its original, else its content) or ID#NAME. The summary is indexed like extracted text
+  (a hit says in #summary), and goes stale when what it summarizes changes; kb doctor then asks for
+  a new one. kb writes no summaries itself: an LLM does, and registers it here.
+
+    kb rendition summary doc-… summary.md --model claude-opus-5-5
+
+Options:
+  --model TEXT  The model that wrote it (default: the co-author, $KB_COAUTHOR).
+  -h, --help    Show this message and exit.
+```
+
 ## kb rendition transforms
 
 ```
@@ -919,6 +943,45 @@ Options:
   --record    Store hashes for URL renditions that have none.
   --json
   -h, --help  Show this message and exit.
+```
+
+## kb artifact
+
+```
+Usage: kb artifact [OPTIONS] COMMAND [ARGS]...
+
+  Artifacts: technotes, demos and notebooks made here to present knowledge.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  list  The store's artifacts: what each is, how much of its making is recorded, its inputs, and
+        whether it is stale (an input changed since it was made).
+```
+
+## kb artifact list
+
+```
+Usage: kb artifact list [OPTIONS]
+
+  The store's artifacts: what each is, how much of its making is recorded, its inputs, and whether
+  it is stale (an input changed since it was made).
+
+  An artifact is a document of doctype technote, demo or notebook, made here, with the items it
+  presents as its inputs:
+
+    kb add note.pdf --set doctype=technote --set provenance=cited --derived-from obs-… --derived-from dat-… ...
+    kb artifact list --stale
+    kb open doc-…                     # a demo opens in your browser, from its source
+
+Options:
+  --doctype [technote|demo|notebook]
+                                  Only these doctypes (repeatable).
+  --stale                         Only those whose inputs changed.
+  --all                           Include superseded versions.
+  --json
+  -h, --help                      Show this message and exit.
 ```
 
 ## kb asset

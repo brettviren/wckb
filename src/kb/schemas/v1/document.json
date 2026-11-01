@@ -45,7 +45,18 @@
         "manual",
         "proposal",
         "book",
+        "demo",
+        "notebook",
+        "prompt",
         "other"
+      ]
+    },
+    "provenance": {
+      "description": "For an artifact (a technote, demo or notebook made here): how much of its making is recorded. cited: the items it presents (derived_from); recorded: also the steps that made it; rebuildable: a view remakes it.",
+      "enum": [
+        "cited",
+        "recorded",
+        "rebuildable"
       ]
     },
     "event": {
