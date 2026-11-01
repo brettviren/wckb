@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.7) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.8) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -232,7 +232,7 @@ One concrete data source that renditions and asset bindings refer to, such as a 
 Where a rendition's bytes are. Each type is served by a data source (kb.sources); new types plug in there.
 
 - `db`: `filename`
-- `cas`: `name`
+- `cas`: `name`, `filename`
 - `url`: `url`, `retrieved`, `auth`
 - `local`: `host`, `path`
 - `datalad`: `source`, `path`, `key`

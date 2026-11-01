@@ -61,7 +61,7 @@ def test_add_large_file_goes_to_content_store(root, tmp_path):
     big.write_bytes(b"x" * (kb.cfg.max_inline_bytes + 1))
     rec = authoring.add(kb, "dataset", [str(big)], {"title": "Big", "summary": "A big file."})
     r = rec.rendition("original")
-    assert r["locations"] == [{"type": "cas", "name": "default"}]
+    assert r["locations"] == [{"type": "cas", "name": "default", "filename": "big.root"}]
     assert content.blob_path(cas, r["sha256"]).exists()
     assert content.resolve(kb, rec, r) == content.blob_path(cas, r["sha256"])
     assert not kb.has_blob(r["sha256"])

@@ -88,7 +88,8 @@ doc-wyy1zah3qt   document    -          Amdahl's law: ant colony vs marching arm
                  …approaches vs rewriting algorithms avoid separate [workflows], ensure [feedback] between the two
 ```
 
-Read the text itself with `cat "$(kb rendition path doc-wyy1zah3qt#text)"`.
+Open the image with `kb open doc-wyy1zah3qt`, and the text read from it
+with `kb open doc-wyy1zah3qt --text` (`--print` gives just the path).
 OCR makes mistakes ("dificult",
 "viggertoroker" for "trigger/broker" here). That is why its fidelity is
 `ocr`, and why the title and summary, which you wrote, matter.

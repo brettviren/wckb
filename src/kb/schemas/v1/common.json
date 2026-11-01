@@ -234,6 +234,11 @@
             "name": {
               "description": "Content store (cas) name from the store's settings.",
               "type": "string"
+            },
+            "filename": {
+              "description": "The file's own name (the content store keeps it by hash), for tools that go by it.",
+              "type": "string",
+              "pattern": "^[^/][^\\0]*$"
             }
           },
           "required": [

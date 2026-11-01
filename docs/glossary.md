@@ -622,7 +622,7 @@ to be right; please fix the other place.
 
 **verbs and things**
 : `kb` has two kinds of commands. *Verbs* used every day stand at the top
-  (`init`, `status`, `add`, `new`, `show`, `ls`, `search`, `context`, `log`,
+  (`init`, `status`, `add`, `new`, `show`, `open`, `ls`, `search`, `context`, `log`,
   `check`, `lint`, `doctor`, `config`, `push`, `pull`, `sync`). Everything else lives in one
   command family per *thing*, named by a noun from this glossary: `kb item`,
   `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge`,

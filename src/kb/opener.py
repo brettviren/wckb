@@ -1,0 +1,117 @@
+"""Opening an item's file with the application the desktop associates with its type (``kb open``).
+
+Which file: an item's original by default (for a search hit in extracted
+text, the file the text came from), its text with ``text`` (the original
+itself when that is text, else the text extracted from it), or a rendition
+named ``ID#NAME``.  Content not here is fetched or got first (a URL
+downloaded, ``datalad get`` in a dataset).
+
+Files kept by hash (a content store, the download cache) have no name; the
+application is given a link with the file's own name, so it can tell the
+type.  The application is ``open.command`` (a list; ``{path}`` is replaced,
+else the path is appended), else ``xdg-open`` (Linux), ``open`` (macOS) or
+the Windows association.
+"""
+
+import logging
+import mimetypes
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path, PurePosixPath
+from urllib.parse import unquote, urlsplit
+
+from . import content
+from .errors import KBError
+from .ids import parse_ref
+from .items import Item, Store
+
+log = logging.getLogger(__name__)
+
+
+def choose(rec: Item, name: str | None = None, text: bool = False) -> dict:
+    """The rendition to open: NAME, else the item's original (else its content, else its first);
+    with TEXT, that rendition's text instead."""
+    if name:
+        r = rec.rendition(name)
+    else:
+        order = sorted(rec.renditions, key=lambda r: (r["role"] != "original", r["name"] != "original",
+                                                      r["role"] != "content"))
+        if not order:
+            raise KBError(f"{rec.id} has no renditions: nothing to open")
+        r = order[0]
+        if r["role"] == "derived" and r.get("derived_from") and rec.has_rendition(r["derived_from"]):
+            r = rec.rendition(r["derived_from"])
+    if not text or content.is_text(r["media_type"]):
+        return r
+    derived = [d for d in rec.renditions if d["role"] == "derived" and d.get("derived_from") == r["name"]
+               and content.is_text(d["media_type"])]
+    if not derived:
+        raise KBError(f"{rec.id}#{r['name']} has no text extracted from it (kb rendition extract {rec.id})")
+    return next((d for d in derived if d["name"] in ("text", f"{r['name']}-text")), derived[0])
+
+
+def filename(rec: Item, r: dict) -> str:
+    """The file's own name: as the store, a URL or a dataset has it, else the rendition's name and type."""
+    for loc in r.get("locations", []):
+        if loc.get("filename"):
+            return PurePosixPath(loc["filename"]).name
+        if loc["type"] in ("datalad", "source") and loc.get("path"):
+            return PurePosixPath(loc["path"]).name
+        if loc["type"] == "url":
+            name = PurePosixPath(unquote(urlsplit(loc["url"]).path)).name
+            if PurePosixPath(name).suffix:
+                return name
+    ext = mimetypes.guess_extension(r["media_type"]) or ""
+    return f"{rec.id}-{r['name']}{ext}"
+
+
+def path(kb: Store, ref: str, text: bool = False, fetch: bool = True) -> tuple[Item, dict, Path]:
+    """(item, rendition, a local file with its content and its own name), fetched or got if need be."""
+    ident, name = parse_ref(ref)
+    rec = kb.get(ident)
+    r = choose(rec, name, text)
+    p = content.resolve(kb, rec, r, fetch_urls=fetch)
+    if p is None:
+        raise KBError(f"{rec.id}#{r['name']} is not reachable from here"
+                      + ("" if fetch else " without fetching"))
+    want = filename(rec, r)
+    if p.name != want:      # kept by hash: give the application the file's own name
+        link = kb.cfg.cache_dir / "open" / (r.get("sha256") or rec.id) / want
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(p.resolve())
+        p = link
+    return rec, r, p
+
+
+def command(kb: Store, file: Path) -> list[str] | None:
+    """The command that opens FILE (None on Windows, where the association is used directly)."""
+    conf = (kb.cfg.raw.get("open") or {}).get("command")
+    if conf:
+        argv = [str(a) for a in ([conf] if isinstance(conf, str) else conf)]
+        return ([a.replace("{path}", str(file)) for a in argv] if any("{path}" in a for a in argv)
+                else argv + [str(file)])
+    if sys.platform == "darwin":
+        return ["open", str(file)]
+    if sys.platform.startswith("win"):
+        return None
+    if shutil.which("xdg-open"):
+        return ["xdg-open", str(file)]
+    raise KBError("no way to open files here: install xdg-utils (xdg-open), or set open.command in your config")
+
+
+def launch(kb: Store, file: Path) -> None:
+    """Open FILE with its application, in the background (kb does not wait for it)."""
+    argv = command(kb, file)
+    if argv is None:
+        os.startfile(file)            # type: ignore[attr-defined]  # Windows only
+        return
+    log.debug("open: %s", " ".join(argv))
+    try:
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as exc:
+        raise KBError(f"cannot run {argv[0]}: {exc}") from None

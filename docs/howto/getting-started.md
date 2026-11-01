@@ -29,7 +29,7 @@ DataLad and sqlite-vec come with kb. DataLad also needs git-annex on PATH
 `kb --help` lists two kinds of command:
 
 - **Everyday verbs**, at the top: `kb init`, `kb status`, `kb add`,
-  `kb new`, `kb show`, `kb ls`, `kb search`, `kb context`, `kb log`,
+  `kb new`, `kb show`, `kb open`, `kb ls`, `kb search`, `kb context`, `kb log`,
   `kb check`, `kb lint`, `kb doctor`, `kb config`, `kb push`, `kb pull`,
   `kb sync`.
 - **One family per thing**, named by a word from the

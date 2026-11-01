@@ -175,7 +175,7 @@ def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = No
         if not name:
             raise KBError("no content-addressed store configured (kb config set cas.default '{\"path\": ...}')")
         put_cas(kb, name, src, sha)
-        return [{"type": "cas", "name": name}], sha, size
+        return [{"type": "cas", "name": name, "filename": filename}], sha, size
     if mode == "local":
         return [{"type": "local", "host": kb.cfg.host, "path": str(src.resolve())}], sha, size
     return [], sha, size

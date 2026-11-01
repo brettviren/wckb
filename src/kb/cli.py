@@ -65,7 +65,7 @@ def command(group, *args, **kwargs):
 
 
 SECTIONS = [
-    ("Everyday", ["init", "status", "add", "new", "show", "ls", "search", "context", "log"]),
+    ("Everyday", ["init", "status", "add", "new", "show", "open", "ls", "search", "context", "log"]),
     ("Keeping a store sound", ["check", "lint", "doctor", "config"]),
     ("Moving knowledge between stores", ["push", "pull", "sync"]),
     ("Commands by thing (kb THING --help)", ["item", "rendition", "asset", "source", "kset", "edge", "bundle",
@@ -535,6 +535,33 @@ def show_cmd(c, ref, fmt, depth):
     if rec.kind == "kset":
         click.echo("")
         click.echo("\n".join(r._tree_lines(v["tree"])))
+
+
+@command(main, "open", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--text", is_flag=True, help="Open the text (as extracted from the file, and searched) instead.")
+@click.option("--print", "print_only", is_flag=True, help="Only print the file's path; open nothing.")
+@click.option("--no-fetch", is_flag=True, help="Only what is here: don't download or datalad get.")
+@pass_ctx
+def open_cmd(c, ref, text, print_only, no_fetch):
+    """Open an item's file with the application your desktop uses for its type.
+
+    REF is an item (its original: for a hit in extracted text, the file the
+    text came from) or ID#NAME (that rendition). Content not on this machine
+    is fetched first (a download, or datalad get). The path is printed.
+    open.command in your config names another opener (default: xdg-open,
+    or open on macOS).
+
+    \b
+      kb open doc-wyy1zah3qt            # the image, in your image viewer
+      kb open doc-wyy1zah3qt --text     # the text read from it
+      kb open doc-…#slides --print      # just the path, for other tools
+    """
+    from . import opener
+    _, _, path = opener.path(c.kb, ref, text, fetch=not no_fetch)
+    click.echo(str(path))
+    if not print_only:
+        opener.launch(c.kb, path)
 
 
 @command(main, "ls")

@@ -50,7 +50,8 @@ in scope.
   (GitHub/Gitea/Forgejo/Gogs APIs), `secrets` (secret specs), `logs`
   (logging), `indico` (Indico sites as DataLad datasets, by git-annex-remote-indico)
   `sharing` (sources shared by the users of one computer), `metadata`
-  (metadata found in what `kb add` adds: arXiv, PDF, EXIF) and `ocr` (OCR engines). `config` also says which store a command uses (store contexts).
+  (metadata found in what `kb add` adds: arXiv, PDF, EXIF), `ocr` (OCR engines) and `opener`
+  (`kb open`: an item's file in the desktop's application). `config` also says which store a command uses (store contexts).
 - Schemas: hand-written JSON Schema in `src/kb/schemas/v<N>/`. After
   changing them, run `uv run kb item schema --markdown > docs/reference/schema.md`
   (a test checks this). Additive changes bump `schema.REVISION`. Breaking

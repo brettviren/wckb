@@ -42,6 +42,7 @@ Everyday:
   add        Add files or URLs as a new primary item (default kind: document).
   new        Make a new item of KIND.
   show       One item: facts, links, where the material is, an excerpt (sets: as a tree).
+  open       Open an item's file with the application your desktop uses for its type.
   ls         List items (current ones unless --all), newest first.
   search     Search titles, summaries, subjects and the text of items (words; a trailing * matches a
              prefix).
@@ -250,6 +251,29 @@ Options:
   --json                          Same as --format json.
   --depth INTEGER                 How deep to unfold nested knowledge sets.  [default: 4]
   -h, --help                      Show this message and exit.
+```
+
+## kb open
+
+```
+Usage: kb open [OPTIONS] REF
+
+  Open an item's file with the application your desktop uses for its type.
+
+  REF is an item (its original: for a hit in extracted text, the file the text came from) or ID#NAME
+  (that rendition). Content not on this machine is fetched first (a download, or datalad get). The
+  path is printed. open.command in your config names another opener (default: xdg-open, or open on
+  macOS).
+
+    kb open doc-wyy1zah3qt            # the image, in your image viewer
+    kb open doc-wyy1zah3qt --text     # the text read from it
+    kb open doc-…#slides --print      # just the path, for other tools
+
+Options:
+  --text      Open the text (as extracted from the file, and searched) instead.
+  --print     Only print the file's path; open nothing.
+  --no-fetch  Only what is here: don't download or datalad get.
+  -h, --help  Show this message and exit.
 ```
 
 ## kb ls

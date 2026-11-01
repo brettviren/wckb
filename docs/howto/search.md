@@ -112,6 +112,21 @@ Nearest vectors are found with sqlite-vec (a dependency of kb) when SQLite
 can load it, else by comparing every vector in Python
 (`embed.sqlite_vec = false` turns sqlite-vec off).
 
+## Opening what you found
+
+`kb open ID` opens an item's file with the application your desktop uses for
+its type (`xdg-open`; `open` on macOS). It opens the original, even when the
+words matched in text extracted from it; `--text` opens that text instead,
+and `ID#NAME` names a rendition. A file not on this machine is fetched first
+(a download, or `datalad get` in its dataset). The path is printed, and
+`--print` prints it without opening anything. Another opener:
+
+```toml
+# ~/.config/kb/config.toml
+[open]
+command = ["gio", "open"]      # {path} marks where the path goes; else it comes last
+```
+
 ## Reading one item
 
 ```
@@ -121,6 +136,9 @@ kb show ks-… --depth 2   # a knowledge set as a tree
 kb show top-… --format md    # markdown; --format view gives the view model; --json the item
 kb item content top-…           # the text itself
 kb rendition path doc-…#original     # a file with the content, for other tools
+kb open doc-…              # open its file in the application for its type (the original, got if need be)
+kb open doc-… --text       # the text extracted from it, which search matched
+kb open doc-… --print      # only the path
 kb log obs-…               # its history: created, changed, transferred, reviewed …
 ```
 

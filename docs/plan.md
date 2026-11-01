@@ -20,6 +20,7 @@ Deliverables:
 | Search by rendition and chunk; text extracted on add; vectors as a cache by model and text | `src/kb/items.py`, `query.py`, `embed.py`, `transforms.py` | done |
 | The content dataset: large content's default home (a datalad source) | `src/kb/content.py` | done |
 | OCR (tesseract, configured engines); PDF text by page; sqlite-vec; `reindex --fetch` | `src/kb/ocr.py`, `transforms.py`, `embed.py` | done |
+| `kb open`: an item's file (original or text) in the desktop's application | `src/kb/opener.py` | done |
 | Shared sources on one computer: shared datasets, shared clones (`--shared`, `kb source share`) | `src/kb/sharing.py` | done |
 | The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `items.py` | done |
 | Data sources (polymorphic): db, cas, url, local, asset, datalad | `src/kb/locations.py`, `content.py` | done |
