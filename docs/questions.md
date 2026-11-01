@@ -41,6 +41,27 @@ Status:
 - Captions for images that have no text (a vision model), as a separate
   transform?
 
+**S12. Lessons from a research session run through kb (2026-11-01).** *(open)*
+- A subagent researched embedding models and vector indexes with the
+  kb-research approach (topic `top-q4vh7h3cbb` in the wckb store). Fixed
+  since: web pages typed and extracted, found page metadata, large URL
+  content kept, tags searchable and filterable, sentence searches, recall
+  duplicates, messages that name options and limits.
+- Open:
+  - `related` is one-way. Should kb show incoming links (from `refs`), or
+    should `kb item set --add related=` offer to link both ways?
+  - A URL that refuses kb (HTTP 403) leaves `unextracted` and `unhashed`
+    findings that never go away. Should kb remember the refusal and stop
+    retrying until asked?
+  - Text extracted from web pages carries the site's navigation ("Skip to
+    content", menus). Is a readability step (main content only) worth it?
+  - `date` is frozen, so a wrong date needs a supersede, which leaves
+    citing items pointing at the old one (kb-correct propagates). Three
+    guessed dates were tagged `date-guessed` instead. Should a date be
+    correctable while an item is new, or carry a precision or source?
+  - `kb new KIND --help` doesn't say which fields KIND needs; `kb item
+    schema KIND` does. Should `kb new` show them per kind?
+
 **S2. Who writes a group store?** *(open)*
 - A maintainer, a CI job applying accepted bundles, or a small service? How
   is the read-only snapshot published (EOS, web)?

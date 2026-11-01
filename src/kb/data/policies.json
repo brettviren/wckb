@@ -55,6 +55,14 @@
     "description": "Add documents, datasets, configs, snapshots."
   },
   {
+    "name": "kb-research",
+    "type": "skill",
+    "version": 1,
+    "file": "skills/kb-research/SKILL.md",
+    "title": "kb-research",
+    "description": "Research a question; record sources, one-claim observations and a topic."
+  },
+  {
     "name": "kb-correct",
     "type": "skill",
     "version": 3,

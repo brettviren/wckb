@@ -67,6 +67,9 @@ go back to Claude in the same turn.
 
 - "Ingest these slides from Indico <URL>; I have a copy at ~/Downloads/x.pdf."
   The `kb-ingest` skill handles the SSO case with `--url`.
+- "Research which embedding models would suit kb, about ten sources, and
+  keep it in the KB." The `kb-research` skill files the sources, one-claim
+  observations and a topic with the answer ([research](research.md)).
 - "The noise was actually in run 1243 (elog 5521). Correct the KB." The
   `kb-correct` skill supersedes the item and revises the topics.
 - "Make a one-page PDF on TPC noise for Thursday." This uses `kb-view`.

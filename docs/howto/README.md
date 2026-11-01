@@ -10,6 +10,7 @@ Read these in order if you are new; later on, go straight to the task you need.
 | [working-with-claude](working-with-claude.md) | what Claude does by routine, the hooks, capturing, consulting |
 | [observations](observations.md) | record facts, hearsay, configurations; attribution, validity, status |
 | [documents](documents.md) | add papers, slides, Indico and arXiv material; extract text |
+| [research](research.md) | research a question with Claude and keep sources, findings and the answer in kb (`kb-research`) |
 | [ocr](ocr.md) | images and scanned pages: text by OCR (tesseract or another engine), so search finds it |
 | [datasets](datasets.md) | add data, data packages, ROOT/HDF5 files, conditions snapshots |
 | [assets](assets.md) | files and file sets with versions from several sources (directories, URLs, the store; DataLad, Indico, DocDB planned) |

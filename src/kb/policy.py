@@ -39,9 +39,9 @@ HOOK_PREFIXES = ("kb hook ", "kb check --hook")
 TYPES = tuple(FILENAME)
 
 DEFAULT_USE = {
-    "project": ["kb-core", "kb-routine", "kb-federation", "kb-consult", "kb-capture", "kb-promote",
+    "project": ["kb-core", "kb-routine", "kb-federation", "kb-consult", "kb-capture", "kb-research", "kb-promote",
                 "kb-correct", "kb-check-hook", "kb-recall-hook", "kb-session-hook"],
-    "home": ["kb-core", "kb-routine", "kb-federation", "kb-consult", "kb-capture", "kb-promote",
+    "home": ["kb-core", "kb-routine", "kb-federation", "kb-consult", "kb-capture", "kb-research", "kb-promote",
              "kb-review", "kb-ingest", "kb-correct", "kb-curate", "kb-check-hook", "kb-session-hook"],
     "group": ["kb-core", "kb-federation", "kb-consult", "kb-ingest", "kb-correct", "kb-view",
               "kb-curate", "kb-promote", "kb-review", "kb-review-prs", "kb-check-hook"],

@@ -461,7 +461,7 @@ a more open store unless it is relabeled deliberately.
 - `kb show --format md|json` shows items as people see them;
 - `kb log` shows what happened.
 
-Skills: `kb-consult`, `kb-capture`, `kb-ingest`, `kb-correct`, `kb-view`,
+Skills: `kb-consult`, `kb-capture`, `kb-ingest`, `kb-research`, `kb-correct`, `kb-view`,
 `kb-curate`, `kb-promote`, `kb-review` (inbox) and `kb-review-prs` (bundle
 pull requests).
 
