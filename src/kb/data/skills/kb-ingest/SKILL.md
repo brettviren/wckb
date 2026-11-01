@@ -9,8 +9,16 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    `kb ls --kind document --subject ...`. `kb add` also refuses duplicates
    by identifier.
 2. **Add it** as a primary item. `kb add` hashes the content and decides
-   where it lives: small files go in the store, big ones in the content store, and
-   URLs stay URLs.
+   where it lives: small files go in the store, big ones in the content store
+   or the store's content dataset, and URLs stay URLs. It also **finds
+   metadata** and says what it found: from arXiv (an arXiv URL or
+   `--identifier arxiv=ID`: title, authors, date, abstract, DOI), a PDF's
+   document information, an image's EXIF. Options you give win over what it
+   finds; check the found title and summary, and correct them.
+
+   ```
+   kb add https://arxiv.org/abs/2601.01234 --subject detector/tpc/noise   # arXiv gives the rest
+   ```
 
    ```
    kb add https://indico.example/event/123/.../slides.pdf --kind document \
@@ -20,7 +28,10 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    ```
 
    - If the URL needs SSO and the user has the file: `kb add FILE --url URL ...`.
-   - For papers, add `--identifier arxiv=... --identifier doi=...`.
+   - For papers, add `--identifier arxiv=... --identifier doi=...` when kb
+     didn't find them.
+   - `--target DIR/` copies the file into a source (a DataLad dataset is
+     `datalad save`d) and records it there.
    - Datasets: `--kind dataset --set format=csv`, then `kb data describe ID`.
    - Files committed in a DataLad dataset are added by reference (kb records
      the dataset as a source item; nothing is copied). If a file there is
@@ -35,10 +46,13 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
      `kb asset scan --register`. Point the document's rendition at it with
      the location `{"type": "asset", "asset": ID, "version": LABEL, "path": FILE}`.
      See `kb asset --help`.
-3. **Extract text:** `kb rendition extract ID` (`kb rendition transforms` lists what's
-   available). Check the result with `kb item content ID text`. For slides, text
-   extraction loses the plots. If the figures matter, read the slides (or
-   ask the user) and write a digest:
+3. **Text:** `kb add` extracts text from PDFs and slides, and reads images
+   and scanned pages by OCR when an engine is installed (`kb rendition
+   transforms` lists what is available). Check the result with
+   `kb item content ID text`. If nothing was extracted, `kb doctor
+   unextracted --fix` retries. For slides, text extraction loses the plots.
+   If the figures matter, read the slides (or ask the user) and write a
+   digest:
 
    ```
    # write digest.md somewhere, then register it as an LLM-made rendition:

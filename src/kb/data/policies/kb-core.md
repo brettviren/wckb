@@ -24,11 +24,14 @@ database directly.
 - `kb status` shows the store at a glance and what needs attention;
   `kb doctor` diagnoses problems, and `kb doctor --fix` repairs them (within
   the `curate` autonomy).
-- Find things with `kb context`, `kb ls` and `kb search`; read one item with
+- Find things with `kb context`, `kb ls` and `kb search` (which also searches
+  text extracted from PDFs, slides and images); read one item with
   `kb show ID` (`--format llm` for its full content). Its history is `kb log ID`.
 - Content is held in *renditions*: small text in the store, large files in a
-  content store or at a URL, always with a sha256. Get a file with
-  `kb rendition path ID#NAME`, and text with `kb item content ID`.
+  content store, the store's content dataset or at a URL, always with a
+  sha256. `kb open ID` opens an item's file (`--text`: the text search
+  matched; `--print`: just its path), and `kb item content ID [NAME]` prints
+  text.
 
 Rules:
 

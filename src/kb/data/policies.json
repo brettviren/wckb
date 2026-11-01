@@ -2,7 +2,7 @@
   {
     "name": "kb-core",
     "type": "instructions",
-    "version": 4,
+    "version": 5,
     "file": "policies/kb-core.md",
     "order": 10,
     "title": "KB core rules",
@@ -33,7 +33,7 @@
   {
     "name": "kb-consult",
     "type": "skill",
-    "version": 3,
+    "version": 4,
     "file": "skills/kb-consult/SKILL.md",
     "title": "kb-consult",
     "description": "Answer from the KB."
@@ -49,7 +49,7 @@
   {
     "name": "kb-ingest",
     "type": "skill",
-    "version": 5,
+    "version": 6,
     "file": "skills/kb-ingest/SKILL.md",
     "title": "kb-ingest",
     "description": "Add documents, datasets, configs, snapshots."

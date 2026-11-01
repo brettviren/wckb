@@ -34,12 +34,13 @@ in scope.
   Item JSON stays validated by JSON Schema on every write.
 - Logic modules: `items` (model, digest, `Store`), `authoring` (new/add/supersede),
   `edit` (set, renditions, content, checkout/checkin), `locations` (location
-  sources: db, cas, url, local, asset, datalad), `assets` (assets, bindings, asset
+  sources: db, cas, url, local, asset, datalad, source), `assets` (assets, bindings, asset
   sources), `sources` (source items: types, guessing, adding), `datasets`
-  (DataLad: datasets as source items, clones, content), `content` (placing content, hashing, fetch, verify), `checks`
+  (DataLad: datasets as source items, clones, content), `content` (placing content, the content dataset, hashing, fetch, verify), `checks`
   (consistency scan), `lint` (advice), `doctor` (remedies: diagnose and fix
   common problems), `status` (the store at a glance), `graph` (staleness, stamping), `build` (views),
-  `query`/`search`/`embed`/`context`, `transforms`, `fair` (data describe and
+  `query`/`search` (the search index, by rendition, chunk and page), `embed` (the
+  vector cache, sqlite-vec), `context`, `transforms` (text from files, OCR included), `fair` (data describe and
   export), `migrate`,
   `scaffold`, `federation` (neighbors) and `federated` (cross-store
   queries), `transfer` (knowledge sets, atomic transfers, multi-path
@@ -48,7 +49,7 @@ in scope.
   `push` (candidates, push, pull, obtain), `sync` (twins), `policy` (policy elements, enactment, autonomy), `hooks`
   (Claude Code hook entry points), `githooks` (git hooks for exchange repositories), `forge`
   (GitHub/Gitea/Forgejo/Gogs APIs), `secrets` (secret specs), `logs`
-  (logging), `indico` (Indico sites as DataLad datasets, by git-annex-remote-indico)
+  (logging), `indico` (Indico sites as DataLad datasets, by git-annex-remote-indico),
   `sharing` (sources shared by the users of one computer), `metadata`
   (metadata found in what `kb add` adds: arXiv, PDF, EXIF), `ocr` (OCR engines) and `opener`
   (`kb open`: an item's file in the desktop's application). `config` also says which store a command uses (store contexts).
@@ -101,7 +102,7 @@ Autonomy the human has granted you here:
 
 never: leave it to the human. ask: ask first, and pass their words with --approved. auto: go ahead, then tell the human what you did.
 
-<!-- kb:policy kb-core@4 -->
+<!-- kb:policy kb-core@5 -->
 ## Working with the knowledge base
 
 A knowledge base (KB) of people and their LLM sessions. You are one of its
@@ -128,11 +129,14 @@ database directly.
 - `kb status` shows the store at a glance and what needs attention;
   `kb doctor` diagnoses problems, and `kb doctor --fix` repairs them (within
   the `curate` autonomy).
-- Find things with `kb context`, `kb ls` and `kb search`; read one item with
+- Find things with `kb context`, `kb ls` and `kb search` (which also searches
+  text extracted from PDFs, slides and images); read one item with
   `kb show ID` (`--format llm` for its full content). Its history is `kb log ID`.
 - Content is held in *renditions*: small text in the store, large files in a
-  content store or at a URL, always with a sha256. Get a file with
-  `kb rendition path ID#NAME`, and text with `kb item content ID`.
+  content store, the store's content dataset or at a URL, always with a
+  sha256. `kb open ID` opens an item's file (`--text`: the text search
+  matched; `--print`: just its path), and `kb item content ID [NAME]` prints
+  text.
 
 Rules:
 
