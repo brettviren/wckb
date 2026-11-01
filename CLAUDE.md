@@ -47,7 +47,8 @@ in scope.
   and formatters for people), `exchange` (bundle pull requests),
   `push` (candidates, push, pull, obtain), `sync` (twins), `policy` (policy elements, enactment, autonomy), `hooks`
   (Claude Code hook entry points), `githooks` (git hooks for exchange repositories), `forge`
-  (GitHub/Gitea/Forgejo/Gogs APIs) and `secrets` (secret specs).
+  (GitHub/Gitea/Forgejo/Gogs APIs), `secrets` (secret specs) and `logs`
+  (logging). `config` also says which store a command uses (store contexts).
 - Schemas: hand-written JSON Schema in `src/kb/schemas/v<N>/`. After
   changing them, run `uv run kb item schema --markdown > docs/reference/schema.md`
   (a test checks this). Additive changes bump `schema.REVISION`. Breaking
@@ -67,6 +68,11 @@ in scope.
 - Keep imports in `cli.py` lazy; LLMs call `kb` often and start-up time
   matters.
 - Errors meant for users are `KBError`, and the CLI shows them as one line.
+- Log with `logging.getLogger(__name__)`: `debug` for what went right but
+  explains a surprise, `info` for high-level success, `warning` for what kb
+  got over, `error` for more about a failure. Data a command outputs goes to
+  stdout, never to the log; messages to the person go through `ui.info` or
+  `logs.tell`.
 - Never print or log a resolved secret. Use `secrets.mask` for display.
 - Tests run inside Claude Code sessions. `tests/conftest.py` clears the
   agent environment variables. Tests of autonomy set `KB_AGENT=1`
