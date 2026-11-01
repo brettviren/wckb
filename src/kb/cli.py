@@ -57,6 +57,28 @@ def handle_errors(fn):
     return wrapper
 
 
+class KindHelp(click.Command):
+    """--help after a KIND (kb new KIND --help, kb add --kind KIND --help) also lists that kind's fields."""
+
+    def parse_args(self, ctx, args):
+        if any(a in ("-h", "--help") for a in args):
+            kinds = [a for a in args if a in KINDS]
+            if "--kind" in args and args.index("--kind") + 1 < len(args):
+                kinds = [args[args.index("--kind") + 1]]
+            ctx.meta["help_kind"] = kinds[0] if kinds and kinds[0] in KINDS else None
+        return super().parse_args(ctx, args)
+
+    def format_help(self, ctx, formatter):
+        super().format_help(ctx, formatter)
+        kind = ctx.meta.get("help_kind")
+        if kind:
+            from .schema import field_guide
+            formatter.write("\n" + ui.field_guide(kind, field_guide(kind)) + "\n")
+        else:
+            formatter.write(f"\nKinds: {', '.join(KINDS)}. Give one before --help to see its fields "
+                            f"(kb {ctx.info_name} KIND --help).\n")
+
+
 def command(group, *args, **kwargs):
     """A subcommand whose KBErrors become clean one-line failures."""
     def deco(fn):
@@ -155,8 +177,8 @@ def group(name, help_text, parent=None, hidden=False, order=()):
     return g
 
 
-item_grp = group("item", "Items: change, correct, withdraw, edit, inspect derivation, schemas.",
-                 order=["set", "edit", "supersede", "retract", "content", "checkout", "checkin",
+item_grp = group("item", "Items: change, correct, withdraw, link, edit, inspect derivation, schemas.",
+                 order=["set", "link", "links", "edit", "supersede", "retract", "content", "checkout", "checkin",
                         "deps", "graph", "stale", "stamp", "schema"])
 rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract text, get a file, verify.",
                       order=["path", "add", "extract", "transforms", "locate", "verify"])
@@ -205,10 +227,17 @@ def item_options(fn):
                                    "'elog 5521', 'read <URL>' ..."),
         click.option("--when", help="Observations and configs: when it was asserted (date)."),
         click.option("--creators", multiple=True, help="Author (repeatable)."),
-        click.option("--date", help="Date of the thing itself (e.g. of a talk)."),
+        click.option("--date", help="The date the thing is known by: when it was published, else made (fixed once "
+                                     "written). Qualified dates: --dated."),
+        click.option("--dated", multiple=True, metavar="QUALIFIER=DATE",
+                     help="A qualified date, correctable later (repeatable). QUALIFIER: created, published, "
+                          "modified, accessed (read or downloaded), captured (photo, recording)."),
         click.option("--identifier", "identifiers", multiple=True, help="scheme=value: doi=, arxiv=, indico=, inspire= ..."),
         click.option("--evidence", multiple=True, help="Supporting ref or URL (repeatable)."),
         click.option("--related", multiple=True, help="Related ref (repeatable)."),
+        click.option("--link", "links", multiple=True, metavar="RELATION=ID",
+                     help="A typed link (repeatable). RELATION: supports, contradicts, refines, alternative-to, "
+                          "compares-with, uses, part-of, cites, same-as (kb item link --help says what each means)."),
         click.option("--derived-from", "derived_from", multiple=True, help="Input ref, for topics and views (repeatable)."),
         click.option("--license"),
         click.option("--set", "sets", multiple=True, help="Any field: key=value (JSON values parsed; dotted keys nest)."),
@@ -292,7 +321,7 @@ def init_cmd(c, path, scope, name, access, target, up, no_enact):
         raise click.ClickException(str(exc)) from None
 
 
-@command(main, "new", no_args_is_help=True)
+@command(main, "new", no_args_is_help=True, cls=KindHelp)
 @click.argument("kind", type=click.Choice(KINDS))
 @item_options
 @click.option("--text", help="Content (note.md, or page.md for topics).")
@@ -326,7 +355,7 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
     _done(kb, rec, json_out)
 
 
-@command(main, "add", no_args_is_help=True)
+@command(main, "add", no_args_is_help=True, cls=KindHelp)
 @click.argument("sources", nargs=-1, required=True)
 @click.option("--kind", default="document", type=click.Choice(["document", "dataset", "config", "snapshot", "software", "observation"]),
               show_default=True)
@@ -413,6 +442,64 @@ def retract_cmd(c, ref, reason, by, evidence, via):
     if evidence:
         fields["evidence"] = list(evidence)
     _done(kb, retract(kb, ref, reason, fields, via=via))
+
+
+def _relations_help() -> str:
+    from .graph import RELATIONS
+    return "\n".join(f"  {k:<15} {v[1]} (seen from the other: {v[0]})" for k, v in RELATIONS.items())
+
+
+@command(item_grp, "link", no_args_is_help=True)
+@click.argument("ref")
+@click.argument("relation", type=click.Choice(["supports", "contradicts", "refines", "alternative-to",
+                                               "compares-with", "uses", "part-of", "cites", "same-as"]))
+@click.argument("other")
+@click.option("--note", help="Why, in a few words.")
+@click.option("--remove", is_flag=True, help="Remove the link instead.")
+@pass_ctx
+def item_link_cmd(c, ref, relation, other, note, remove):
+    """Link REF to OTHER by RELATION (what REF is to OTHER); OTHER shows it under the inverse name.
+
+    \b
+    Relations:
+    {relations}
+
+    \b
+      kb item link obs-a supports obs-b
+      kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
+      kb item links obs-b            # its links, both ways
+    """
+    from .graph import link
+    rec = link(c.kb, ref, relation, other, note, remove)
+    click.echo(rec.id)
+
+
+item_link_cmd.help = item_link_cmd.help.replace("{relations}", _relations_help())
+
+
+@command(item_grp, "links", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--depth", default=1, show_default=True, help="Follow links this many steps.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def item_links_cmd(c, ref, depth, json_out):
+    """REF's place in the graph: what it links to and what links to it (corrections, evidence, derivation,
+    related, typed links), each named from REF's side."""
+    from .graph import neighbours
+    from .ids import parse_ref
+    kb = c.kb
+    ident = kb.get(parse_ref(ref)[0]).id
+    rows = neighbours(kb, ident, depth)
+    if json_out:
+        return ui.emit_json(rows)
+    for e in rows:
+        rec = kb.items.get(e["other"])
+        title = rec.data.get("title", "") if rec else "(not in this store)"
+        pad = "  " * (e["depth"] - 1)
+        click.echo(f"{pad}{e['item'] if e['depth'] > 1 else ''}{' ' if e['depth'] > 1 else ''}"
+                   f"{e['label']:<16} {e['other']:<16} {title}")
+    if not rows:
+        ui.info("no links")
 
 
 @command(item_grp, "set", no_args_is_help=True)

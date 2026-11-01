@@ -30,9 +30,9 @@ from .config import access_rank
 from .errors import KBError
 from .ids import parse_ref
 from .items import Store, Item, blob_shas, canonical, core, fixed_compatible, is_frozen, now, source_refs
-REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "related")
-MUTABLE_LISTS = ("subject", "tags", "evidence", "related", "urls", "paths")
-MUTABLE_SCALARS = ("status", "summary", "license")
+REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "related", "links")
+MUTABLE_LISTS = ("subject", "tags", "evidence", "related", "links", "urls", "paths")
+MUTABLE_SCALARS = ("status", "summary", "license", "dates")
 MUTABLE = MUTABLE_SCALARS + MUTABLE_LISTS + ("identifiers",)
 
 log = logging.getLogger(__name__)

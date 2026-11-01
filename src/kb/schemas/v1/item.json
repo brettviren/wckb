@@ -72,8 +72,31 @@
       }
     },
     "date": {
-      "description": "Date of the thing itself, e.g. of a talk or paper.",
+      "description": "The date the thing is known by: when it was published (else made). Fixed once written; qualified and correctable dates are in `dates`.",
       "$ref": "common.json#/$defs/date"
+    },
+    "dates": {
+      "description": "Qualified dates of the thing, each saying what it dates; unlike `date`, they can be corrected. created: when it was made (written, drawn, produced); published: when it was made public (released, posted, presented); modified: when it last changed; accessed: when it was read or downloaded for this item; captured: when a photo or recording was taken.",
+      "type": "object",
+      "properties": {
+        "created": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "published": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "modified": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "accessed": {
+          "$ref": "common.json#/$defs/date"
+        },
+        "captured": {
+          "$ref": "common.json#/$defs/date"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "supersedes": {
       "description": "Items this one replaces (corrections, new versions).",
@@ -112,6 +135,41 @@
       "type": "array",
       "items": {
         "$ref": "common.json#/$defs/ref"
+      }
+    },
+    "links": {
+      "description": "Typed relations to other items (a knowledge graph); each item shows the links to it under the inverse name. related is the untyped kind.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rel": {
+            "description": "What this item is to the other one.",
+            "enum": [
+              "supports",
+              "contradicts",
+              "refines",
+              "alternative-to",
+              "compares-with",
+              "uses",
+              "part-of",
+              "cites",
+              "same-as"
+            ]
+          },
+          "ref": {
+            "$ref": "common.json#/$defs/ref"
+          },
+          "note": {
+            "description": "Why, in a few words.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "ref"
+        ],
+        "additionalProperties": false
       }
     },
     "license": {

@@ -254,6 +254,37 @@ to be right; please fix the other place.
   model's wrapper, say). Its text has fidelity `ocr`. *Code:* `kb.ocr`
   (`Engine`, `engines`, `engine`, `read`), the `ocr` transform.
 
+**link** (typed link, knowledge graph)
+: A typed relation from one item to another (field `links`: `supports`,
+  `contradicts`, `refines`, `alternative-to`, `compares-with`, `uses`,
+  `part-of`, `cites`, `same-as`). Stored on one item; the other shows it
+  under the inverse name (a **back link**: "supported by", "alternative
+  to"). Back links of every kind of reference (corrections, evidence,
+  derivation, related) come from the `refs` query table. *Code:*
+  `kb.graph.RELATIONS`, `link`, `neighbours`, `kb item link|links`.
+
+**qualified date**
+: A date that says what it dates (field `dates`): `created`, `published`,
+  `modified`, `accessed` (read or downloaded for this item), `captured`
+  (a photo or recording). Unlike `date` (the date a thing is known by:
+  when it was published; fixed once written), qualified dates can be
+  corrected. kb records `accessed` when it downloads a URL. *Code:*
+  `authoring.DATE_QUALIFIERS`, `--dated QUALIFIER=DATE`.
+
+**fetch failure**
+: A URL that could not be fetched is recorded on its location (`failed`:
+  the HTTP status, the reason, when), so retries can depend on why. A 404
+  or 410 at `kb add` is refused (a wrong URL); `kb doctor` reports
+  recorded failures instead of retrying them; `kb rendition verify` retries
+  and clears the record when the fetch works. *Code:* `content.FetchError`,
+  `content.mark_fetch`, `content.refused`.
+
+**main content** (readability)
+: What is extracted from a web page for search: its largest `article`,
+  else `main`, else `body`, without navigation, headers, footers, sidebars,
+  forms and scripts. *Code:* `kb.readability.main_content`, the `pandoc`
+  transform for `text/html`.
+
 **search index**
 : The store's `fts` table: a row for each item's head (title, summary,
   subjects) and for each chunk of each of its text renditions, so a hit

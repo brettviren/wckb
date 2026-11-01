@@ -123,6 +123,22 @@ def default_cas(kb) -> str | None:
     return usable[0] if len(usable) == 1 else None
 
 
+class FetchError(KBError):
+    """A URL could not be fetched: the HTTP status (None for a network error) and the reason."""
+
+    def __init__(self, url: str, status: int | None, reason: str):
+        super().__init__(f"cannot fetch {url}: " + (f"HTTP {status} {reason}" if status else reason))
+        self.url, self.status, self.reason = url, status, reason
+
+    def record(self) -> dict:
+        """What a url location keeps of it (``failed``)."""
+        return {**({"status": self.status} if self.status else {}), "reason": self.reason, "at": now()}
+
+
+#: HTTP statuses meaning the URL itself is wrong (not a refusal, not a passing failure).
+GONE = (404, 410)
+
+
 @dataclass
 class Fetched:
     path: Path
@@ -145,8 +161,12 @@ def fetch_info(kb, url: str, timeout: float = 60) -> Fetched:
             shutil.copyfileobj(resp, tmp)
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower() or None
             modified = resp.headers.get("Last-Modified")
+    except urllib.error.HTTPError as exc:      # urlopen raises it, so there is no temporary file yet
+        raise FetchError(url, exc.code, str(exc.reason)) from None
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise KBError(f"cannot fetch {url}: {exc}") from exc
+        if "tmp" in locals():
+            Path(tmp.name).unlink(missing_ok=True)
+        raise FetchError(url, None, str(getattr(exc, "reason", exc))) from None
     tmp_path = Path(tmp.name)
     sha, size = sha256_file(tmp_path)
     dest = locations.url_cache_path(kb, sha)
@@ -163,6 +183,33 @@ def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
     """Download *url* into the url source directory (content-addressed); return (path, sha256, size)."""
     f = fetch_info(kb, url, timeout)
     return f.path, f.sha256, f.size
+
+
+def refused(rendition: dict) -> list[dict]:
+    """The recorded failures of a rendition that is only at URLs, all of which failed (else empty)."""
+    locs = rendition.get("locations", [])
+    if not locs or any(l["type"] != "url" or not l.get("failed") for l in locs):
+        return []
+    return [l["failed"] | {"url": l["url"]} for l in locs]
+
+
+def mark_fetch(kb, rec, url: str, failure: dict | None) -> None:
+    """Record on REC's url locations for URL that fetching it failed (FAILURE), or worked (None)."""
+    import copy
+    from .items import Item
+    if kb.readonly:
+        return
+    data = copy.deepcopy(kb.get(rec.id).data)
+    changed = False
+    for r in data.get("renditions", []):
+        for loc in r.get("locations", []):
+            if loc["type"] == "url" and loc["url"] == url and loc.get("failed") != failure:
+                if failure is None:
+                    changed |= loc.pop("failed", None) is not None
+                else:
+                    loc["failed"], changed = failure, True
+    if changed:
+        kb.save(Item(data, kb), "fetch", {"url": url, "failed": failure})
 
 
 def resolve(kb, rec, rendition: dict, fetch_urls: bool = True, verify: bool = False) -> Path | None:
@@ -345,9 +392,14 @@ def verify(kb, recs, record: bool = False) -> list[dict]:
                 item = {"ref": f"{rec.id}#{r['name']}", "url": loc["url"]}
                 try:
                     _, sha, size = fetch(kb, loc["url"])
-                except KBError as exc:
-                    report.append(item | {"result": "unreachable", "detail": str(exc)})
+                except FetchError as exc:
+                    if not kb.readonly and loc.get("failed") != exc.record():
+                        loc["failed"], dirty = exc.record(), True
+                    report.append(item | {"result": "unreachable", "detail": str(exc),
+                                          **({"status": exc.status} if exc.status else {})})
                     continue
+                if loc.pop("failed", None) is not None:
+                    dirty = True
                 if r.get("sha256") is None:
                     if record:
                         r["sha256"], r["size"] = sha, size

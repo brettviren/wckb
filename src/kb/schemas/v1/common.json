@@ -262,6 +262,26 @@
             "auth": {
               "description": "Hint for humans: sso, collaboration, none ...",
               "type": "string"
+            },
+            "failed": {
+              "description": "The last attempt to fetch it failed: the HTTP status (absent for a network error), the reason, and when. Cleared by a fetch that works (kb rendition verify).",
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "integer"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "at": {
+                  "$ref": "#/$defs/datetime"
+                }
+              },
+              "required": [
+                "reason",
+                "at"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

@@ -53,7 +53,12 @@ def lint(kb: Store) -> list[Problem]:
                 out.append(_warn("local-only", f"{rec.id}#{r['name']}", f"only on host {locs[0]['host']}",
                                  "put it in a content store (kb rendition locate) or add a URL others can reach"))
             if r["role"] == "original" and "sha256" not in r:
-                out.append(_warn("unhashed", f"{rec.id}#{r['name']}", "no sha256: changes upstream cannot be detected",
+                failed = [l["failed"] for l in r.get("locations", []) if l.get("failed")]
+                why = (f" (fetching failed: HTTP {failed[0]['status']} {failed[0]['reason']})"
+                       if failed and failed[0].get("status") else
+                       f" (fetching failed: {failed[0]['reason']})" if failed else "")
+                out.append(_warn("unhashed", f"{rec.id}#{r['name']}", "no sha256: changes upstream cannot be detected"
+                                 + why,
                                  "fetch it (kb rendition verify --record); if the site refuses kb, add the copy "
                                  "you have: kb rendition add ID FILE --name original-copy"))
         if rec.kind == "view":
@@ -83,6 +88,7 @@ def dangling(kb: Store) -> list[tuple[str, str]]:
     for rec in kb.items.values():
         d = rec.data
         refs = d.get("members", []) + d.get("supersedes", []) + d.get("retracts", []) + d.get("related", [])
+        refs += [x["ref"] for x in d.get("links", [])]
         refs += rec.inputs() + [e for e in d.get("evidence", []) if "://" not in e] + source_refs(d)
         for r in refs:
             if not kb.exists(r):

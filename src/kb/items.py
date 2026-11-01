@@ -30,16 +30,16 @@ FIXED_ROLES = ("original", "content")
 
 _ORDER = [
     "schema_version", "id", "kind", "title", "summary", "status", "access",
-    "subject", "tags", "valid", "created", "asserted_by", "creators", "date",
+    "subject", "tags", "valid", "created", "asserted_by", "creators", "date", "dates",
     "doctype", "event", "venue", "version", "system", "query", "retrieved",
     "parameters", "repository", "commit", "language", "format", "variables",
     "produced_by", "name", "policy_type", "stage", "applies_to", "order", "based_on", "affiliation",
     "email", "handles", "build", "audience", "members", "depth", "nested", "follow", "purpose",
     "asset_type", "match", "versions", "bindings",
     "identifiers", "license", "supersedes", "retracts", "derived_from", "evidence",
-    "related", "origin", "renditions", "x",
+    "related", "links", "origin", "renditions", "x",
 ]
-_DIGEST_EXCLUDE = {"summary", "tags", "related", "evidence", "x", "origin"}
+_DIGEST_EXCLUDE = {"summary", "tags", "related", "links", "dates", "evidence", "x", "origin"}
 _DIGEST_ROLES = {"original", "content", "metadata", "source"}
 
 
@@ -408,6 +408,7 @@ class Store:
         rel += [(i, parse_ref(r)[0], "derived_from") for r in rec.inputs()]
         rel += [(i, parse_ref(e)[0], "evidence") for e in d.get("evidence", []) if "://" not in e]
         rel += [(i, s, "source") for s in source_refs(d)]
+        rel += [(i, parse_ref(x["ref"])[0], x["rel"]) for x in d.get("links", [])]
         c.executemany("INSERT INTO refs VALUES (?,?,?)", rel)
         c.executemany("INSERT INTO identifiers VALUES (?,?,?)", [(i, k, v) for k, v in d.get("identifiers", {}).items()])
         c.executemany("INSERT INTO renditions VALUES (?,?,?,?,?,?,?,?)", [

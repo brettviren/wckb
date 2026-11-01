@@ -102,7 +102,7 @@ Autonomy the human has granted you here:
 
 never: leave it to the human. ask: ask first, and pass their words with --approved. auto: go ahead, then tell the human what you did.
 
-<!-- kb:policy kb-core@6 -->
+<!-- kb:policy kb-core@7 -->
 ## Working with the knowledge base
 
 A knowledge base (KB) of people and their LLM sessions. You are one of its
@@ -149,6 +149,9 @@ Rules:
    `--when`; if you inferred it yourself, `--by claude --how "inferred from
    <what>"`. Documents: their authors are `--creators`. kb records who filed
    anything (and `--via` the tool).
+   Say how items relate with typed links (`--link supports=ID`,
+   `kb item link ID RELATION OTHER`); `kb item links ID` shows an item's
+   links both ways. `kb new KIND --help` lists a kind's fields and values.
 3. **`verified` needs evidence** from an authoritative source. Hearsay is
    `unverified`, and a model's reading of a figure is not evidence.
 4. **Write the summary for the next LLM:** one to three sentences, not the

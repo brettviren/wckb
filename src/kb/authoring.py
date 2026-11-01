@@ -17,6 +17,15 @@ from .items import Store, Item, now
 
 CONTENT_NAME = {"topic": "page"}  # content rendition name; "note" otherwise
 
+#: What a qualified date (field ``dates``) can say, as in schemas/v1/item.json.
+DATE_QUALIFIERS = {
+    "created": "when it was made (written, drawn, produced)",
+    "published": "when it was made public (released, posted, presented)",
+    "modified": "when it last changed",
+    "accessed": "when it was read or downloaded for this item",
+    "captured": "when a photo or recording was taken",
+}
+
 
 # -- turning options into fields -------------------------------------------
 
@@ -64,7 +73,7 @@ def deep_merge(base: dict, over: dict) -> dict:
 def fields_from_options(*, title=None, summary=None, subject=(), tags=(), runs=(), start=None,
                         end=None, status=None, access=None, by=None, how=None, when=None,
                         creators=(), date=None, identifiers=None, evidence=(), related=(),
-                        derived_from=(), license=None, sets=()) -> dict:
+                        derived_from=(), license=None, sets=(), dated=(), links=()) -> dict:
     f: dict = {}
     if title: f["title"] = title
     if summary: f["summary"] = summary
@@ -89,6 +98,17 @@ def fields_from_options(*, title=None, summary=None, subject=(), tags=(), runs=(
     if related: f["related"] = list(related)
     if derived_from: f["derived_from"] = list(derived_from)
     if license: f["license"] = license
+    for q in dated:
+        k, eq, v = q.partition("=")
+        if not eq or k not in DATE_QUALIFIERS:
+            raise KBError(f"--dated wants QUALIFIER=DATE, QUALIFIER one of {', '.join(DATE_QUALIFIERS)}: {q!r}")
+        f.setdefault("dates", {})[k] = v
+    for x in links:
+        from .graph import RELATIONS
+        rel, eq, ref = x.partition("=")
+        if not eq or rel not in RELATIONS:
+            raise KBError(f"--link wants RELATION=ID, RELATION one of {', '.join(RELATIONS)}: {x!r}")
+        f.setdefault("links", []).append({"rel": rel, "ref": ref})
     return deep_merge(f, parse_set(sets))
 
 
@@ -142,6 +162,8 @@ def _refs(data: dict):
     for field in ("supersedes", "retracts", "related", "members"):
         for ref in data.get(field, []):
             yield field, ref
+    for x in data.get("links", []):
+        yield "links", x["ref"]
     for d in data.get("derived_from", []):
         yield "derived_from", d["ref"] if isinstance(d, dict) else d
     for ev in data.get("evidence", []):
@@ -228,10 +250,16 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             while name in used:
                 name += "_"
             used.add(name)
-            path, said, modified = None, None, None
+            path, said, modified, failure = None, None, None, None
             if is_url and fetch:
-                f = content.fetch_info(kb, src)
-                path, said, modified = f.path, f.media_type, f.last_modified
+                try:
+                    f = content.fetch_info(kb, src)
+                    path, said, modified = f.path, f.media_type, f.last_modified
+                except content.FetchError as exc:
+                    if exc.status in content.GONE:
+                        raise KBError(f"{exc} (the URL is wrong, or the page is gone)") from None
+                    failure = exc.record()        # a refusal or a passing failure: keep the URL, say what happened
+                    _warn(f"{exc}: added without its content (recorded; kb rendition verify ID retries)")
             elif not is_url:
                 path = Path(src).expanduser()
                 if not path.is_file():
@@ -239,7 +267,9 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             mtype = content.sniff(path, filename, said) if path is not None else content.media_type(filename)
             if guess and path is not None and not got:
                 found.take(metadata.for_file(path, mtype, last_modified=modified))
-            got.append((src, is_url, filename, name, path, mtype))
+            if is_url and path is not None and not got:     # a fact, not a guess: when kb read it
+                found.put("dates.accessed", now()[:10], "kb's download")
+            got.append((src, is_url, filename, name, path, mtype, failure))
         guessed = {k: v for k, v in found.fields.items() if kind == "document" or k not in _DOCUMENT_ONLY}
         ids = {**guessed.get("identifiers", {}), **fields.get("identifiers", {})}
         if ids and not force:
@@ -247,11 +277,14 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             if dup:
                 raise KBError(f"already in this store as {', '.join(dup)} (same identifier); use --force to add anyway")
         renditions = []
-        for src, is_url, filename, name, path, mtype in got:
+        for src, is_url, filename, name, path, mtype, failure in got:
             r = {"name": name, "role": "original", "media_type": mtype, "locations": []}
             if is_url:
-                r["locations"].append(content.url_location(src, retrieved=fetch))
+                r["locations"].append(content.url_location(src, retrieved=path is not None)
+                                      | ({"failed": failure} if failure else {}))
             if target is not None:
+                if path is None:
+                    raise KBError(f"{src}: nothing to copy to --target (fetching it failed)")
                 dest = _copy(path, target, filename, several=len(sources) > 1)
                 locs, sha, size = _place_copy(kb, dest, filename, mode, cas_name)
                 r.update(sha256=sha, size=size)
@@ -278,6 +311,12 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
         rec = _finish(kb, data)
         _report_places(kb, renditions)
         return rec
+
+
+def _warn(message: str) -> None:
+    import logging
+    from .logs import tell
+    tell(logging.getLogger(__name__), logging.WARNING, message)
 
 
 def _copy(path: Path, target: str | Path, filename: str, several: bool) -> Path:

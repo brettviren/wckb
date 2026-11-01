@@ -45,12 +45,18 @@ kb add https://github.com/asg017/sqlite-vec --set doctype=manual \
 
 - **arXiv**: kb gets the title, authors, date and abstract from arXiv, and
   the PDF's text.
-- **Web pages**: kb finds the page's title and description and extracts its
-  text. A page rarely has a date. Give the date it shows (a release, "last
-  updated"), else the day you read it, and say which in the summary.
-  **Never a date from memory**: `date` cannot be changed afterwards.
-- **A site that refuses kb** (HTTP 403): `kb add URL --no-fetch ...`; if you
-  have the page another way, add that copy too.
+- **Web pages**: kb finds the page's title and description, extracts the
+  text of its main content, and records the day it read the page
+  (`dates.accessed`) and the server's `dates.modified`.
+- **Dates say what they date.** `--date` is the date the thing is known by
+  (when it was published) and is fixed once written: give it only when the
+  source shows it. Otherwise use qualified dates, which can be corrected
+  later: `--dated published=2024-08-01`, `--dated created=...`.
+  **Never a date from memory.**
+- **A site that refuses kb** (HTTP 403 ...): kb adds the item anyway and
+  records the failure on its URL (`kb doctor` then reports it rather than
+  retrying). If you have the page another way, add that copy
+  (`kb rendition add ID FILE --name original-copy`).
 - Correct a found title or summary that says too little (`kb item set ID
   summary="..."`).
 
@@ -69,7 +75,7 @@ kb new observation \
   --text "<the claim in full: numbers, versions, where in the source, caveats>" \
   --subject search/embedding-models/nomic-embed --tag query-prefix \
   --by claude --how "read <source URL>" --when 2026-11-01 --start 2026-11-01 \
-  --evidence doc-… --related obs-…
+  --evidence doc-… --link compares-with=obs-…
 ```
 
 - **Title**: the claim itself, short ("X has 768 dims"), not "About X".
@@ -82,9 +88,11 @@ kb new observation \
   didn't verify it.
 - **Validity**: `--start <today>` for claims about current versions, so
   readers know when they held.
-- **Connections**: `--related` to the observations it should be read with
-  (the same benchmark, the alternative). `related` is one-way, so add the
-  link on both items (`kb item set ID --add related=obs-…`).
+- **Connections**: typed links say how items relate:
+  `--link alternative-to=obs-…`, `--link supports=obs-…`,
+  `--link compares-with=obs-…` (`kb item link --help` lists the relations).
+  Link one way; the other item shows the link under its inverse name
+  (`kb item links ID` shows both). `--related` is for when no relation fits.
 - Before filing, `kb search` for the claim. If it is there, cite it, or
   correct it with kb-correct if it is wrong.
 - Comparisons across sources ("on MTEB v2 retrieval, A 61.8 > B 55.1") are

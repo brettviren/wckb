@@ -59,12 +59,12 @@ class Found:
     def take(self, other: "Found", over: bool = False) -> None:
         """Merge OTHER in: its fields fill gaps (or, with OVER, replace these)."""
         for k, v in other.fields.items():
-            if k == "identifiers":
-                ids = self.fields.setdefault("identifiers", {})
+            if k in ("identifiers", "dates"):
+                ids = self.fields.setdefault(k, {})
                 for ik, iv in v.items():
                     if over or ik not in ids:
                         ids[ik] = iv
-                        self.whence[f"identifiers.{ik}"] = other.whence.get(f"identifiers.{ik}", "")
+                        self.whence[f"{k}.{ik}"] = other.whence.get(f"{k}.{ik}", "")
             elif over or k not in self.fields:
                 self.fields[k] = v
                 self.whence[k] = other.whence.get(k, "")
@@ -76,8 +76,9 @@ class Found:
     def put(self, key: str, value, whence: str) -> None:
         if value in (None, "", [], {}):
             return
-        if key.startswith("identifiers."):
-            self.fields.setdefault("identifiers", {})[key.split(".", 1)[1]] = value
+        if key.startswith(("identifiers.", "dates.")):
+            head, sub = key.split(".", 1)
+            self.fields.setdefault(head, {})[sub] = value
         else:
             self.fields[key] = value
         self.whence[key] = whence
@@ -152,7 +153,10 @@ def from_arxiv(ident: str, timeout: float = 30) -> Found:
     if abstract:
         f.put("summary", summary_of(abstract), whence)
     f.put("creators", [a.findtext("a:name", "", _ATOM).strip() for a in entry.findall("a:author", _ATOM)], whence)
-    f.put("date", _date(text("a:published")), whence)
+    f.put("date", _date(text("a:published")), whence)              # the date a paper is known by
+    f.put("dates.published", _date(text("a:published")), whence)
+    if text("a:updated") and _date(text("a:updated")) != _date(text("a:published")):
+        f.put("dates.modified", _date(text("a:updated")), whence)
     f.put("identifiers.arxiv", base, whence)
     f.put("identifiers.doi", text("arxiv:doi"), whence)
     journal = text("arxiv:journal_ref")
@@ -196,8 +200,8 @@ def _pdf_info(path: Path) -> tuple[dict, str, tuple[float, float] | None]:
             k, v = k.strip().lower(), v.strip()
             if k in ("title", "author", "subject", "keywords", "creator", "producer") and v:
                 meta[k] = v
-            elif k == "creationdate":
-                meta["creationdate"] = v
+            elif k in ("creationdate", "moddate"):
+                meta[k] = v
             elif k == "page size":
                 m = re.match(r"([\d.]+) x ([\d.]+)", v)
                 size = (float(m[1]), float(m[2])) if m else None
@@ -219,7 +223,8 @@ def from_pdf(path: Path, lookup: bool = True) -> Found:
     subject = (meta.get("subject") or "").strip()
     if 0 < len(subject) <= 400:
         f.put("summary", subject, "the PDF's information")
-    f.put("date", _date(meta.get("creationdate")), "the PDF's information")
+    f.put("dates.created", _date(meta.get("creationdate")), "the PDF's information")     # the file's, not the work's
+    f.put("dates.modified", _date(meta.get("moddate")), "the PDF's information")
     creator = (meta.get("creator") or "") + " " + (meta.get("producer") or "")
     if (size and size[0] > size[1]) or "beamer" in creator.lower() or "powerpoint" in creator.lower():
         f.put("doctype", "presentation", "the PDF's page shape" if size and size[0] > size[1] else whence)
@@ -288,8 +293,9 @@ def from_html(path: Path, last_modified: str | None = None) -> Found:
                  or tags.get("article:published_time") or tags.get("datepublished") or tags.get("date"))
     if date:
         f.put("date", date, w)
-    elif last_modified:
-        f.put("date", last_modified, "the server's Last-Modified")
+        f.put("dates.published", date, w)
+    if last_modified:
+        f.put("dates.modified", last_modified, "the server's Last-Modified")
     return f
 
 
@@ -328,7 +334,7 @@ def from_image(path: Path) -> Found:
     if title and len(title.strip()) <= 200:
         f.put("title", title.strip(), whence)
     f.put("creators", _people(tags.get("artist") or tags.get("author")), whence)
-    f.put("date", _date(tags.get("datetimeoriginal") or tags.get("createdate") or tags.get("creation time")
+    f.put("dates.captured", _date(tags.get("datetimeoriginal") or tags.get("createdate") or tags.get("creation time")
                         or tags.get("datetime")), whence)
     camera = " ".join(x.strip() for x in (tags.get("make"), tags.get("model")) if x)
     if f.fields or camera:

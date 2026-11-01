@@ -49,8 +49,9 @@ Claude then follows the skill:
 
 3. **Facts become observations, one claim each**, with numbers, a summary
    that says why it matters, attribution (`--by claude --how "read <URL>"`),
-   the source as evidence, a validity start date, and `--related` links to
-   the observations it should be read with:
+   the source as evidence, a validity start date, and typed links to the
+   observations it should be read with (`--link alternative-to=obs-…`,
+   `--link compares-with=obs-…`; the first run used untyped `--related`):
 
    ```
    obs-3hnqws1va3   nomic-embed-text-v1.5 needs task prefixes (search_query:/search_document:)
@@ -94,13 +95,16 @@ claim against its source, mark it with `kb item set obs-… status=verified`
 - **Subjects for browsing, tags for facets.** `kb context SUBJECT` walks a
   hierarchy, and `kb ls --tag` cuts across it (all the MIT-licensed things,
   all the pre-v1 libraries).
-- **Links.** Evidence ties a claim to its source, `related` ties it to the
-  claims to compare with, and the topic's `derived_from` ties the answer to
-  every claim. `kb item stale` then knows which topics to revise when a
-  claim is corrected.
-- **Dates.** `--start` says when the claim was true. A document's `date` is
-  the date the source shows or the day it was read, never a guess, because
-  it cannot be changed later.
+- **Links.** Evidence ties a claim to its source, typed links tie it to the
+  claims it supports, contradicts or is an alternative to, and the topic's
+  `derived_from` ties the answer to every claim. Each item shows the links
+  to it as well (`kb item links ID`: "supported by", "used to build"), and
+  `kb item stale` knows which topics to revise when a claim is corrected.
+- **Dates say what they date.** `--start` says when a claim was true. A
+  document's `date` is when it was published, and only when the source
+  shows it (it cannot be changed later). Other dates are qualified and
+  correctable: kb records `accessed` (when it read the page) and the
+  server's `modified`; give `--dated published=...` and the like yourself.
 
 ## What the first run taught kb
 
@@ -112,6 +116,8 @@ Running this research uncovered problems in kb, which are now fixed:
 - the prompt hook named one topic five times;
 - errors did not say which option was missing.
 
-What is still open is in [questions](../questions.md) S12. When something
+Its other lessons are now part of kb too ([questions](../questions.md) S12):
+back links and typed links, recorded fetch failures, the main content of
+web pages, qualified dates, and `kb new KIND --help`. When something
 in kb gets in the way of a research run, say so in the report: that is how
 kb improves.

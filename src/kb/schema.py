@@ -18,7 +18,7 @@ from .errors import KBError
 from .ids import KINDS
 
 MAJOR = 1
-REVISION = "1.8"
+REVISION = "1.9"
 BASE_URI = "https://schemas.kb.invalid/v%d/"
 
 
@@ -67,7 +67,9 @@ def validate(data: dict) -> list[str]:
 
 
 #: The command-line option that gives a field, for messages about a missing or bad one.
-OPTION = {"derived_from": "--derived-from ID", "title": "--title", "summary": "--summary", "creators": "--creators", "date": "--date",
+OPTION = {"tags": "--tag", "links": "--link RELATION=ID", "identifiers": "--identifier SCHEME=VALUE",
+          "valid": "--runs, --start, --end", "status": "--status", "access": "--access",
+          "derived_from": "--derived-from ID", "dates": "--dated QUALIFIER=DATE", "title": "--title", "summary": "--summary", "creators": "--creators", "date": "--date",
           "doctype": "--set doctype=paper|preprint|presentation|manual|report|other|...",
           "asserted_by": "--by, --how, --when", "subject": "--subject", "system": "--set system=...",
           "parameters": "--set 'parameters={...}'", "query": "--set query=...", "retrieved": "--set retrieved=DATE"}
@@ -75,6 +77,12 @@ OPTION = {"derived_from": "--derived-from ID", "title": "--title", "summary": "-
 
 def _describe(error) -> str:
     path = "/".join(str(p) for p in error.absolute_path) or "(item)"
+    if error.validator in ("oneOf", "anyOf") and error.context and all(
+            e.validator == "required" for e in error.context):
+        # alternatives, each missing: name them all, and how to give each
+        names = [e.message.split("'")[1] for e in error.context if "'" in e.message]
+        return f"{path}: needs one of " + ", ".join(
+            f"'{n}'" + (f" (give {OPTION[n]})" if n in OPTION else "") for n in dict.fromkeys(names))
     if error.validator in ("oneOf", "anyOf") and error.context:
         # The nearest sub-error usually says what was actually wrong.
         best = max(error.context, key=lambda e: len(list(e.absolute_path)))
@@ -108,3 +116,60 @@ def check_revision(required: str) -> None:
             raise KBError(f"bad schema revision {v!r} in the store's settings") from None
     if parse(required) > parse(REVISION):
         raise KBError(f"this store needs schema {required} but kb implements {REVISION}: upgrade kb")
+
+
+def field_guide(kind: str, major: int = MAJOR) -> list[dict]:
+    """The fields of an item of KIND, for people: name, required, how to give it (option), allowed values
+    (enum), and what it is; required ones first, then those of the kind, then those every item has."""
+    if kind not in KINDS:
+        raise KBError(f"no kind {kind!r} (kinds: {', '.join(KINDS)})")
+    schemas = load_schemas(major)
+    own, base = schemas.get(kind, {}), schemas["item"]
+    required = set(own.get("required", [])) | set(base.get("required", []))
+    for part in own.get("allOf", []):           # alternatives, as for a document's date or dates
+        for alt in part.get("anyOf", []):
+            required |= {f"{r} (or another)" for r in alt.get("required", [])} - required
+    skip = {"id", "kind", "schema_version", "created", "renditions", "origin", "x"}
+
+    defs = schemas.get("common", {}).get("$defs", {})
+
+    def deref(spec: dict) -> dict:
+        ref = spec.get("$ref", "")
+        return defs.get(ref.rsplit("/", 1)[-1], spec) if "#/$defs/" in ref else spec
+
+    def first_sentence(text: str) -> str:
+        cut = text.find(". ", 40)
+        return text if cut < 0 or len(text) <= 140 else text[:cut + 1]
+
+    def enum_of(spec: dict):
+        spec = deref(spec)
+        if "enum" in spec:
+            return spec["enum"]
+        if spec.get("type") == "object" and spec.get("properties") and spec.get("additionalProperties") is False:
+            return list(spec["properties"])         # qualifiers (dates): the keys it may have
+        items = spec.get("items") or {}
+        if isinstance(items, dict) and "enum" in items:
+            return items["enum"]
+        rel = (items.get("properties") or {}).get("rel") if isinstance(items, dict) else None
+        return rel.get("enum") if rel else None
+
+    out = []
+    for source, props in (("kind", own.get("properties", {})), ("item", base.get("properties", {}))):
+        for name, spec in props.items():
+            if name in skip or any(f["name"] == name for f in out) or not isinstance(spec, dict):
+                continue
+            if spec.get("const") is not None:
+                continue
+            req = name in required or f"{name} (or another)" in required
+            out.append({"name": name, "required": req, "either": f"{name} (or another)" in required,
+                        "option": OPTION.get(name) or (f"--{name.replace('_', '-')}" if name in _OPTIONS else
+                                                       f"--set {name}=..."),
+                        "enum": enum_of(spec),
+                        "description": first_sentence(spec.get("description") or deref(spec).get("description") or ""),
+                        "of": source})
+    return sorted(out, key=lambda f: (not f["required"], f["of"] != "kind"))
+
+
+#: Fields with an option of their own (else --set NAME=...).
+_OPTIONS = {"title", "summary", "subject", "tags", "status", "access", "creators", "date", "identifiers",
+            "evidence", "related", "derived_from", "license", "links"}

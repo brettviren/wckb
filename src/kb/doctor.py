@@ -444,15 +444,29 @@ def _retype(kb, f):
 
 @remedy("unextracted", "Items with a PDF, slides or the like but no text from it, so search can't see inside")
 def _unextracted(kb):
+    from .content import refused
     from .transforms import unextracted
-    todo = [(rec.id, src, t.name) for rec in kb.items.values() if kb.is_current(rec.id)
-            for src, t in unextracted(kb, rec)]
+    todo, out = [], []
+    for rec in kb.items.values():
+        if not kb.is_current(rec.id):
+            continue
+        for src, t in unextracted(kb, rec):
+            failed = refused(rec.rendition(src))
+            if failed:          # not retried by itself: what to do depends on why (a person decides)
+                why = "; ".join(f"HTTP {f['status']} {f['reason']}" if f.get("status") else f["reason"]
+                                for f in failed)
+                out.append(Finding("unextracted", f"{rec.id}#{src} has no text: fetching it failed ({why}, "
+                                   f"{failed[0]['at'][:10]})", f"retry with kb rendition verify {rec.id}, or add "
+                                   f"the file you have: kb rendition add {rec.id} FILE --name {src}-copy",
+                                   where=f"{rec.id}#{src}"))
+            else:
+                todo.append((rec.id, src, t.name))
     if todo:
         names = ", ".join(f"{i}#{s}" for i, s, _ in todo[:5]) + (" ..." if len(todo) > 5 else "")
-        return [Finding("unextracted", f"{len(todo)} rendition(s) without extracted text: {names}",
-                        "extract their text (kb rendition extract ID; may fetch content)", "auto",
-                        data={"ids": sorted({i for i, _, _ in todo})})]
-    return []
+        out.append(Finding("unextracted", f"{len(todo)} rendition(s) without extracted text: {names}",
+                           "extract their text (kb rendition extract ID; may fetch content)", "auto",
+                           data={"ids": sorted({i for i, _, _ in todo})}))
+    return out
 
 
 @_unextracted.fixer

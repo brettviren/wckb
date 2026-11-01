@@ -41,27 +41,6 @@ Status:
 - Captions for images that have no text (a vision model), as a separate
   transform?
 
-**S12. Lessons from a research session run through kb (2026-11-01).** *(open)*
-- A subagent researched embedding models and vector indexes with the
-  kb-research approach (topic `top-q4vh7h3cbb` in the wckb store). Fixed
-  since: web pages typed and extracted, found page metadata, large URL
-  content kept, tags searchable and filterable, sentence searches, recall
-  duplicates, messages that name options and limits.
-- Open:
-  - `related` is one-way. Should kb show incoming links (from `refs`), or
-    should `kb item set --add related=` offer to link both ways?
-  - A URL that refuses kb (HTTP 403) leaves `unextracted` and `unhashed`
-    findings that never go away. Should kb remember the refusal and stop
-    retrying until asked?
-  - Text extracted from web pages carries the site's navigation ("Skip to
-    content", menus). Is a readability step (main content only) worth it?
-  - `date` is frozen, so a wrong date needs a supersede, which leaves
-    citing items pointing at the old one (kb-correct propagates). Three
-    guessed dates were tagged `date-guessed` instead. Should a date be
-    correctable while an item is new, or carry a precision or source?
-  - `kb new KIND --help` doesn't say which fields KIND needs; `kb item
-    schema KIND` does. Should `kb new` show them per kind?
-
 **S2. Who writes a group store?** *(open)*
 - A maintainer, a CI job applying accepted bundles, or a small service? How
   is the read-only snapshot published (EOS, web)?
@@ -564,6 +543,24 @@ Status:
   (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
 ## Decided
+
+**S12. Lessons from a research session run through kb.** *(decided and built 2026-11-01)*
+- Back links: every reference is shown from both ends (`kb item links`,
+  `kb show`), and items have typed links (`links`: supports, contradicts,
+  refines, alternative-to, compares-with, uses, part-of, cites, same-as):
+  a knowledge graph. Open: more relations, or relations a store defines
+  (C3-like settings)?
+- Fetch failures are recorded with their HTTP status on the URL location;
+  doctor reports them rather than retrying. Open: a retry policy by status
+  (429 and 5xx after a while; 401/403 only when asked).
+- Web pages are reduced to their main content before extraction
+  (`kb.readability`, standard library only).
+- Dates are qualified (`dates`: created, published, modified, accessed,
+  captured) and correctable; `date` means published and is given only
+  when known.
+- `kb new KIND --help` lists the kind's fields with options and allowed
+  values; enumerated values are listed where they are given (`--help`,
+  `kb item link --help`, `kb ls --subjects|--tags`, `kb source types`).
 
 **S1. Where does a project's database live?** *(decided 2026-11-01)*
 - In its store context's location: for a git working tree with no store in

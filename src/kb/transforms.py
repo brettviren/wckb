@@ -158,9 +158,18 @@ class Pandoc(Transform):
         return _cmd_version(["pandoc", "--version"]).replace("pandoc ", "")
 
     def run(self, src, dst, media_type):
-        # no raw HTML in the output: it is for reading and searching, and web pages are mostly markup
+        info = None
+        if media_type == "text/html":       # a web page: only its main content (kb.readability)
+            from .readability import main_content
+            page = Path(src).read_text(encoding="utf-8", errors="replace")
+            content, how = main_content(page)
+            src = dst.with_name(dst.stem + ".main.html")
+            src.write_text(f"<html><body>{content}</body></html>", encoding="utf-8")
+            info = {"options": {"readability": how}}
+        # no raw HTML in the output: it is for reading and searching
         _run(["pandoc", "-f", _PANDOC_FROM[media_type], "-t", "gfm-raw_html", "--wrap=none", str(src),
               "-o", str(dst)])
+        return info
 
 
 class Pptx(Transform):
@@ -333,7 +342,14 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
         if existing.get("source_sha256") == src_r.get("sha256"):
             raise KBError(f"{rec.id}#{name} exists and is up to date (use --force to redo)")
     t = choose(kb, src_r["media_type"], transform)
-    src = content.resolve(kb, rec, src_r)
+    try:
+        src = content.resolve(kb, rec, src_r)
+    except content.FetchError as exc:
+        content.mark_fetch(kb, rec, exc.url, exc.record())       # so that retries can go by what happened
+        raise
+    for loc in src_r.get("locations", []):
+        if loc["type"] == "url" and loc.get("failed") and src is not None:
+            content.mark_fetch(kb, rec, loc["url"], None)
     if src is None:
         raise KBError(f"{rec.id}#{source} is not reachable from here (not in the store, a content store or the cache, and no fetchable URL)")
 

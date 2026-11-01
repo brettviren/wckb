@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.8) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.9) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -21,12 +21,14 @@ the schema itself, which is authoritative.
 | `status` |  | status | Confidence in the content: draft, unverified, verified (needs evidence), disputed. |
 | `identifiers` |  | identifiers | External identifiers: doi, arxiv, inspire, indico, cds, url ... |
 | `creators` |  | list of agent | Authors of the thing recorded (person refs or names). |
-| `date` |  | date | Date of the thing itself, e.g. of a talk or paper. |
+| `date` |  | date | The date the thing is known by: when it was published (else made). Fixed once written; qualified and correctable dates are in `dates`. |
+| `dates` |  | object | Qualified dates of the thing, each saying what it dates; unlike `date`, they can be corrected. created: when it was made (written, drawn, produced); published: when it was made public (released, posted, presented); modified: when it last changed; accessed: when it was read or downloaded for this item; captured: when a photo or recording was taken. |
 | `supersedes` |  | list of ref | Items this one replaces (corrections, new versions). |
 | `retracts` |  | list of ref | Items this one withdraws without replacement. |
 | `derived_from` |  | list of derivation | Inputs of a topic, view or derived item; stamped with digests. |
 | `evidence` |  | list of ref_or_url | Refs or URLs supporting the content; required for verified. |
 | `related` |  | list of ref | Other related items. |
+| `links` |  | list of object | Typed relations to other items (a knowledge graph); each item shows the links to it under the inverse name. related is the untyped kind. |
 | `license` |  | string | SPDX identifier or a local term such as collaboration-internal. |
 | `renditions` |  | list of rendition | Representations of the item's material and where each one's bytes are (in the store, a content store, a URL, an asset ...). |
 | `origin` |  | origin | Set on copies pushed from another store. |
@@ -58,7 +60,7 @@ A paper, preprint, technote, presentation, thesis, minutes or similar. The origi
 | `venue` |  | string | Journal, conference or series. |
 | `version` |  | string |  |
 
-Also required here: `creators`, `date`.
+Also required here: `creators`.
 
 ## dataset
 
@@ -233,7 +235,7 @@ Where a rendition's bytes are. Each type is served by a data source (kb.sources)
 
 - `db`: `filename`
 - `cas`: `name`, `filename`
-- `url`: `url`, `retrieved`, `auth`
+- `url`: `url`, `retrieved`, `auth`, `failed`
 - `local`: `host`, `path`
 - `datalad`: `source`, `path`, `key`
 - `source`: `source`, `path`

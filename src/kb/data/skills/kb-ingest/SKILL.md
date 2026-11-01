@@ -28,12 +28,14 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    ```
 
    - If the URL needs SSO and the user has the file: `kb add FILE --url URL ...`.
-   - Web pages (READMEs, model cards, docs): kb finds the page's title and
-     description, and its date if the page or server gives one. Otherwise
-     `--date` is the date the page shows (a release, "last updated"), else
-     the day you read it, and say which in the summary. Never a date from
-     memory: `date` cannot be changed later. The text is extracted from the
-     HTML for search.
+   - Web pages (READMEs, model cards, docs): kb finds the page's title,
+     description and author, records when it read the page
+     (`dates.accessed`), and extracts the text of the page's main content.
+     `--date` (when the thing was published; fixed once written) only when
+     the page shows it; else qualified dates (`--dated published=...`),
+     which can be corrected. Never a date from memory.
+   - A URL that fails (HTTP 403 ...) is added with the failure recorded;
+     a 404 is refused (the URL is wrong).
    - For papers, add `--identifier arxiv=... --identifier doi=...` when kb
      didn't find them.
    - `--target DIR/` copies the file into a source (a DataLad dataset is

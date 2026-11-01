@@ -20,6 +20,7 @@ Deliverables:
 | Search by rendition and chunk; text extracted on add; vectors as a cache by model and text | `src/kb/items.py`, `query.py`, `embed.py`, `transforms.py` | done |
 | The content dataset: large content's default home (a datalad source) | `src/kb/content.py` | done |
 | OCR (tesseract, configured engines); PDF text by page; sqlite-vec; `reindex --fetch` | `src/kb/ocr.py`, `transforms.py`, `embed.py` | done |
+| Typed links and back links (knowledge graph); qualified dates; fetch failures recorded; readability for web pages; kinds' fields in `--help` | `src/kb/graph.py`, `content.py`, `readability.py`, `schema.py` | done |
 | `kb-research` skill: research recorded as sources, one-claim observations and a topic | `src/kb/data/skills/kb-research/` | done |
 | `kb open`: an item's file (original or text) in the desktop's application | `src/kb/opener.py` | done |
 | Shared sources on one computer: shared datasets, shared clones (`--shared`, `kb source share`) | `src/kb/sharing.py` | done |

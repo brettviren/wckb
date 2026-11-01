@@ -112,6 +112,17 @@ Nearest vectors are found with sqlite-vec (a dependency of kb) when SQLite
 can load it, else by comparing every vector in Python
 (`embed.sqlite_vec = false` turns sqlite-vec off).
 
+## Discovering kinds, fields and values
+
+```
+kb new --help                     # the kinds
+kb new observation --help         # an observation's fields: required ones, options, allowed values
+kb add --kind document --help     # the same for kb add
+kb item link --help               # the relations of typed links, and their inverses
+kb ls --subjects; kb ls --tags    # the subjects and tags in use
+kb source types; kb rendition transforms
+```
+
 ## Opening what you found
 
 `kb open ID` opens an item's file with the application your desktop uses for
@@ -140,6 +151,8 @@ kb open doc-…              # open its file in the application for its type (th
 kb open doc-… --text       # the text extracted from it, which search matched
 kb open doc-… --print      # only the path
 kb log obs-…               # its history: created, changed, transferred, reviewed …
+kb item links obs-…        # its links both ways: evidence, corrections, derivation, typed links (supported by …)
+kb item links obs-… --depth 2   # and theirs
 ```
 
 ## The database directly

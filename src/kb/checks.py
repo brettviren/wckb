@@ -104,6 +104,7 @@ def _check_refs(kb: Store, rec: Item) -> list[Problem]:
     probs = []
     d = rec.data
     fields = [(f, r) for f in ("supersedes", "retracts", "related", "members") for r in d.get(f, [])]
+    fields += [("links", x["ref"]) for x in d.get("links", [])]
     fields += [("derived_from", x["ref"] if isinstance(x, dict) else x) for x in d.get("derived_from", [])]
     fields += [("evidence", e) for e in d.get("evidence", []) if isinstance(e, str) and "://" not in e]
     for field, ref in fields:

@@ -7,6 +7,21 @@
   "allOf": [
     {
       "$ref": "item.json"
+    },
+    {
+      "description": "A document is dated: date, or qualified dates.",
+      "anyOf": [
+        {
+          "required": [
+            "date"
+          ]
+        },
+        {
+          "required": [
+            "dates"
+          ]
+        }
+      ]
     }
   ],
   "properties": {
@@ -61,7 +76,6 @@
   },
   "required": [
     "creators",
-    "date",
     "doctype"
   ],
   "unevaluatedProperties": false,

@@ -64,7 +64,7 @@ Moving knowledge between stores:
              wins.
 
 Commands by thing (kb THING --help):
-  item       Items: change, correct, withdraw, edit, inspect derivation, schemas.
+  item       Items: change, correct, withdraw, link, edit, inspect derivation, schemas.
   rendition  Renditions of an item: add, mirror, extract text, get a file, verify.
   asset      Assets: abstract files and file sets, their versions, and the sources that supply them.
   source     Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items
@@ -166,10 +166,17 @@ Options:
                                   meeting', 'elog 5521', 'read <URL>' ...
   --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
-  --date TEXT                     Date of the thing itself (e.g. of a talk).
+  --date TEXT                     The date the thing is known by: when it was published, else made
+                                  (fixed once written). Qualified dates: --dated.
+  --dated QUALIFIER=DATE          A qualified date, correctable later (repeatable). QUALIFIER:
+                                  created, published, modified, accessed (read or downloaded),
+                                  captured (photo, recording).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
   --evidence TEXT                 Supporting ref or URL (repeatable).
   --related TEXT                  Related ref (repeatable).
+  --link RELATION=ID              A typed link (repeatable). RELATION: supports, contradicts,
+                                  refines, alternative-to, compares-with, uses, part-of, cites,
+                                  same-as (kb item link --help says what each means).
   --derived-from TEXT             Input ref, for topics and views (repeatable).
   --license TEXT
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
@@ -193,6 +200,8 @@ Options:
   --no-guess                      Don't look for metadata in the files or at arXiv.
   --json
   -h, --help                      Show this message and exit.
+
+Kinds: observation, document, dataset, config, snapshot, software, topic, view, person, policy, kset, asset, source. Give one before --help to see its fields (kb kb add KIND --help).
 ```
 
 ## kb new
@@ -226,10 +235,17 @@ Options:
                                   meeting', 'elog 5521', 'read <URL>' ...
   --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
-  --date TEXT                     Date of the thing itself (e.g. of a talk).
+  --date TEXT                     The date the thing is known by: when it was published, else made
+                                  (fixed once written). Qualified dates: --dated.
+  --dated QUALIFIER=DATE          A qualified date, correctable later (repeatable). QUALIFIER:
+                                  created, published, modified, accessed (read or downloaded),
+                                  captured (photo, recording).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
   --evidence TEXT                 Supporting ref or URL (repeatable).
   --related TEXT                  Related ref (repeatable).
+  --link RELATION=ID              A typed link (repeatable). RELATION: supports, contradicts,
+                                  refines, alternative-to, compares-with, uses, part-of, cites,
+                                  same-as (kb item link --help says what each means).
   --derived-from TEXT             Input ref, for topics and views (repeatable).
   --license TEXT
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
@@ -240,6 +256,8 @@ Options:
   --from-json FILENAME            Partial item as JSON (- for stdin); kb fills the rest.
   --json                          Print the item as JSON.
   -h, --help                      Show this message and exit.
+
+Kinds: observation, document, dataset, config, snapshot, software, topic, view, person, policy, kset, asset, source. Give one before --help to see its fields (kb kb new KIND --help).
 ```
 
 ## kb show
@@ -543,13 +561,17 @@ Options:
 ```
 Usage: kb item [OPTIONS] COMMAND [ARGS]...
 
-  Items: change, correct, withdraw, edit, inspect derivation, schemas.
+  Items: change, correct, withdraw, link, edit, inspect derivation, schemas.
 
 Options:
   -h, --help  Show this message and exit.
 
 Commands:
   set        Change fields of an item, within policy (key=value; key=null deletes).
+  link       Link REF to OTHER by RELATION (what REF is to OTHER); OTHER shows it under the inverse
+             name.
+  links      REF's place in the graph: what it links to and what links to it (corrections, evidence,
+             derivation, related, typed links), each named from REF's side.
   edit       Edit an item in $EDITOR (its JSON, or --content), validated and applied within policy.
   supersede  Correct an item: a new one that supersedes REF (fields inherited unless given).
   retract    Withdraw REF without replacement (writes a retraction observation).
@@ -579,6 +601,50 @@ Options:
   --remove TEXT       Remove from a list field: key=value.
   --replace-ref TEXT  OLD=NEW in derived_from, evidence and related.
   -h, --help          Show this message and exit.
+```
+
+## kb item link
+
+```
+Usage: kb item link [OPTIONS] REF {supports|contradicts|refines|alternative-to|compares-
+                    with|uses|part-of|cites|same-as} OTHER
+
+  Link REF to OTHER by RELATION (what REF is to OTHER); OTHER shows it under the inverse name.
+
+      Relations:
+        supports        gives evidence or an argument for it (seen from the other: supported by)
+    contradicts     disagrees with it (seen from the other: contradicted by)
+    refines         adds detail to it, or narrows it (seen from the other: refined by)
+    alternative-to  can be used instead of it (seen from the other: alternative to)
+    compares-with   is compared with it (the same benchmark, the same question) (seen from the other: compared with)
+    uses            relies on it, or is built with it (seen from the other: used by)
+    part-of         is a part of it (seen from the other: has part)
+    cites           refers to it (seen from the other: cited by)
+    same-as         is the same thing, described twice (seen from the other: same as)
+
+        kb item link obs-a supports obs-b
+        kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
+        kb item links obs-b            # its links, both ways
+      
+
+Options:
+  --note TEXT  Why, in a few words.
+  --remove     Remove the link instead.
+  -h, --help   Show this message and exit.
+```
+
+## kb item links
+
+```
+Usage: kb item links [OPTIONS] REF
+
+  REF's place in the graph: what it links to and what links to it (corrections, evidence,
+  derivation, related, typed links), each named from REF's side.
+
+Options:
+  --depth INTEGER  Follow links this many steps.  [default: 1]
+  --json
+  -h, --help       Show this message and exit.
 ```
 
 ## kb item edit
@@ -617,10 +683,17 @@ Options:
                                   meeting', 'elog 5521', 'read <URL>' ...
   --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
-  --date TEXT                     Date of the thing itself (e.g. of a talk).
+  --date TEXT                     The date the thing is known by: when it was published, else made
+                                  (fixed once written). Qualified dates: --dated.
+  --dated QUALIFIER=DATE          A qualified date, correctable later (repeatable). QUALIFIER:
+                                  created, published, modified, accessed (read or downloaded),
+                                  captured (photo, recording).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
   --evidence TEXT                 Supporting ref or URL (repeatable).
   --related TEXT                  Related ref (repeatable).
+  --link RELATION=ID              A typed link (repeatable). RELATION: supports, contradicts,
+                                  refines, alternative-to, compares-with, uses, part-of, cites,
+                                  same-as (kb item link --help says what each means).
   --derived-from TEXT             Input ref, for topics and views (repeatable).
   --license TEXT
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).

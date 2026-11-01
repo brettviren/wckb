@@ -42,7 +42,8 @@ def test_a_web_page(kb, site):
     d, r = rec.data, rec.rendition("original")
     assert r["media_type"] == "text/html"                     # from the server, though the URL has no extension
     assert d["title"] == "vecdb - a tiny vector store" and d["summary"].startswith("vecdb keeps vectors")
-    assert d["creators"] == ["Ann Example"] and d["date"] == "2024-10-15"    # Last-Modified, the page has no date
+    assert d["creators"] == ["Ann Example"] and "date" not in d               # the page says nothing of when
+    assert d["dates"]["modified"] == "2024-10-15" and len(d["dates"]["accessed"]) == 10   # the server; kb
     if shutil.which("pandoc"):
         from kb import transforms
         made, failed = transforms.extract_missing(kb, rec)
@@ -71,7 +72,7 @@ def test_a_sentence_finds_items_with_some_of_its_words(kb):
 
 
 def test_messages_name_options_and_limits(kb):
-    with pytest.raises(KBError, match=r"'date' is a required property \(give --date\)"):
+    with pytest.raises(KBError, match=r"needs one of 'date' \(give --date\), 'dates' \(give --dated"):
         authoring.new(kb, "document", {"title": "T", "summary": "S.", "doctype": "manual", "creators": ["A"],
                                        "identifiers": {"url": "https://example.org"}})
     with pytest.raises(KBError, match="too long: 450 characters, at most 400"):
@@ -102,3 +103,62 @@ def test_mistyped_remedy(kb, site, monkeypatch):
     kb = Store.open(kb.root)
     assert kb.get(rec.id).rendition("original")["media_type"] == "text/html"
     assert doctor.diagnose(kb, ["mistyped"]) == []
+
+
+@pytest.fixture
+def refusing():
+    """A site that answers 403 to kb, and 404 under /gone."""
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            self.send_response(404 if self.path.startswith("/gone") else 403)
+            self.end_headers()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+
+
+def test_fetch_failures_are_recorded(kb, refusing):
+    from kb import content, doctor
+    with pytest.raises(KBError, match="HTTP 404.*the URL is wrong"):
+        authoring.add(kb, "document", [f"{refusing}/gone/page.html"], {"doctype": "manual"})
+    rec = authoring.add(kb, "document", [f"{refusing}/docs/vss.html"],
+                        {"doctype": "manual", "title": "VSS", "summary": "Docs.", "creators": ["DuckDB"],
+                         "dates": {"accessed": "2026-11-01"}})
+    (loc,) = rec.rendition("original")["locations"]
+    assert loc["failed"]["status"] == 403 and loc["failed"]["reason"] == "Forbidden" and "sha256" not in rec.rendition("original")
+    found = doctor.diagnose(kb, ["unextracted"])
+    assert [f.mode for f in found] == ["manual"] and "HTTP 403 Forbidden" in found[0].summary   # not retried by itself
+    report = content.verify(kb, [kb.get(rec.id)])
+    assert report[0]["result"] == "unreachable" and report[0]["status"] == 403
+
+
+def test_a_link_and_its_back_link(kb):
+    from kb import graph
+    a = observation(kb, title="LanceDB is embedded")
+    b = observation(kb, title="sqlite-vec is embedded")
+    graph.link(kb, a.id, "alternative-to", b.id, note="own storage format")
+    kb = Store.open(kb.root)
+    (e,) = [e for e in graph.neighbours(kb, b.id) if e["rel"] == "alternative-to"]
+    assert e["direction"] == "in" and e["other"] == a.id and e["label"] == "alternative to"
+    graph.link(kb, a.id, "supports", b.id)
+    labels = {e["label"] for e in graph.neighbours(Store.open(kb.root), b.id)}
+    assert {"alternative to", "supported by"} <= labels
+    with pytest.raises(KBError, match="no relation 'likes'"):
+        graph.link(kb, a.id, "likes", b.id)
+    graph.link(kb, a.id, "supports", b.id, remove=True)
+    assert [x["rel"] for x in Store.open(kb.root).get(a.id).data["links"]] == ["alternative-to"]
+    from kb.schema import load_schemas
+    assert load_schemas()["item"]["properties"]["links"]["items"]["properties"]["rel"]["enum"] == list(graph.RELATIONS)
+
+
+def test_qualified_dates_can_be_corrected(kb):
+    from kb import edit
+    rec = authoring.new(kb, "document", {"title": "README", "summary": "A readme.", "doctype": "manual",
+                                         "creators": ["A"], "dates": {"accessed": "2026-11-01"},
+                                         "identifiers": {"url": "https://example.org/r"}})
+    edit.set_fields(kb, rec.id, sets=["dates.published=2024-08-01"])
+    assert Store.open(kb.root).get(rec.id).data["dates"] == {"accessed": "2026-11-01", "published": "2024-08-01"}

@@ -171,6 +171,7 @@ def test_add_from_arxiv(root, arxiv):
     d = rec.data
     assert d["title"] == "Coherent Noise in Liquid Argon Time Projection Chambers"
     assert d["creators"] == ["Ann Example", "Bob Sample"] and d["date"] == "2026-01-05"
+    assert d["dates"]["published"] == "2026-01-05" and "accessed" in d["dates"]    # arXiv's date; kb's download
     assert d["identifiers"] == {"arxiv": "2601.01234", "doi": "10.1000/xyz123"}
     assert d["doctype"] == "paper" and d["venue"] == "JINST 21 (2026) P01001" and d["version"] == "2"
     assert d["summary"].startswith("We study coherent noise") and "Further details" not in d["summary"]
@@ -216,7 +217,7 @@ def test_pdf_metadata(kb, tmp_path, monkeypatch, reader):
         monkeypatch.setitem(sys.modules, "pymupdf", None)          # import fails: the command-line tools are used
     rec = authoring.add(kb, "document", [str(pdf)], {})
     d = rec.data
-    assert (d["title"], d["creators"], d["date"], d["doctype"]) == (
+    assert (d["title"], d["creators"], d["dates"]["created"], d["doctype"]) == (
         "TPC noise update", ["Ann Example", "Bob Sample"], "2026-10-28", "presentation")
     assert d["summary"] == "Noise grew after the grounding change." and d["identifiers"] == {"doi": "10.1000/abc.987"}
 
@@ -240,7 +241,7 @@ def test_image_exif(kb, tmp_path):
     exif.get_ifd(0x8769)[0x9003] = "2026:10:28 09:30:00"   # DateTimeOriginal
     img.save(tmp_path / "tpc.jpg", exif=exif)
     rec = authoring.add(kb, "document", [str(tmp_path / "tpc.jpg")], {"summary": "A photo."})
-    assert (rec.data["title"], rec.data["creators"], rec.data["date"], rec.data["doctype"]) == (
+    assert (rec.data["title"], rec.data["creators"], rec.data["dates"]["captured"], rec.data["doctype"]) == (
         "The TPC after the fill", ["Ann Example"], "2026-10-28", "other")
 
 

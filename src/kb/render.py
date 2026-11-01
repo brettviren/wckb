@@ -169,6 +169,8 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
         f.append(("by", ", ".join(look.name(c) for c in d["creators"])))
     if d.get("date"):
         f.append(("dated", when(d["date"])))
+    for q, v in (d.get("dates") or {}).items():
+        f.append((q, when(v)))
     if d.get("valid"):
         f.append(("applies to", runs(d["valid"])))
     if kind == "document":
@@ -244,8 +246,11 @@ def _binding_text(b: dict) -> str:
     return where + ("" if v == "none" else f" (versions: {b.get('pattern') or v})")
 
 
-def _relations(d: dict, look: Lookup) -> list[tuple[str, str, str]]:
+def _relations(d: dict, look: Lookup, store_kb=None) -> list[tuple[str, str, str]]:
+    """Each reference of the item (label, id, title), its typed links, then (with STORE_KB) the links to it."""
     out = []
+    for x in d.get("links", []):
+        out.append((x["rel"], x["ref"], look.title(x["ref"]) + (f" ({x['note']})" if x.get("note") else "")))
     for field_, label in (("supersedes", "corrects"), ("retracts", "withdraws"), ("evidence", "evidence"),
                           ("derived_from", "built from"), ("related", "related")):
         for x in d.get(field_, []):
@@ -276,7 +281,16 @@ def item_view(rec, look: Lookup, store_kb=None, settings: dict | None = None) ->
         links += [(r["label"], u) for u in r["links"] if (r["label"], u) not in links]
     return {"id": rec.id, "kind": d["kind"], "title": d.get("title", ""), "summary": d.get("summary", ""),
             "badges": badges, "facts": _facts(d, look), "links": links, "renditions": rends,
-            "excerpt": excerpt, "relations": _relations(d, look)}
+            "excerpt": excerpt, "relations": _relations(d, look, store_kb) + _backlinks(rec.id, look, store_kb)}
+
+
+def _backlinks(ident: str, look: Lookup, store_kb) -> list[tuple[str, str, str]]:
+    """Links to the item from others (named from its side: "supported by", "corrected by" ...)."""
+    if store_kb is None:
+        return []
+    from .graph import label
+    rows = store_kb.conn.execute("SELECT src, rel FROM refs WHERE dst = ? AND src != ?", (ident, ident)).fetchall()
+    return [(label(rel, False), src, look.title(src)) for src, rel in rows if rel != "source"]
 
 
 def tree_view(kset: dict, look: Lookup, max_depth: int = 4) -> dict:

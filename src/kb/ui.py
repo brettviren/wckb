@@ -6,6 +6,20 @@ import sys
 import click
 
 
+def field_guide(kind: str, fields: list[dict]) -> str:
+    """kb new KIND --help: the fields of KIND, required first, with how to give each and allowed values."""
+    lines = [f"Fields of a {kind} (* required; + one of these):", ""]
+    for f in fields:
+        mark = "+" if f.get("either") else "*" if f["required"] else " "
+        lines.append(f"  {mark} {f['name']:<14} {f['option']}")
+        if f["enum"]:
+            lines.append(f"    {'':<14} one of: {', '.join(map(str, f['enum']))}")
+        if f["description"]:
+            lines.append(f"    {'':<14} {f['description'].rstrip('.')}.")
+    lines += ["", f"The full schema: kb item schema {kind}"]
+    return "\n".join(lines)
+
+
 def emit_json(obj) -> None:
     click.echo(json.dumps(obj, indent=2, default=str, ensure_ascii=False))
 
