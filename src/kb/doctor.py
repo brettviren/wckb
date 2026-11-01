@@ -171,18 +171,16 @@ def _gitignore(kb):
     ignored = subprocess.run(["git", "-C", str(kb.root), "check-ignore", "-q", DB_NAME]).returncode == 0
     if not ignored and not tracked:
         out.append(Finding("gitignore", "the store is inside a git working tree and not ignored",
-                           f"write {kb.root / '.gitignore'} ignoring everything in the store directory", "auto",
+                           f"add the store's own files to {kb.root / '.gitignore'}", "auto",
                            str(kb.root)))
     return out
 
 
 @_gitignore.fixer
 def _write_gitignore(kb, f):
-    p = kb.root / ".gitignore"
-    old = p.read_text() if p.exists() else ""
-    p.write_text(old + ("" if not old or old.endswith("\n") else "\n")
-                 + "# a kb store: not versioned here (share it with kb bundles)\n*\n")
-    return f"wrote {p}"
+    from .scaffold import ignore_store
+    added = ignore_store(kb.root)
+    return f"added {', '.join(added)} to {kb.root / '.gitignore'}"
 
 
 @remedy("kb-on-path", "kb is not on PATH for Claude Code and git hooks")

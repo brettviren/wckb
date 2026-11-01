@@ -90,6 +90,9 @@ def status(v: dict) -> None:
         click.echo("edges     none (kb edge add NAME --relation up --path DIR)")
     for name, ok in v["content_stores"].items():
         click.echo(f"cas       {name}: {'mounted' if ok else 'not available here'}")
+    cd = v.get("content_dataset")
+    if cd:
+        click.echo(f"content   {cd['path'] or 'not on this machine'} ({cd['id']})")
     for src in v.get("sources", []):
         click.echo(f"source    {src['id']} {src['type']} {src['title']}: "
                    + ("on this machine" if src["here"] else "not on this machine"))

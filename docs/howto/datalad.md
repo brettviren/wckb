@@ -8,15 +8,15 @@ for the design.
 
 ## Install
 
-DataLad support is optional:
+DataLad comes with kb. git-annex must be on PATH too (`apt install
+git-annex`):
 
 ```
-uv tool install --editable '.[datalad]'     # or: pip install 'wckb[datalad]'
 kb source types                             # datalad: implemented (and what is missing, if anything)
 ```
 
-git-annex must be on PATH too. Without DataLad, kb still reads content
-already present in a local clone, but cannot clone or fetch.
+Without git-annex, kb still reads content already present in a local clone,
+but cannot clone or fetch.
 
 ## Describe a dataset: source items
 

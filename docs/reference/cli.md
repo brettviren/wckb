@@ -170,10 +170,11 @@ Options:
   --license TEXT
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
   --via TEXT                      Tool or session making the item (e.g. claude-code).
-  --place [auto|db|cas|local|datalad|none]
+  --place [auto|db|cas|content|local|datalad|none]
                                   Where content goes: auto = left in its DataLad dataset if
                                   committed there, else in the store if small, else the content
-                                  store (cas), else local-only.  [default: auto]
+                                  store (cas), else the store's content dataset, else local-only.
+                                  [default: auto]
   --cas TEXT                      Content store (cas) to use (default: 'default').
   --url TEXT                      Canonical URL of a single local file (e.g. Indico behind SSO).
   --no-fetch                      Record URLs without downloading (no hash).
@@ -1741,6 +1742,8 @@ Options:
 
 Commands:
   snapshot  Write a consistent single-file copy of the store, to publish read-only or as a backup.
+  content   The store's content dataset: where large content with no other home goes (a DataLad
+            dataset).
   reindex   Rebuild the store's query tables (search, subjects, runs, references) from the items.
   embed     Embed what the search index holds that the model has no vectors for (needs [embed]
             configured).
@@ -1760,6 +1763,28 @@ Options:
   -h, --help  Show this message and exit.
 ```
 
+## kb store content
+
+```
+Usage: kb store content [OPTIONS] [PATH]
+
+  The store's content dataset: where large content with no other home goes (a DataLad dataset).
+
+  Content too large for the database goes to a content store (cas) if one is configured, else to
+  this dataset, else is recorded as local to this machine. kb makes the dataset on first need, at
+  content/ beside kb.sqlite. Give PATH to put it elsewhere (or to adopt a dataset there). It is an
+  ordinary datalad source: share it, give it siblings, push it.
+
+    kb store content                      # where it is
+    kb store content /data/kb-content     # make (or adopt) it there
+
+Options:
+  --create      Make it now (default place: content/ beside kb.sqlite).
+  --shared      Share it among the users of this computer (kb source share).
+  --group TEXT  With --shared: the Unix group.
+  -h, --help    Show this message and exit.
+```
+
 ## kb store reindex
 
 ```
@@ -1768,6 +1793,7 @@ Usage: kb store reindex [OPTIONS]
   Rebuild the store's query tables (search, subjects, runs, references) from the items.
 
 Options:
+  --fetch     Fetch text that is not on this machine (URLs, DataLad content) to index it too.
   -h, --help  Show this message and exit.
 ```
 

@@ -86,7 +86,8 @@ A store is a directory:
 kb.sqlite        the store (WAL mode; never write it on a network filesystem)
 .kb/             this machine's: local.toml (paths), cache/, build/, checkout/
                  (a store may itself be a .kb/ directory: .kb/kb.sqlite)
-.gitignore       "*", when the store sits inside a project's git working tree
+content/         the store's content dataset (a DataLad dataset), if it has one here (§3)
+.gitignore       kb's own entries added (kb.sqlite*, .kb/, content/), when the store sits in a git working tree
 ```
 
 The policy a store enacts (CLAUDE.md, `.claude/skills/`,
@@ -103,6 +104,14 @@ Tables in `kb.sqlite`:
 | `events` | append-only history: create, set, content, checkin, extract, stamp, build, publish, transfer-in/out, inbox and review actions |
 | `inbox`, `reviews` | received bundles; reviews by people and LLMs |
 | `subjects`, `runs`, `refs`, `identifiers`, `renditions`, `fts` | query tables kept in step on every write (`fts`: a row per item head and per chunk of each text rendition) |
+
+**The content dataset.** Large content with no other home (no content
+store) goes to the store's content dataset: an ordinary DataLad dataset,
+described by an ordinary `datalad` source item that the setting
+`content.dataset` names, made on first need at `content/` beside
+`kb.sqlite` (`content.path`, or `kb store content PATH`, puts it
+elsewhere). Placement for large content is: content store, then content
+dataset, then local.
 
 Configuration is layered, last one wins:
 
@@ -391,11 +400,18 @@ Views should pin their environment (`pixi.lock`, `uv.lock`,
   kept, as long as it is on this machine. When the original changes, the
   `stale` remedy re-extracts (and so re-indexes); `unextracted` catches what
   was never extracted.
+- **Pages and OCR.** Text of several pages separates them with form feeds
+  (PDF text, page by page), so each index row has its page and a hit names
+  it. Images, and PDF pages with no text of their own, are read by OCR
+  when an engine is available (`kb.ocr`: tesseract, or a configured
+  command); that text has fidelity `ocr`.
 - **Indexes are not precious.** `fts` is rebuilt from the items
   (`kb store reindex`; an upgrade of the database does it once). Vectors are
   a cache outside the store (`~/.cache/wckb/vectors.sqlite`), addressed by
   model identity and the hash of the text, so reindexing, re-chunking an
-  unchanged text or changing model never throws vectors away.
+  unchanged text or changing model never throws vectors away. sqlite-vec
+  indexes them per model when SQLite can load it. `kb store reindex
+  --fetch` fetches text that is not here to index it.
 - `kb context` is a compact markdown pack for LLMs: topics first, then
   current items, then history, within a character budget.
 - All of these take `--reach N` / `--in NAME` to include neighbor stores

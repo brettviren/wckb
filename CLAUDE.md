@@ -49,8 +49,8 @@ in scope.
   (Claude Code hook entry points), `githooks` (git hooks for exchange repositories), `forge`
   (GitHub/Gitea/Forgejo/Gogs APIs), `secrets` (secret specs), `logs`
   (logging), `indico` (Indico sites as DataLad datasets, by git-annex-remote-indico)
-  `sharing` (sources shared by the users of one computer) and `metadata`
-  (metadata found in what `kb add` adds: arXiv, PDF, EXIF). `config` also says which store a command uses (store contexts).
+  `sharing` (sources shared by the users of one computer), `metadata`
+  (metadata found in what `kb add` adds: arXiv, PDF, EXIF) and `ocr` (OCR engines). `config` also says which store a command uses (store contexts).
 - Schemas: hand-written JSON Schema in `src/kb/schemas/v<N>/`. After
   changing them, run `uv run kb item schema --markdown > docs/reference/schema.md`
   (a test checks this). Additive changes bump `schema.REVISION`. Breaking

@@ -22,6 +22,10 @@ They are addressed by model identity and the SHA-256 of the text, so:
 
 Vectors of a store from before this layout (its ``vectors`` table) are
 copied in once.
+
+**Nearest neighbours** are found with sqlite-vec when SQLite can load it (a
+``vec0`` table per model, made from the vectors and kept in step), else by
+comparing every vector in Python.  ``embed.sqlite_vec = false`` turns it off.
 """
 
 import hashlib
@@ -45,6 +49,9 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS vectors (
   identity TEXT NOT NULL, text_hash TEXT NOT NULL, dim INTEGER NOT NULL, vec BLOB NOT NULL,
   PRIMARY KEY (identity, text_hash));
+-- one sqlite-vec index per model (vec_<space>), of the vectors above by their rowid
+CREATE TABLE IF NOT EXISTS spaces (space INTEGER PRIMARY KEY, identity TEXT NOT NULL UNIQUE,
+  dim INTEGER NOT NULL);
 """
 
 
@@ -136,11 +143,11 @@ def head_text(title: str, summary: str) -> str:
 
 
 def _pack(v):
-    return struct.pack(f"{len(v)}f", *v)
+    return struct.pack(f"<{len(v)}f", *v)        # little-endian float32, as sqlite-vec reads it
 
 
 def _unpack(b, dim):
-    return struct.unpack(f"{dim}f", b)
+    return struct.unpack(f"<{dim}f", b)
 
 
 def _norm(v):
@@ -154,15 +161,54 @@ def vectors_path(kb: Store) -> Path:
     return Path(p).expanduser() if p else cache_home() / "vectors.sqlite"
 
 
+class _Vectors(sqlite3.Connection):
+    vec = False                     # sqlite-vec is loaded
+
+
 def _vdb(kb: Store) -> sqlite3.Connection:
     path = vectors_path(kb)
     path.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, isolation_level=None)
+    db = sqlite3.connect(path, isolation_level=None, factory=_Vectors)
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=10000")
     db.executescript(SCHEMA)
+    db.vec = _load_vec(kb, db)
     _adopt_old(kb, db)
     return db
+
+
+def _load_vec(kb: Store, db) -> bool:
+    """Load sqlite-vec into DB, if wanted and possible."""
+    if (kb.cfg.embed or {}).get("sqlite_vec", True) is False:
+        return False
+    try:
+        import sqlite_vec
+        db.enable_load_extension(True)
+        sqlite_vec.load(db)
+        db.enable_load_extension(False)
+        return True
+    except (ImportError, AttributeError, sqlite3.OperationalError) as exc:
+        log.debug("sqlite-vec not used: %s", exc)
+        return False
+
+
+def _space(db, identity: str, dim: int) -> str | None:
+    """The sqlite-vec table of IDENTITY's vectors, made and brought up to date; None without sqlite-vec."""
+    if not getattr(db, "vec", False):
+        return None
+    row = db.execute("SELECT space, dim FROM spaces WHERE identity = ?", (identity,)).fetchone()
+    if row is None:
+        db.execute("INSERT INTO spaces (identity, dim) VALUES (?, ?)", (identity, dim))
+        row = db.execute("SELECT space, dim FROM spaces WHERE identity = ?", (identity,)).fetchone()
+        db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_{row[0]} USING vec0("
+                   f"embedding float[{dim}] distance_metric=cosine)")
+    if row[1] != dim:
+        raise KBError(f"vectors of {identity} have {row[1]} dimensions, now {dim}: "
+                      "a different model under the same identity?")
+    table = f"vec_{row[0]}"
+    db.execute(f"INSERT INTO {table} (rowid, embedding) SELECT rowid, vec FROM vectors WHERE identity = ? "
+               f"AND rowid NOT IN (SELECT rowid FROM {table})", (identity,))
+    return table
 
 
 def _adopt_old(kb: Store, db: sqlite3.Connection) -> None:
@@ -220,33 +266,51 @@ def embed(kb: Store, embedder: Embedder | None = None) -> dict:
 
 
 def semantic(kb: Store, query: str, limit: int = 20, embedder: Embedder | None = None) -> list[tuple]:
-    """(item ID, best cosine similarity, rendition of the best chunk) ordered best first."""
+    """(item ID, best cosine similarity, rendition, page of the best chunk) ordered best first."""
     embedder = embedder or Embedder.from_config(kb)
     identity = _identity(embedder)
-    rows = kb.conn.execute("SELECT id, rendition, hash FROM fts").fetchall()
+    rows = kb.conn.execute("SELECT id, rendition, page, hash FROM fts").fetchall()
+    by_hash: dict[str, list] = {}
+    for r in rows:
+        by_hash.setdefault(r["hash"], []).append(r)
     db = _vdb(kb)
     try:
-        hashes = {r["hash"] for r in rows}
-        vecs = {h: (dim, blob) for h, dim, blob in db.execute(
-            "SELECT text_hash, dim, vec FROM vectors WHERE identity = ?", (identity,)) if h in hashes}
+        dims = db.execute("SELECT DISTINCT dim FROM vectors WHERE identity = ?", (identity,)).fetchall()
+        if not dims:
+            raise KBError(f"no embeddings by {identity} yet: run kb store embed")
+        q = _norm(_query(embedder, query))
+        if len(dims) > 1 or dims[0][0] != len(q):
+            raise KBError(f"vectors of {identity} have {dims[0][0]} dimensions, the query's {len(q)}: "
+                          "a different model under the same identity?")
+        scores = _nearest(db, identity, q, set(by_hash), limit)
     finally:
         db.close()
-    if not vecs:
-        raise KBError(f"no embeddings by {identity} for this store yet: run kb store embed")
-    q = _norm(_query(embedder, query))
-    best: dict[str, tuple[float, str]] = {}
-    for r in rows:
-        v = vecs.get(r["hash"])
-        if v is None:
-            continue
-        dim, blob = v
-        if dim != len(q):
-            raise KBError(f"vectors of {identity} have {dim} dimensions, the query's {len(q)}: "
-                          "a different model under the same identity?")
-        s = sum(a * b for a, b in zip(q, _unpack(blob, dim)))
-        if s > best.get(r["id"], (-2.0, ""))[0]:
-            best[r["id"]] = (s, r["rendition"])
-    return sorted(((i, s, rn) for i, (s, rn) in best.items()), key=lambda t: -t[1])[:limit]
+    best: dict[str, tuple] = {}
+    for h, s in scores.items():
+        for r in by_hash[h]:
+            if s > best.get(r["id"], (-2.0,))[0]:
+                best[r["id"]] = (s, r["rendition"], r["page"])
+    return sorted(((i, *v) for i, v in best.items()), key=lambda t: -t[1])[:limit]
+
+
+def _nearest(db, identity: str, q: list[float], hashes: set[str], limit: int) -> dict[str, float]:
+    """Cosine similarity of Q to the vectors of IDENTITY whose text is one of HASHES (this store's): the
+    nearest by sqlite-vec when there is enough of them among the nearest, else all of them, in Python."""
+    table = _space(db, identity, len(q))
+    if table is not None:
+        k = max(limit * 20, 200)
+        near = db.execute(f"SELECT v.text_hash, n.distance FROM (SELECT rowid, distance FROM {table} "
+                          f"WHERE embedding MATCH ? AND k = ?) n JOIN vectors v ON v.rowid = n.rowid",
+                          (_pack(q), k)).fetchall()
+        mine = {h: 1.0 - d for h, d in near if h in hashes}
+        if len(mine) >= limit or len(near) < k:     # enough of this store's, or every vector looked at
+            return mine
+        log.debug("sqlite-vec: %d of the %d nearest are this store's; comparing them all", len(mine), k)
+    out = {}
+    for h, dim, blob in db.execute("SELECT text_hash, dim, vec FROM vectors WHERE identity = ?", (identity,)):
+        if h in hashes:
+            out[h] = sum(a * b for a, b in zip(q, _unpack(blob, dim)))
+    return out
 
 
 def text_hash(text: str) -> str:

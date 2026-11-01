@@ -240,11 +240,27 @@ to be right; please fix the other place.
   | `datalad` | a file in a DataLad dataset (a source item, a path, an annex key) |
   | `source` | a file in a source's directory tree: a git repository or filesystem tree (a source item, a path) |
 
+**content dataset**
+: A store's home for large content that has no other (no content store):
+  an ordinary DataLad dataset, described by an ordinary `datalad` source
+  item that the setting `content.dataset` names; made on first need at
+  `content/` beside `kb.sqlite`. Files go in by sha256. *Code:*
+  `kb.content.content_dataset`, `put_content`, `kb store content`,
+  `kb add --place content`.
+
+**OCR engine**
+: What reads the text of an image (and of PDF pages without text):
+  `tesseract`, or a command configured in `[ocr.engines.NAME]` (a local
+  model's wrapper, say). Its text has fidelity `ocr`. *Code:* `kb.ocr`
+  (`Engine`, `engines`, `engine`, `read`), the `ocr` transform.
+
 **search index**
 : The store's `fts` table: a row for each item's head (title, summary,
   subjects) and for each chunk of each of its text renditions, so a hit
   names the rendition. Only items are indexed, never whole sources. It is
-  rebuilt from the items (`kb store reindex`). *Code:* `kb.items.index_rows`,
+  rebuilt from the items (`kb store reindex`, `--fetch` to fetch text not
+  here). Each row has the page of its chunk, for text of several pages.
+  *Code:* `kb.items.index_rows`,
   `kb.query.fts`.
 
 **vector cache**
@@ -312,7 +328,7 @@ to be right; please fix the other place.
 : A git + git-annex repository managed by DataLad, identified by a dataset
   ID (a UUID). Not to be confused with kb's `dataset` item kind (data
   described as knowledge). *Code:* `kb.datasets`, location type and asset
-  source `datalad`; optional extra `wckb[datalad]`.
+  source `datalad`.
 
 **placing**
 : Deciding where new content goes: `auto` (left in its DataLad dataset if

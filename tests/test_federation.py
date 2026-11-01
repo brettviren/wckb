@@ -30,7 +30,8 @@ def test_project_store_layout(world):
     p, pd = world["project"], world["proj_dir"]
     assert p.cfg.scope == "project" and p.cfg.access == "private" and p.cfg.name == "proj"
     assert (pd / "CLAUDE.md").exists() and (pd / ".claude" / "skills" / "kb-promote" / "SKILL.md").exists()
-    assert (p.root / ".gitignore").read_text().splitlines()[-1] == "*"     # the code repo doesn't version the store
+    assert "kb.sqlite" in (p.root / ".gitignore").read_text().splitlines()   # the code repo doesn't version the store
+    assert "*" not in (p.root / ".gitignore").read_text().splitlines()       # but nothing else of it is hidden
     from kb.config import find_root
     (pd / "src").mkdir()
     assert find_root(pd) == p.root and find_root(pd / "src") == p.root

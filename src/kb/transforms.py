@@ -19,6 +19,7 @@ from pathlib import Path
 from . import content
 from .errors import KBError
 from .items import Store, Item
+from .ocr import IMAGE_TYPES
 
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -51,7 +52,9 @@ class Transform:
     def version(self) -> str:
         return ""
 
-    def run(self, src: Path, dst: Path, media_type: str) -> None:
+    def run(self, src: Path, dst: Path, media_type: str) -> dict | None:
+        """Write DST from SRC; optionally say more: {"fidelity": ..., "options": {...}} (OCR was used ...).
+        Text of several pages separates them with form feeds (\\f), so search can name the page."""
         raise NotImplementedError
 
 
@@ -94,6 +97,12 @@ class PdfToText(Transform):
 
 
 class PyMuPDF(Transform):
+    """Text per page, pages separated by form feeds; a page without text of its own (a scan) is read by
+    OCR when an engine is available (config: the ocr settings)."""
+
+    #: A page with fewer characters than this is taken for a scan.
+    SCANNED = 20
+
     def available(self):
         return importlib.util.find_spec("pymupdf") is not None
 
@@ -101,12 +110,44 @@ class PyMuPDF(Transform):
         return _pkg_version("pymupdf")
 
     def run(self, src, dst, media_type):
+        import tempfile
         import pymupdf
-        parts = []
-        with pymupdf.open(src) as doc:
+        from . import ocr
+        pages, read, used = [], [], None
+        with pymupdf.open(src) as doc, tempfile.TemporaryDirectory() as tmp:
             for i, page in enumerate(doc, 1):
-                parts.append(f"## Page {i}\n\n{page.get_text().strip()}\n")
-        dst.write_text("\n".join(parts))
+                text = page.get_text().strip()
+                if len(text) < self.SCANNED and ocr.available(self.config):
+                    image = Path(tmp) / f"page-{i}.png"
+                    page.get_pixmap(dpi=300).save(image)
+                    got, used = ocr.read(image, self.config)
+                    if got.strip():
+                        text, read = got.strip(), read + [i]
+                pages.append(text)
+        dst.write_text("\f".join(pages) + "\n")
+        if read:
+            return {"fidelity": "ocr" if len(read) == len(pages) else "extracted",
+                    "options": {"ocr": f"{used.name} {used.version()}".strip(), "ocr_pages": read}}
+        return None
+
+
+class Ocr(Transform):
+    """Text from an image by OCR (kb.ocr: tesseract, or a configured engine)."""
+
+    def available(self):
+        from . import ocr
+        return ocr.available(self.config)
+
+    def version(self):
+        from . import ocr
+        e = ocr.engine(self.config)
+        return f"{e.name} {e.version()}".strip() if e else ""
+
+    def run(self, src, dst, media_type):
+        from . import ocr
+        text, used = ocr.read(src, self.config)
+        dst.write_text(text)
+        return {"fidelity": "ocr", "options": {"ocr": f"{used.name} {used.version()}".strip()}}
 
 
 class Pandoc(Transform):
@@ -228,7 +269,10 @@ def builtin() -> list[Transform]:
     return [
         PdfToText("pdftotext", ("application/pdf",), "text/plain", ".txt", priority=40,
                   description="poppler pdftotext -layout"),
-        PyMuPDF("pymupdf", ("application/pdf",), priority=30, description="PyMuPDF text per page (extra: pdf)"),
+        PyMuPDF("pymupdf", ("application/pdf",), "text/plain", ".txt", priority=30,
+                description="PyMuPDF text per page; OCR for scanned pages (extra: pdf)"),
+        Ocr("ocr", IMAGE_TYPES, "text/plain", ".txt", fidelity="ocr", priority=50,
+            description="OCR (tesseract, or an engine in [ocr.engines])"),
         Pandoc("pandoc", tuple(_PANDOC_FROM), priority=50, description="pandoc to GitHub markdown"),
         Pptx("pptx", (PPTX,), priority=50, description="python-pptx: titles, text, tables, notes (extra: pptx)"),
         RootDescribe("root-describe", ("application/x-root",), "application/json", ".json", priority=50,
@@ -238,6 +282,9 @@ def builtin() -> list[Transform]:
 
 def registry(kb: Store) -> list[Transform]:
     out = builtin()
+    for t in out:
+        if isinstance(t, (PyMuPDF, Ocr)):
+            t.config = kb.cfg.raw.get("ocr", {}) or {}
     for name, conf in kb.cfg.transforms.items():
         if "command" not in conf:
             raise KBError(f"transform {name} (setting transforms.{name}) needs a command")
@@ -293,7 +340,7 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
     with tempfile.TemporaryDirectory(dir=kb.cfg.kbdir) as tmp:
         out = Path(tmp) / filename
         try:
-            t.run(src, out, src_r["media_type"])
+            info = t.run(src, out, src_r["media_type"]) or {}
         except KBError:
             raise
         except Exception as exc:          # a library's own error (a damaged or mislabelled file)
@@ -303,13 +350,16 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
         with kb.tx():
             locs, sha, size = content.place(kb, out, filename)
             if locs and locs[0]["type"] == "local":
-                raise KBError(f"{filename} is too large for the database and no content store is configured")
+                raise KBError(f"{filename} is too large for the database, and there is no content store or "
+                              "content dataset here (git-annex is needed for one)")
             derived = {
                 "name": name, "role": "derived", "media_type": t.output_type,
                 "sha256": sha, "size": size, "locations": locs,
                 "derived_from": source, "source_sha256": src_r.get("sha256"),
-                "fidelity": t.fidelity, "transform": {"name": t.name, "version": t.version()},
+                "fidelity": info.get("fidelity", t.fidelity), "transform": {"name": t.name, "version": t.version()},
             }
+            if info.get("options"):
+                derived["transform"]["options"] = info["options"]
             if derived["source_sha256"] is None:
                 derived.pop("source_sha256")
             data = copy.deepcopy(rec.data)

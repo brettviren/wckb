@@ -35,7 +35,7 @@ What `kb doctor` knows today (`kb doctor --list` is authoritative):
 |---|---|---|
 | `network-fs` | the store is on NFS, EOS, CIFS ...; writes are refused | move it to local disk, publish snapshots (advice) |
 | `query-tables` | search tables out of step with the items | `kb store reindex` (auto) |
-| `gitignore` | a store inside a git working tree is not ignored, or `kb.sqlite` is tracked | write `.gitignore` (auto); untrack (advice) |
+| `gitignore` | a store inside a git working tree is not ignored, or `kb.sqlite` is tracked | add kb's own files to `.gitignore` (auto); untrack (advice) |
 | `kb-on-path` | `kb` is not on PATH, so hooks and LLM sessions can't run it | install it as a uv tool (advice) |
 | `user` | items are attributed to your login name | make your person item (advice); then set `user` in config.toml (ask) |
 | `policy` | policy not enacted, outdated, or edited by hand | `kb policy enact` (auto, unless hand edits would be lost: then advice) |

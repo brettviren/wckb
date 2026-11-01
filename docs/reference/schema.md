@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.6) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.7) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -223,7 +223,7 @@ One concrete data source that renditions and asset bindings refer to, such as a 
 | `locations` | yes | list of location |  |
 | `derived_from` |  | string | Name of the rendition (in this item) this was made from. |
 | `source_sha256` |  | sha256 |  |
-| `fidelity` |  | `lossless` \| `extracted` \| `llm` |  |
+| `fidelity` |  | `lossless` \| `extracted` \| `ocr` \| `llm` |  |
 | `transform` |  | object |  |
 | `notes` |  | string |  |
 

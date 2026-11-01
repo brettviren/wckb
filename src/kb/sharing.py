@@ -193,8 +193,9 @@ def unshare(path: Path) -> list[str]:
     return done
 
 
-def create(path: Path, group: str | None = None, shared: bool = False) -> list[str]:
-    """A new DataLad dataset at PATH (text in git, as text2git), shared by GROUP if SHARED."""
+def create(path: Path, group: str | None = None, shared: bool = False, text2git: bool = True) -> list[str]:
+    """A new DataLad dataset at PATH (text in git, as text2git, unless not TEXT2GIT: then all annexed),
+    shared by GROUP if SHARED."""
     from . import datasets
     datasets.need()
     path = Path(path).expanduser().absolute()
@@ -208,7 +209,8 @@ def create(path: Path, group: str | None = None, shared: bool = False) -> list[s
         path.chmod(0o2775)
         _git(path, "init", "-q", "--shared=group")
     import datalad.api as dl
-    dl.create(path=str(path), force=shared, cfg_proc=["text2git"], result_renderer="disabled")
+    dl.create(path=str(path), force=shared, cfg_proc=["text2git"] if text2git else None,
+              result_renderer="disabled")
     done.append(f"made a DataLad dataset at {path}")
     if shared:
         done += share(path, group)

@@ -173,7 +173,7 @@ view_grp = group("view", "Views: build derived presentations and publish them.")
 data_grp = group("data", "Describe and package data for use outside kb (Frictionless, RO-Crate).")
 policy_grp = group("policy", "LLM policy: named, versioned instructions, skills, hooks; selection, enactment, autonomy.")
 store_grp = group("store", "The store itself: snapshots, query tables, embeddings, schema migration.",
-                  order=["snapshot", "reindex", "embed", "migrate"])
+                  order=["snapshot", "content", "reindex", "embed", "migrate"])
 config_grp = group("config", "The store's settings (held in the store).")
 exchange_grp = group("exchange", "Exchange repositories: git repositories of bundles, for transport and review.",
                      order=["init", "hooks"])
@@ -329,9 +329,9 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
               show_default=True)
 @item_options
 @click.option("--place", "mode", default="auto", show_default=True,
-              type=click.Choice(["auto", "db", "cas", "local", "datalad", "none"]),
+              type=click.Choice(["auto", "db", "cas", "content", "local", "datalad", "none"]),
               help="Where content goes: auto = left in its DataLad dataset if committed there, else in the store "
-                   "if small, else the content store (cas), else local-only.")
+                   "if small, else the content store (cas), else the store's content dataset, else local-only.")
 @click.option("--cas", "cas_name", help="Content store (cas) to use (default: 'default').")
 @click.option("--url", help="Canonical URL of a single local file (e.g. Indico behind SSO).")
 @click.option("--no-fetch", is_flag=True, help="Record URLs without downloading (no hash).")
@@ -603,7 +603,8 @@ def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
         click.echo(ui.item_line(r, store=r["store"] if (reach or only) else None))
         pad = "" .ljust(29 if (reach or only) else 16)
         if r.get("rendition"):
-            click.echo(f"{pad} in #{r['rendition']}" + (f" (from #{r['from']})" if r.get("from") else ""))
+            click.echo(f"{pad} in #{r['rendition']}" + (f", page {r['page']}" if r.get("page") else "")
+                       + (f" (from #{r['from']})" if r.get("from") else ""))
         if r.get("snip"):
             click.echo(f"{pad} {' '.join(r['snip'].split())}")
 
@@ -851,11 +852,41 @@ def stamp_cmd(c, refs):
 
 
 @command(store_grp, "reindex")
+@click.option("--fetch", is_flag=True,
+              help="Fetch text that is not on this machine (URLs, DataLad content) to index it too.")
 @pass_ctx
-def reindex_cmd(c):
+def reindex_cmd(c, fetch):
     """Rebuild the store's query tables (search, subjects, runs, references) from the items."""
-    n = c.kb.reindex()
+    n = c.kb.reindex(fetch)
     ui.info(f"reindexed {n} items")
+
+
+@command(store_grp, "content")
+@click.argument("path", type=click.Path(file_okay=False, path_type=Path), required=False)
+@click.option("--create", is_flag=True, help="Make it now (default place: content/ beside kb.sqlite).")
+@click.option("--shared", is_flag=True, help="Share it among the users of this computer (kb source share).")
+@click.option("--group", help="With --shared: the Unix group.")
+@pass_ctx
+def store_content_cmd(c, path, create, shared, group):
+    """The store's content dataset: where large content with no other home goes (a DataLad dataset).
+
+    Content too large for the database goes to a content store (cas) if one
+    is configured, else to this dataset, else is recorded as local to this
+    machine. kb makes the dataset on first need, at content/ beside
+    kb.sqlite. Give PATH to put it elsewhere (or to adopt a dataset there).
+    It is an ordinary datalad source: share it, give it siblings, push it.
+
+    \b
+      kb store content                      # where it is
+      kb store content /data/kb-content     # make (or adopt) it there
+    """
+    from .content import content_dataset
+    found = content_dataset(c.kb, create=bool(path or create or shared), path=path, shared=shared, group=group)
+    if found is None:
+        ui.info("no content dataset yet (kb makes one on first need; kb store content --create makes it now)")
+        return
+    rec, root = found
+    click.echo(f"{root}\t{rec.id}")
 
 
 @command(store_grp, "embed")

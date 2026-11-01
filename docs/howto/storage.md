@@ -5,7 +5,8 @@
 | content | where |
 |---|---|
 | items (metadata), notes, topic pages, view sources, extracted text, small data (1 MiB or less) | the store's database, `kb.sqlite` (location `db`) |
-| large files you have | a content-addressed store (location `cas`): `<path>/sha256/ab/cd/<sha256>` |
+| large files you have | a content-addressed store (location `cas`): `<path>/sha256/ab/cd/<sha256>`, if one is configured |
+| large files with no other home | the store's **content dataset** (location `datalad`), `content/` beside `kb.sqlite` by default |
 | material that has a home (Indico, arXiv, CDS, EOS) | its URL (location `url`), plus a hash, plus optionally a `cas` copy |
 | files only on one machine | location `local`, flagged by `kb lint` |
 | files in a DataLad dataset | location `datalad`: the dataset (a source item), path and annex key ([datalad](datalad.md)) |
@@ -25,6 +26,32 @@ plug in there.
 DataLad datasets are a source too: files stay in the dataset, and a
 *source item* says which dataset and where to clone it from. See
 [datalad](datalad.md).
+
+## The content dataset
+
+Content too large for the database (and extracted text from a long
+document) goes to a content store if one is configured, else to the store's
+**content dataset**, else is recorded as local to this machine. Placing a
+file in the content dataset copies it in at `sha256/ab/<sha256>/<name>`
+and `datalad save`s it.
+
+The content dataset is an ordinary DataLad dataset, described by an
+ordinary `datalad` source item that the store setting `content.dataset`
+names. kb makes it on first need, at `content/` beside `kb.sqlite`, with
+everything annexed:
+
+```
+kb store content                       # where it is (and its source item)
+kb store content /data/kb-content      # make (or adopt) it elsewhere, e.g. off a network filesystem
+kb store content --create --shared     # make it now, shared with your group
+```
+
+Because it is a source like any other, everything for sources works on it:
+`kb source share`, `datalad siblings add` and `datalad push` to back it up
+or publish it, and `datalad get` on another machine. A store that receives
+items whose content is in your content dataset clones it from the URL its
+source item lists, so give it one (a sibling others can reach) if you
+share such items. `--place content` sends a file there whatever its size.
 
 ## The database lives on local disk
 

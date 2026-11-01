@@ -32,9 +32,19 @@ def status(kb: Store, context=None) -> dict:
         "edges": [{"name": n.name, "relation": n.relation, "available": n.available, "writable": n.writable,
                    "land": n.mode} for n in neighbors(kb)],
         "content_stores": {name: (p is not None and p.is_dir()) for name, p in sorted(cfg.cas.items())},
+        "content_dataset": _content(kb),
         "sources": _sources(kb),
         "attention": [f.as_dict() for f in findings],
     }
+
+
+def _content(kb: Store) -> dict | None:
+    from .content import CONTENT_SETTING, content_dataset
+    found = content_dataset(kb)
+    if found:
+        return {"id": found[0].id, "path": str(found[1])}
+    ref = (kb.setting(CONTENT_SETTING) or {}).get("dataset")
+    return {"id": ref, "path": None} if ref else None
 
 
 def _sources(kb: Store) -> list[dict]:

@@ -18,6 +18,23 @@ def default_target(path: Path, scope: str) -> str:
     return ".." if scope == "project" and path.name == SUBDIR else "."
 
 
+#: What a store inside a git working tree keeps out of the repository: its own files, nothing else.
+IGNORED = (DB_NAME, f"{DB_NAME}-shm", f"{DB_NAME}-wal", ".kb/", "content/")
+
+
+def ignore_store(path: Path) -> list[str]:
+    """Add the store's own files (IGNORED) to PATH/.gitignore, made if missing; other lines are kept.
+    The lines added."""
+    f = path / ".gitignore"
+    old = f.read_text() if f.exists() else ""
+    have = {line.strip() for line in old.splitlines()}
+    add = [p for p in IGNORED if p not in have and p.rstrip("/") not in have]
+    if add:
+        head = "" if not old or old.endswith("\n") else "\n"
+        f.write_text(old + head + "# kb's own files (knowledge travels in bundles)\n" + "\n".join(add) + "\n")
+    return add
+
+
 def _in_git_worktree(path: Path) -> bool:
     r = subprocess.run(["git", "-C", str(path), "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True)
     return r.returncode == 0 and r.stdout.strip() == "true"
@@ -48,8 +65,8 @@ def init(path: Path, name: str | None = None, access: str | None = None, scope: 
     made = [str(path / DB_NAME)]
     if _in_git_worktree(path):
         # A store is not versioned by the repository around it; knowledge travels by bundles.
-        (path / ".gitignore").write_text("# a kb store: not versioned here (share it with kb bundles)\n*\n")
-        made.append(str(path / ".gitignore"))
+        if ignore_store(path):
+            made.append(str(path / ".gitignore"))
     kb = Store.open(path)
     if up is not None:
         other = Store.open(Path(up).expanduser().resolve(), readonly=True)

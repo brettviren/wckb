@@ -54,10 +54,10 @@
    not seen, or, when nobody can be asked (an agent, a script), stops and
    says how to proceed (`kb source clone`, `kb source link`).
 
-5. **DataLad is an optional dependency.** `pip install 'wckb[datalad]'`
-   (plus git-annex). Without it, kb still reads content already present
-   in a local clone; cloning and fetching need it, and `kb source types`
-   and `kb doctor` say what is missing.
+5. **DataLad is a dependency** (since 2026-11-01; it was an optional
+   extra). git-annex must be on PATH too. Without git-annex, kb still
+   reads content already present in a local clone; cloning and fetching
+   need it, and `kb source types` and `kb doctor` say what is missing.
 
 6. **Location and asset source both.** A file committed in a dataset is
    added with a `datalad` location (no copy into the store), its annex key

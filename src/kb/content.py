@@ -6,6 +6,7 @@ module decides where *new* content goes and offers the common helpers.
 
 import hashlib
 import mimetypes
+import os
 import shutil
 import tempfile
 import urllib.error
@@ -128,7 +129,10 @@ def resolve(kb, rec, rendition: dict, fetch_urls: bool = True, verify: bool = Fa
     return locations.resolve(kb, rec, rendition, fetch=fetch_urls)
 
 
-PLACE_MODES = ("auto", "db", "cas", "local", "datalad", "none")
+PLACE_MODES = ("auto", "db", "cas", "content", "local", "datalad", "none")
+
+#: The store setting naming its content dataset (a datalad source item).
+CONTENT_SETTING = "content"
 
 
 def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = None) -> tuple[list[dict], str, int]:
@@ -136,9 +140,11 @@ def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = No
 
     ``auto``: a file committed in a DataLad dataset stays there (when DataLad
     support is installed); otherwise small files go in the store's database,
-    large ones in the content-addressed store if there is one, else are
-    recorded as local to this host.  ``datalad`` insists on the dataset.
-    ``none`` records only the hash (the content lives at a URL).
+    large ones in the content-addressed store if there is one, else in the
+    store's content dataset (made on first need, when git-annex is here),
+    else are recorded as local to this host.  ``datalad`` insists on the
+    dataset the file is in; ``content`` on the content dataset.  ``none``
+    records only the hash (the content lives at a URL).
     """
     if mode not in PLACE_MODES:
         raise KBError(f"--place must be one of {', '.join(PLACE_MODES)}")
@@ -152,8 +158,12 @@ def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = No
             mode = "db"
         elif cas or default_cas(kb):
             mode = "cas"
+        elif content_dataset_usable(kb):
+            mode = "content"
         else:
             mode = "local"
+    if mode == "content":
+        return [put_content(kb, src, filename, sha)], sha, size
     if mode == "db":
         if size > kb.cfg.max_inline_bytes:
             raise KBError(f"{src} is {size} bytes, over the {kb.cfg.max_inline_bytes} byte limit for the database; "
@@ -169,6 +179,64 @@ def place(kb, src: Path, filename: str, mode: str = "auto", cas: str | None = No
     if mode == "local":
         return [{"type": "local", "host": kb.cfg.host, "path": str(src.resolve())}], sha, size
     return [], sha, size
+
+
+# -- the content dataset ------------------------------------------------------------------------
+# A store's home for large content that has no other: an ordinary DataLad dataset, described by a
+# datalad source item that the setting content.dataset names.  By default it is content/ beside
+# kb.sqlite (setting content.path says elsewhere), made on first need.  Files go in by sha256.
+
+def content_dataset(kb, create: bool = False, path: Path | None = None, shared: bool = False,
+                    group: str | None = None):
+    """(source item, directory here) of the store's content dataset, or None if it has none here; with
+    CREATE, made (at PATH, else content.path, else content/ beside kb.sqlite) or adopted if missing."""
+    from . import datasets
+    conf = kb.setting(CONTENT_SETTING) or {}
+    ref = conf.get("dataset")
+    if ref and ref in kb.items and path is None:
+        root = datasets.locate(kb, kb.items[ref])
+        if root is not None or not create:
+            return (kb.items[ref], root) if root is not None else None
+    if not create:
+        return None
+    datasets.need()
+    where = Path(path or conf.get("path") or kb.root / "content").expanduser().absolute()
+    if not (where / ".git").exists():
+        from .sharing import create as make
+        make(where, group, shared=shared, text2git=False)
+    elif shared:
+        from .sharing import share
+        share(where, group)
+    where = where.resolve()
+    uuid = datasets.identity(where)
+    have = datasets.sources_for(kb, uuid) if uuid else []
+    rec = have[0] if have else datasets.describe(
+        kb, [str(where)], title=f"{kb.cfg.name} content",
+        summary=f"The content dataset of the store {kb.cfg.name}: large files kb keeps for it, by sha256.")
+    new = {**conf, "dataset": rec.id, **({"path": str(where)} if path else {})}
+    if new != conf:
+        kb.set_setting(CONTENT_SETTING, new)
+    return rec, where
+
+
+def content_dataset_usable(kb) -> bool:
+    """Can large content go to a content dataset here (there is one, or one can be made)?"""
+    from . import datasets
+    if kb.readonly:
+        return False
+    return content_dataset(kb) is not None or datasets.available() is None
+
+
+def put_content(kb, src: Path, filename: str, sha: str) -> dict:
+    """Copy SRC into the content dataset (made if needed) by its sha256, save it; its datalad location."""
+    from .sources import TYPES
+    rec, root = content_dataset(kb, create=True)
+    rel = f"sha256/{sha[:2]}/{sha}/{filename}"
+    dest = root / rel
+    if not os.path.lexists(dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dest)
+    return TYPES["datalad"].put(kb, rec, root, rel, f"Add {filename} ({sha[:12]}) (kb)")
 
 
 def _datalad_location(kb, src: Path, required: bool) -> dict | None:

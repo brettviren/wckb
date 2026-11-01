@@ -14,19 +14,6 @@ Status:
 
 ## S. The knowledge store (see decisions/0001, accepted)
 
-**S1. Where does a project's database live?** *(leaning)*
-- Today: in the store context's location. For a git working tree with no
-  store in or above it and no `context.NAME.location`, that is
-  `$XDG_DATA_HOME/kb/contexts/NAME`, outside the tree. `<project>/kb/kb.sqlite`
-  (with a `.gitignore` of `*`) is still found. Knowledge reaches
-  collaborators by bundles.
-- Open: `kb init` in the working tree's own directory writes a `.gitignore`
-  of `*` there, which hides the whole tree from git (wckb's own repository
-  has one). Should `kb init` refuse a git working tree's top, or write
-  `kb.sqlite*` and `.kb/` instead?
-- Open: should a JSONL export be committed with the code, for projects
-  whose collaborators don't use kb?
-
 **S8. Store contexts: details.** *(leaning)*
 - Today: stores of contexts without a location go in
   `$XDG_DATA_HOME/kb/contexts/NAME` (the request said
@@ -42,64 +29,17 @@ Status:
   `~/.cache/kb/logs`: should both be `~/.cache/kb`? `KB_CONFIG` is gone
   (use `-c`, or `XDG_CONFIG_HOME`).
 
-**S9. A dataset of the store's own, for content kept outside `kb.sqlite`?** *(open: proposed, not built)*
-- Proposed: a DataLad dataset that kb owns, beside `kb.sqlite`, for
-  generated text files and other content that shouldn't live in the
-  database.
-- Today:
-  - extracted text is a `derived` rendition held like any other content:
-    in the database up to `limits.max_inline_bytes` (1 MiB, which covers
-    most papers' text), else in a content store (`cas`), else extraction
-    refuses;
-  - a large original with no content store is recorded as `local` (on one
-    host).
-- What should go where depends on whether it is precious:
-  - **reproducible** (extracted text, the search index, vectors): needs no
-    history, only to be reachable. In a git history it is just weight.
-    Small extracted text in the database has a virtue, though: it travels
-    with the item in bundles, so a receiver can search it without the
-    original or the transform (an SSO-only PDF, say).
-  - **precious** (large originals with no other home): wants versioning,
-    integrity, copies elsewhere and a way for other machines to get it,
-    which is what a DataLad dataset gives.
-- Leaning: a store's *content dataset*. It is not a special mechanism but
-  an ordinary `datalad` source item that the store's settings name as its
-  default home for large content (`content.dataset = src-…`). By default
-  it lives in `content/` beside `kb.sqlite` (or anywhere else, such as off
-  a network filesystem); kb makes it on first need, or `kb init
-  --content-dataset` does.
-  - Everything in it is annexed (no text2git).
-  - kb puts files there as `kb add --target` does now: copy, `datalad
-    save`, a `datalad` location. So it reuses the source machinery,
-    sharing (`--shared`) and transport (`datalad push` to a sibling or a
-    RIA store; receivers clone it from the URL its source item records).
-  - Placement order becomes database (small), content store (if
-    configured), content dataset (if any), local.
-  - Extracted text larger than the database limit goes there instead of
-    being refused.
-- Costs:
-  - It needs DataLad and git-annex (an optional extra today), so the old
-    order must remain without them.
-  - One commit per `kb add`; bulk adds need batching.
-  - Receivers need a reachable URL to clone it, or the content is
-    unreachable for them, as with any dataset.
-- Rejected:
-  - a dataset for the derived text alone (version-controlled cache);
-  - keeping the dataset inside `.kb/`, which is this machine's alone.
-- Open: is that the design? Should the content dataset become the default
-  instead of `local` when DataLad is installed?
-
-**S10. Search: next steps.** *(open)*
-- Vectors are compared in Python: fine for thousands of chunks, slow for
-  hundreds of thousands. Should it use sqlite-vec (orgface's vec0 table per
-  model) when that is installed?
-- Text that is not on this machine (a URL not fetched, a dataset not
-  cloned) is not indexed until it is. Should `kb store reindex --fetch`
-  fetch it?
-- Images have no text: OCR (tesseract) as a transform? Captions from a
-  vision model?
-- Chunks are about 1500 characters by paragraph, the same for FTS and
-  embeddings. Should they be per page for PDFs, so a hit can name the page?
+**S11. Next for the content dataset and search.** *(open)*
+- Bulk adds make one `datalad save` per file; should `kb add` of many files
+  (and `kb doctor unextracted` over many items) save once?
+- Should large content already recorded as `local` move into the content
+  dataset (a doctor remedy, like `local-only` does for content stores)?
+- OCR engines: the built-in `tesseract` and configured commands. Is an HTTP
+  engine worth adding (an OpenAI-compatible vision endpoint, as llama.cpp
+  and ollama serve), or is a command wrapping it enough? Scanned PDF pages
+  are read only by the PyMuPDF transform (not by `pdftotext`).
+- Captions for images that have no text (a vision model), as a separate
+  transform?
 
 **S2. Who writes a group store?** *(open)*
 - A maintainer, a CI job applying accepted bundles, or a small service? How
@@ -115,7 +55,8 @@ Status:
 **S6. Growth.** *(open)*
 - Blobs and events are never deleted (by design). At what size does a store
   need compaction: archiving old events, moving large blobs to a content
-  store? `kb check --deep` cost grows with blob volume.
+  store or the content dataset? `kb check --deep` cost grows with blob
+  volume.
 
 **S7. Snapshot publishing.** *(open)*
 - Who publishes a group store's read-only snapshot (`kb store snapshot`), where
@@ -208,7 +149,7 @@ Status:
 ## A. Group setup and infrastructure
 
 **A1. Where do the content store (cas) and the publish store live?** *(open)*
-- Today: content stores (`cas`) are paths in the store settings or `.kb/local.toml`; snapshots and publications are anywhere.
+- Today: content stores (`cas`) are paths in the store settings or `.kb/local.toml`; snapshots and publications are anywhere. Without a content store, large content goes to the store's content dataset, which can have siblings on EOS or a RIA store.
 - Options: EOS, a group NFS area, or S3 via rclone.
 - Affects CI (it must mount them) and laptops.
 
@@ -229,14 +170,6 @@ Status:
   CODEOWNERS rather than `kb`.
 
 ## B. Federation
-
-**B2. Should a project store be its own repository or part of the project's?** *(open)*
-- Today: the store is kept out of the project's repository (`.gitignore` of `*`); see S1.
-- Inside the project's repo, knowledge is versioned with the code and
-  shared with the code's collaborators. A separate (or ignored) `kb/` keeps
-  private notes out of a public code repository.
-- Is `access` enough to guard a public repo, or should `kb init` refuse
-  `private` inside a repo with a public remote?
 
 **B3. Should the same ID be kept across stores?** *(leaning: yes)*
 - Today: copies keep their ID, and `origin` records the sender, the path of
@@ -477,7 +410,7 @@ Status:
   by URL (the event's title and date, through git-annex-remote-indico's
   `event.json`)? A title from a PDF's first page (largest font) when its
   document information has none? Should PyMuPDF become a dependency rather
-  than the `pdf` extra?
+  than the `pdf` extra? (It is in the development group, so tests use it.)
 
 ## G. Git, forges and secrets
 
@@ -531,8 +464,8 @@ Status:
 ## DS. Data sources (see decisions/0001 §13)
 
 **DS0. Two source interfaces.** *(exploring)*
-- Rendition locations (`kb.locations`: db, cas, url, local, asset, datalad)
-  resolve one file by hash.
+- Rendition locations (`kb.locations`: db, cas, url, local, asset, datalad,
+  source) resolve one file by hash.
 - Asset sources (`kb.assets`: kb, fs, url, datalad; planned indico, docdb)
   enumerate versions of files and file sets.
 - DataLad is both (decisions/0003): a `datalad` location for one committed
@@ -542,16 +475,16 @@ Status:
 
 **DS1. DataLad as a source.** *(decided: decisions/0003; follow-ups open)*
 - Decided: source items, clones by dataset ID, source directories,
-  `datalad` locations and asset source, optional extra.
+  `datalad` locations and asset source. DataLad is a dependency since
+  2026-11-01 (it was an optional extra).
 - Open:
   - `datalad run` vs our provenance (S5);
   - EOS through rclone or WebDAV special remotes;
-  - Indico through datalad-next credentials (DS2);
   - adding a file whose annex content is not present locally (today kb
     needs the content to hash it);
   - dropping content (`datalad drop`) that no item here needs.
 
-**DS2. Indico.** *(leaning: through DataLad)*
+**DS2. Indico.** *(decided 2026-11-01: through DataLad; follow-ups open)*
 - A native `indico` source (Indico's API with a token), or URLs through
   DataLad? Either way the token comes from `kb.secrets`.
 - Built (2026-10-31): `git-annex-remote-indico` (~/dev/git-annex-remote-indico),
@@ -568,12 +501,16 @@ Status:
   the site's dataset and ingests the URL under `datalad run`. `--shared`
   makes shared datasets and shared clones; `kb source share` shares or
   unshares (DS6).
-- Open: does kb still want a native `indico` asset source, or should
-  `PlannedSource("indico")` be dropped in favour of the dataset route?
+- Open: should `PlannedSource("indico")` (a native asset source) be dropped,
+  now that the dataset route exists? Its versions would come from the
+  dataset's history (DataLad tags or commits, V9).
   `git indico ingest` prints "staged; commit with git commit, or datalad
   save" even under `datalad run`, which commits; should it know?
 
 **DS6. Sharing sources on one computer.** *(exploring)*
+- Answered: one dataset for several users is a shared dataset with users'
+  shared (ephemeral) clones (`kb source add --shared`), not a clone of the
+  shared one per user.
 - Today: for DataLad and Indico datasets, the owner's shared dataset and
   users' ephemeral shared clones (`kb.sharing`). `git` and `filesystem`
   sources are shared only as owners, by permissions (`kb source share`).
@@ -590,27 +527,60 @@ Status:
   `[sources.indico] token = {command = "pass show", id = "..."}` in the
   user config).
 
-**DS5. Source items for every source.** *(partly done)*
-- DataLad datasets and named filesystem trees (`--type filesystem`) are
-  source items. Indico and DocDB servers next, the same way?
-- Should a file in a filesystem source get its own location type
-  (`{source, path}`), rather than `local` (one host) or an asset? And a
-  file committed in a git source (`{source, path, commit}`), as DataLad
-  files have `datalad` locations?
-- git sources are done: identity by first commit, clones, asset source.
+**DS5. Source items for every source.** *(mostly done)*
+- Done: DataLad datasets, git repositories, named filesystem trees
+  (`--type filesystem`) and Indico sites (`indico`, a dataset) are source
+  items. A file in a git or filesystem source has the location `source`
+  (`{source, path}`). DocDB next, the same way?
+- Open: should a `source` location in a git source pin the commit
+  (`{source, path, commit}`)? Today the recorded sha256 says whether the
+  file still has the same bytes.
 - Should a filesystem source be guessable in some cases (a directory with a
   marker file), or always need `--type filesystem`?
-
-**DS6. One clone, several users.** *(open)*
-- A dataset on a shared filesystem (a `paths` entry for a host) is used
-  in place. Getting content into it needs write access; should kb then
-  clone from it into the user's source directory instead?
 
 **DS4. Third-party sources.** *(open)*
 - Register `Source` classes through Python entry points
   (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
 ## Decided
+
+**S1. Where does a project's database live?** *(decided 2026-11-01)*
+- In its store context's location: for a git working tree with no store in
+  or above it, `$XDG_DATA_HOME/kb/contexts/NAME`, outside the tree. A store
+  inside a working tree (`./kb/`, or the tree's top) is still found.
+- `kb init` adds only kb's own files (`kb.sqlite*`, `.kb/`, `content/`) to a
+  `.gitignore` there (made if missing), and nothing else; never `*`.
+- No JSONL export by default: items leave a store only through knowledge
+  sets (`kb push`, bundles), explicitly.
+
+**S9. A store's content dataset.** *(decided and built 2026-11-01)*
+- Large content with no other home goes to the store's content dataset: an
+  ordinary DataLad dataset described by an ordinary `datalad` source item,
+  which the setting `content.dataset` names. kb makes it on first need at
+  `content/` beside `kb.sqlite`; `kb store content PATH` puts it elsewhere.
+  Everything in it is annexed, by sha256.
+- Placement for large content: content store (if configured), content
+  dataset (when git-annex is here), local. Extracted text too large for the
+  database goes there too.
+- Reproducible things stay out of git histories: small extracted text in
+  the database (it travels with its item), the index rebuilt, vectors a
+  cache. Rejected: a dataset of derived text alone; a dataset inside
+  `.kb/`. Follow-ups: S11.
+
+**S10. Search: next steps.** *(decided and built 2026-11-01)*
+- sqlite-vec finds nearest vectors when SQLite can load it (a `vec0` table
+  per model in the vector cache), else Python compares them all.
+- `kb store reindex --fetch` fetches text that is not here to index it.
+- OCR: optional and pluggable (`kb.ocr`): `tesseract`, or any command in
+  `[ocr.engines.NAME]` (a local model behind llama.cpp or ollama); used for
+  images and PDF pages without text.
+- PDF text is kept page by page (form feeds); index rows and hits have the
+  page. Follow-ups: S11.
+
+**B2. A project store in the project's repository?** *(obsolete 2026-11-01)*
+- Stores are not git repositories (S0), are kept out of working trees by
+  default (S1), and items leave only as knowledge sets. A public code
+  repository never holds a store.
 
 **S4. DataLad dataset granularity.** *(decided 2026-10-31, decisions/0003)*
 - Zero or more DataLad datasets per store, each described by a source

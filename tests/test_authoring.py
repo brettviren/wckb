@@ -67,10 +67,10 @@ def test_add_large_file_goes_to_content_store(root, tmp_path):
     assert not kb.has_blob(r["sha256"])
 
 
-def test_add_large_file_without_store_is_local_only(kb, tmp_path):
+def test_add_large_file_local_only(kb, tmp_path):
     big = tmp_path / "big.bin"
     big.write_bytes(b"y" * (kb.cfg.max_inline_bytes + 1))
-    rec = authoring.add(kb, "dataset", [str(big)], {"title": "Big", "summary": "Only here."})
+    rec = authoring.add(kb, "dataset", [str(big)], {"title": "Big", "summary": "Only here."}, mode="local")
     loc = rec.rendition("original")["locations"][0]
     assert loc["type"] == "local" and loc["host"] == kb.cfg.host
     assert content.resolve(kb, rec, rec.rendition("original")) == big.resolve()

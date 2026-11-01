@@ -67,10 +67,10 @@ def fts(kb: Store, text: str, limit: int = 20, include_old: bool = False) -> lis
         return []
     # the rows scored first (MATERIALIZED: bm25 and snippet need the MATCH), then the best row per item
     sql = """WITH h AS MATERIALIZED (
-               SELECT id, rendition, chunk, bm25(fts, 0, 0, 0, 0, 5.0, 3.0, 2.0, 1.0) AS score,
+               SELECT id, rendition, chunk, page, bm25(fts, 0, 0, 0, 0, 0, 5.0, 3.0, 2.0, 1.0) AS score,
                       snippet(fts, -1, '[', ']', '…', 12) AS snip
                FROM fts WHERE fts MATCH ?)
-             SELECT h.id, h.rendition, h.chunk, min(h.score) AS score, h.snip, i.kind,
+             SELECT h.id, h.rendition, h.chunk, h.page, min(h.score) AS score, h.snip, i.kind,
                     json_extract(i.json, '$.title') AS title, json_extract(i.json, '$.summary') AS summary,
                     json_extract(i.json, '$.status') AS status
              FROM h JOIN items i ON i.id = h.id GROUP BY h.id ORDER BY score LIMIT ?"""

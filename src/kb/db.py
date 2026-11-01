@@ -28,7 +28,8 @@ from .errors import KBError
 
 DB_NAME = "kb.sqlite"
 #: 2: fts by rendition and chunk; vectors moved out of the store (kept as vectors_v1 until copied).
-DB_VERSION = 2
+#: 3: fts rows have the page of their chunk.
+DB_VERSION = 3
 #: A settings key the upgrade leaves for Store.open: rebuild the query tables, then forget it.
 REINDEX = "_reindex"
 
@@ -97,7 +98,7 @@ CREATE INDEX IF NOT EXISTS renditions_id ON renditions(id);
 -- one row per chunk: rendition '' chunk 0 is the item's head (title and summary); hash: sha256 of what is
 -- embedded for the row (kb.embed), by which vectors are found
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(id UNINDEXED, rendition UNINDEXED, chunk UNINDEXED,
-  hash UNINDEXED, title, summary, subjects, body, tokenize='porter unicode61');
+  page UNINDEXED, hash UNINDEXED, title, summary, subjects, body, tokenize='porter unicode61');
 
 -- guards
 CREATE TRIGGER IF NOT EXISTS items_keep BEFORE DELETE ON items
@@ -171,11 +172,11 @@ def connect(path: Path, readonly: bool = False, create: bool = False) -> sqlite3
         if version > DB_VERSION:
             raise KBError(f"{path} was written by a newer kb (database version {version}); upgrade kb")
         if version < DB_VERSION:
-            if version == 1:          # fts is rebuilt (Store.open reindexes); vectors are kept to be copied out
+            if version >= 1:          # fts is rebuilt (Store.open reindexes)
                 conn.execute("DROP TABLE IF EXISTS fts")
-                if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'vectors'").fetchone():
-                    conn.execute("ALTER TABLE vectors RENAME TO vectors_v1")
                 conn.execute("INSERT OR REPLACE INTO settings VALUES (?, 'true')", (REINDEX,))
+            if version == 1 and conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'vectors'").fetchone():
+                conn.execute("ALTER TABLE vectors RENAME TO vectors_v1")     # kept to be copied out (kb.embed)
             conn.executescript(DDL)
             conn.execute(GUARD)
             conn.execute(f"PRAGMA user_version = {DB_VERSION}")

@@ -28,8 +28,8 @@ When content is needed and there is no clone, kb clones it into the source
 directory, or, with ``sources.datalad.new = "ask"``, asks where (or stops
 with instructions when nobody can be asked).
 
-Support needs the DataLad Python package (``pip install 'wckb[datalad]'``)
-and git-annex.  Reading what is already local (listing a clone, the content
+Support needs the DataLad Python package (a dependency of kb) and git-annex
+on PATH.  Reading what is already local (listing a clone, the content
 of files present) uses git and git-annex directly.
 """
 
@@ -54,7 +54,7 @@ SOURCE_TYPE = "datalad"
 ANNEX_TYPES = ("datalad", "indico")
 REPO_TYPES = ANNEX_TYPES + ("git",)
 LABEL = {"datalad": "DataLad dataset", "indico": "DataLad dataset of an Indico site", "git": "git repository"}
-INSTALL = "pip install 'wckb[datalad]' (or uv tool install --editable '.[datalad]'), and git-annex"
+INSTALL = "git-annex (apt install git-annex), and kb's own dependencies (DataLad: uv sync, or reinstall kb)"
 
 # Set by the CLI when a person can be asked where a new clone goes: (source item, suggestion) -> path or None.
 ASK: Callable[[Item, Path], Path | None] | None = None

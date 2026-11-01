@@ -189,10 +189,10 @@ def blob_shas(data: dict) -> list[str]:
 INDEX_CHARS = 2_000_000
 
 
-def rendition_texts(kb: "Store", rec: Item) -> list[tuple[str, str]]:
+def rendition_texts(kb: "Store", rec: Item, fetch: bool = False) -> list[tuple[str, str]]:
     """Searchable text, by rendition: each textual rendition (an original, a note, text extracted from a
-    PDF ...) whose content is here, wherever it is (the database, a content store, a dataset); nothing is
-    fetched.  View sources are left out."""
+    PDF ...) whose content is here, wherever it is (the database, a content store, a dataset); with FETCH,
+    also what must be fetched or got first.  View sources are left out."""
     from .content import is_text
     out = []
     for r in rec.renditions:
@@ -204,7 +204,7 @@ def rendition_texts(kb: "Store", rec: Item) -> list[tuple[str, str]]:
         if t is None and r.get("locations"):
             from . import locations
             try:
-                p = locations.resolve(kb, rec, r, fetch=False)
+                p = locations.resolve(kb, rec, r, fetch=fetch)
             except KBError:
                 p = None
             if p is not None:
@@ -220,17 +220,24 @@ def text_of(kb: "Store", rec: Item) -> str:
     return "\n\n".join(t for _, t in rendition_texts(kb, rec))
 
 
-def index_rows(kb: "Store", rec: Item) -> list[tuple]:
+def index_rows(kb: "Store", rec: Item, fetch: bool = False) -> list[tuple]:
     """The fts rows of an item: its head (rendition '', chunk 0) and each chunk of each text rendition, every
-    row with the item's title, summary and subjects (so words of both match together)."""
+    row with the item's title, summary and subjects (so words of both match together).  Text of several
+    pages (separated by form feeds, as extracted from PDFs) is chunked page by page, and each row has its
+    page (else None)."""
     from .embed import chunks, head_text, text_hash as h
     d = rec.data
     title, summary = d.get("title", ""), d.get("summary", "")
     subjects = " ".join(s.replace("/", " ") for s in d.get("subject", []))
     head = head_text(title, summary)
-    rows = [(rec.id, "", 0, h(head), title, summary, subjects, "")]
-    for name, text in rendition_texts(kb, rec):
-        rows += [(rec.id, name, i, h(c), title, summary, subjects, c) for i, c in enumerate(chunks(text), 1)]
+    rows = [(rec.id, "", 0, None, h(head), title, summary, subjects, "")]
+    for name, text in rendition_texts(kb, rec, fetch):
+        pages = text.split("\f")
+        n = 0
+        for p, page in enumerate(pages, 1):
+            for c in chunks(page):
+                n += 1
+                rows.append((rec.id, name, n, p if len(pages) > 1 else None, h(c), title, summary, subjects, c))
     return rows
 
 
@@ -388,7 +395,7 @@ class Store:
         self.__dict__.pop("superseded_by", None)
         return rec
 
-    def _index(self, rec: Item) -> None:
+    def _index(self, rec: Item, fetch: bool = False) -> None:
         d, c, i = rec.data, self.conn, rec.id
         for t in ("subjects", "runs", "refs", "identifiers", "renditions"):
             c.execute(f"DELETE FROM {t} WHERE {'src' if t == 'refs' else 'id'} = ?", (i,))
@@ -404,15 +411,17 @@ class Store:
         c.executemany("INSERT INTO renditions VALUES (?,?,?,?,?,?,?,?)", [
             (i, r["name"], r["role"], r["media_type"], r.get("fidelity"), r.get("sha256"), r.get("size"),
              json.dumps(r.get("locations", []))) for r in d.get("renditions", [])])
-        c.executemany("INSERT INTO fts VALUES (?,?,?,?,?,?,?,?)", index_rows(self, rec))
+        c.executemany("INSERT INTO fts VALUES (?,?,?,?,?,?,?,?,?)", index_rows(self, rec, fetch))
 
-    def reindex(self) -> int:
+    def reindex(self, fetch: bool = False) -> int:
+        """Rebuild the query tables from the items; with FETCH, text not on this machine is fetched (URLs,
+        DataLad content) to be indexed too."""
         self._writable()
         with self.tx():
             for t in ("subjects", "runs", "refs", "identifiers", "renditions", "fts"):
                 self.conn.execute(f"DELETE FROM {t}")
             for rec in self.items.values():
-                self._index(rec)
+                self._index(rec, fetch)
         return len(self.items)
 
     def write_new(self, data: dict, approved: str | None = None) -> Item:

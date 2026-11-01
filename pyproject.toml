@@ -9,8 +9,12 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
+    # DataLad datasets: sources, and the store's content dataset (git-annex must be on PATH too).
+    "datalad>=1.0",
     # Validates records against the JSON Schemas shipped in kb/schemas.
     "jsonschema>=4.23",
+    # Nearest-neighbour search over embeddings (used when SQLite can load it; else plain Python).
+    "sqlite-vec>=0.1.9",
     # Writes the kb-managed TOML files (neighbors.toml, policy.toml).
     "tomli-w>=1.0",
 ]
@@ -23,8 +27,6 @@ kb = "kb.cli:main"
 pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
 root = ["uproot>=5"]
-# Data sources that need a Python library (and, for DataLad, git-annex on PATH).
-datalad = ["datalad>=1.0"]
 
 [build-system]
 requires = ["setuptools>=77.0.3"]
@@ -44,7 +46,7 @@ kb = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "wckb[pptx,root]",
+    "wckb[pdf,pptx,root]",
 ]
 
 [tool.pytest.ini_options]

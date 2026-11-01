@@ -410,6 +410,7 @@
           "enum": [
             "lossless",
             "extracted",
+            "ocr",
             "llm"
           ]
         },

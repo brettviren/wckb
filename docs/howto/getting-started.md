@@ -10,7 +10,7 @@ kb --version
 Optional features need extras:
 
 ```
-uv tool install 'wckb[pdf,pptx,root,datalad] @ git+https://...'
+uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
 ```
 
 | extra | adds |
@@ -18,9 +18,11 @@ uv tool install 'wckb[pdf,pptx,root,datalad] @ git+https://...'
 | `pdf` | PyMuPDF |
 | `pptx` | slide extraction |
 | `root` | ROOT file summaries |
-| `datalad` | DataLad datasets as sources (also needs git-annex; see [datalad](datalad.md)) |
 
-`kb` also uses `pdftotext` (poppler) and `pandoc` when they're installed.
+DataLad and sqlite-vec come with kb. DataLad also needs git-annex on PATH
+(`apt install git-annex`; see [datalad](datalad.md)). `kb` also uses
+`pdftotext` (poppler), `pandoc` and, for OCR, `tesseract`
+(`apt install tesseract-ocr`) when they're installed.
 
 ## How the commands are organized
 
@@ -71,10 +73,12 @@ cd ~/work/myproject && kb init kb --scope project --up ~/kb  # one per project, 
 cd ~/kb && kb edge add tpc --relation up --path /data/kb/tpc   # the group's store, if it's on this machine
 ```
 
-`kb` finds a store from wherever you are: `./kb.sqlite`, else `./kb/kb.sqlite`,
-walking up the directory tree. A project store inside a git working tree
-gets a `.gitignore` of `*`, so the code repository never versions the
-database.
+`kb` finds a store from wherever you are, by its store context
+([contexts](contexts.md)). A store inside a git working tree gets its own
+files (`kb.sqlite*`, `.kb/`, `content/`) added to the `.gitignore` there, and
+nothing else, so the code repository never versions the database. Better
+still, keep stores out of working trees: `kb init` in a git working tree
+puts the store in `~/.local/share/kb/contexts/`.
 
 Tell `kb` who you are, and make your home store the parent of every project
 store, in your user config:

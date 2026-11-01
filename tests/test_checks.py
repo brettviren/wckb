@@ -168,7 +168,7 @@ def test_lint_findings(kb, tmp_path):
     observation(kb, runs=("2000",), subject=("detector/pds",))
     big = tmp_path / "big.bin"
     big.write_bytes(b"z" * (kb.cfg.max_inline_bytes + 1))
-    d = authoring.add(kb, "dataset", [str(big)], {"title": "Big data", "summary": "Big data"})
+    d = authoring.add(kb, "dataset", [str(big)], {"title": "Big data", "summary": "Big data"}, mode="local")
     found = {p.code: p for p in lint.lint(kb)}
     assert set(found) >= {"overlap", "local-only", "summary", "subject"}
     assert {a.id, b.id} == set(found["overlap"].where.split())

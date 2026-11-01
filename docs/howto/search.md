@@ -47,15 +47,36 @@ its text renditions: notes, pages, text files, and text extracted from
 PDFs, slides and the like. It reads that text wherever it is kept (the
 store, a content store, a dataset), as long as it is on this machine.
 
-**Text from PDFs and slides.** `kb add` extracts it (`--no-extract` to
-skip). The text becomes a rendition of the item, `text`, derived from the
-`original`. A hit there says so:
+**Text from PDFs, slides and images.** `kb add` extracts it (`--no-extract`
+to skip). The text becomes a rendition of the item, `text`, derived from
+the `original`. Text of a PDF is kept page by page, so a hit names the page:
 
 ```
 doc-1q80e6th8z   document    -          Purity talk
-                 in #text (from #original)
+                 in #text, page 2 (from #original)
                  The purity monitor saw [electron] lifetime drop.
 ```
+
+**OCR.** Images, and PDF pages that have no text of their own (scans), are
+read by OCR when an OCR engine is available. Such text has fidelity `ocr`.
+The engine is `tesseract` (`apt install tesseract-ocr`) or one you
+configure. Any program that prints an image's text will do, such as a
+script that asks a local model behind llama.cpp or ollama:
+
+```toml
+[ocr]
+language = "eng"                 # tesseract's -l
+# engine = "qwen-vl"             # use this one (default: the best available)
+
+[ocr.engines.qwen-vl]
+command = ["ocr-with-ollama", "--model", "qwen2.5vl", "{input}"]
+priority = 10                    # lower is preferred; tesseract is 50
+version = "qwen2.5vl"
+```
+
+**Text that is not here yet.** Text whose content is not on this machine
+(a URL never fetched, a dataset not cloned) is not indexed.
+`kb store reindex --fetch` fetches it and indexes it.
 
 `kb doctor` extracts what was never extracted (`unextracted`), and
 re-extracts text whose original changed (`stale`).
@@ -86,6 +107,10 @@ model identity and the hash of its text, so:
   them again.
 
 If you change prefixes, change `identity` too, since the vectors change.
+
+Nearest vectors are found with sqlite-vec (a dependency of kb) when SQLite
+can load it, else by comparing every vector in Python
+(`embed.sqlite_vec = false` turns sqlite-vec off).
 
 ## Reading one item
 
