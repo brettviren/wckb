@@ -7,10 +7,62 @@ demo, a notebook. In kb an artifact is a `document` of doctype `technote`,
 it what documents have (search of its text, `kb open`, versions by
 supersession), and it goes stale when the knowledge it presents changes.
 
-This guide covers what is built (phase 1 of
+This guide covers what is built (phases 1 and 2 of
 [decisions/0004](../decisions/0004-artifacts.md)): artifacts as documents,
-co-authors, LLM summaries, and HTML artifacts opened from their source.
-Workspaces that record how an artifact was made come next.
+workspaces that record how an artifact was made, co-authors, LLM summaries,
+and HTML artifacts opened from their source. Claude does this with the
+`kb-artifact` skill.
+
+## Make one in a workspace
+
+A workspace is a DataLad dataset where an artifact is made. While you work
+there, kb notes, without being asked:
+
+- what it gives you to read (`kb show`, `kb item content`, `kb open`,
+  `kb rendition path`, `kb context ID`): the artifact's inputs;
+- what you run with `kb artifact run` (a `datalad run`);
+- with kb's hooks, the prompts an LLM is given there and the files it writes.
+
+```
+kb artifact start ~/work/noise-note --title "TPC noise after the grounding fix"
+cd ~/work/noise-note
+kb show obs-…; kb item content dat-… ; kb open top-… --print     # read through kb, here
+kb artifact run --input dat-… -- python fit.py inputs/dat-…-noise.csv
+kb artifact run -- latexmk -pdf note.tex
+kb artifact status                    # what the journal holds so far
+kb artifact inputs                    # what was read: here, or elsewhere in the same session
+kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-11-02 \
+    --subject detector/tpc/noise --drop obs-…
+kb artifact steps doc-…               # how it was made
+```
+
+`finish` makes the artifact document:
+
+- **Its file:** the output, kept in the workspace (a `datalad` location).
+- **Its inputs:** what was read in the workspace, pruned with `--drop`, with
+  `--input` adding any you read another way. They are pinned as they are
+  now.
+- **Its process record:** the reads, the runs (with their commits), each
+  LLM session (its model, prompts and the files it edited) and the other
+  commits. Its provenance is `recorded` when it has runs or LLM steps, else
+  `cited`.
+- **Prompt documents:** each prompt given there becomes a document (doctype
+  `prompt`), `part-of` the artifact, with the model as co-author.
+  `kb artifact start --no-prompts` keeps none.
+
+Finishing again makes a new version, which supersedes the last.
+
+**Moving between pieces of work** needs no care: there is no workspace to
+switch. kb finds the workspace from the working directory, and notes where,
+when and in which session everything happened. Something read outside the
+workspace in the same session is offered at `finish` as `session` (kept
+with `--with-session`), and anything misplaced is dropped or added there.
+
+In Claude Code, kb's session hook sets `KB_SESSION` (and `KB_COAUTHOR`),
+and the hooks `kb-artifact-prompt-hook` and `kb-artifact-edit-hook` note
+prompts and edits in workspaces only. Select them in an existing store with
+`kb policy use kb-artifact kb-artifact-prompt-hook kb-artifact-edit-hook`
+and `kb policy enact`.
 
 ## Add an artifact
 

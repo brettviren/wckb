@@ -956,8 +956,18 @@ Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  list  The store's artifacts: what each is, how much of its making is recorded, its inputs, and
-        whether it is stale (an input changed since it was made).
+  list    The store's artifacts: what each is, how much of its making is recorded, its inputs, and
+          whether it is stale (an input changed since it was made).
+  start   Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is
+          made.
+  status  The artifact workspace here (from the working directory), and what its journal holds so
+          far.
+  run     Run COMMAND in the artifact workspace under datalad run, recording what it read and made.
+  inputs  The items read while making the artifact here: its candidate inputs, for kb artifact
+          finish.
+  finish  Harvest the workspace: OUTPUT (its PDF, or its demo's page) becomes an artifact document.
+  steps   How an artifact was made: the steps of its process record (reads, runs, LLM sessions,
+          commits).
 ```
 
 ## kb artifact list
@@ -982,6 +992,140 @@ Options:
   --all                           Include superseded versions.
   --json
   -h, --help                      Show this message and exit.
+```
+
+## kb artifact start
+
+```
+Usage: kb artifact start [OPTIONS] PATH
+
+  Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is made.
+
+  Work there as usual. kb notes, without being asked, what it gives you to read there (the
+  artifact's inputs), what you run with kb artifact run, and (with kb's hooks) the prompts and edits
+  of an LLM session. There is no workspace to switch to or from: kb finds it from the working
+  directory. When the artifact is ready: kb artifact finish.
+
+    kb artifact start ~/work/noise-note --title "TPC noise after the grounding fix"
+    cd ~/work/noise-note
+
+Options:
+  --title TEXT  What the artifact is to be.  [required]
+  --no-prompts  Don't keep the prompts given to an LLM here.
+  -h, --help    Show this message and exit.
+```
+
+## kb artifact status
+
+```
+Usage: kb artifact status [OPTIONS]
+
+  The artifact workspace here (from the working directory), and what its journal holds so far.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb artifact run
+
+```
+Usage: kb artifact run [OPTIONS] COMMAND...
+
+  Run COMMAND in the artifact workspace under datalad run, recording what it read and made.
+
+    kb artifact run --input dat-… -- python fit.py inputs/dat-…-noise.csv
+    kb artifact run -- latexmk -pdf note.tex
+
+Options:
+  --input REF         An item (or ID#NAME) the command reads: copied into inputs/ and declared
+                      (repeatable).
+  --output TEXT       A file the command makes (repeatable; else what changed).
+  -m, --message TEXT  The commit message.
+  -h, --help          Show this message and exit.
+```
+
+## kb artifact inputs
+
+```
+Usage: kb artifact inputs [OPTIONS]
+
+  The items read while making the artifact here: its candidate inputs, for kb artifact finish.
+
+  'here' means read in the workspace; 'session' means read elsewhere in the same session (kept only
+  with finish --with-session). Prune with finish --drop ID; add one with finish --input ID.
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
+```
+
+## kb artifact finish
+
+```
+Usage: kb artifact finish [OPTIONS] OUTPUT
+
+  Harvest the workspace: OUTPUT (its PDF, or its demo's page) becomes an artifact document.
+
+  Its inputs are the items read in the workspace (kb artifact inputs; --drop, --input, --with-
+  session adjust them), pinned as they are now. Its process record (the 'process' rendition: reads,
+  runs, LLM sessions, commits; kb artifact steps ID) says how it was made, and its provenance is
+  'recorded' if it has runs or LLM steps, else 'cited'. Prompts given here become prompt documents,
+  part of it. Finishing again makes a new version that supersedes the last.
+
+    kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-11-02 --subject ...
+    kb artifact finish site/index.html --doctype demo --drop obs-… --summary ...
+
+Options:
+  --title TEXT                    Short title.
+  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again
+                                  (at most 400 characters).
+  --subject TEXT                  Subject path, e.g. detector/tpc/noise (repeatable).
+  --tag TEXT                      Free label (repeatable).
+  --runs TEXT                     Valid for runs: N or FIRST-LAST (repeatable).
+  --start TEXT                    Valid from (date).
+  --end TEXT                      Valid until (date).
+  --status [draft|unverified|verified|disputed]
+  --access [public|collaboration|group|private]
+  --by TEXT                       Observations and configs: who asserted it (person ID or name;
+                                  claude for your own inference).
+  --how TEXT                      Observations and configs: how it was asserted: 'verbal at collab
+                                  meeting', 'elog 5521', 'read <URL>' ...
+  --when TEXT                     Observations and configs: when it was asserted (date).
+  --creators TEXT                 Author (repeatable).
+  --date TEXT                     The date the thing is known by: when it was published, else made
+                                  (fixed once written). Qualified dates: --dated.
+  --dated QUALIFIER=DATE          A qualified date, correctable later (repeatable). QUALIFIER:
+                                  created, published, modified, accessed (read or downloaded),
+                                  captured (photo, recording).
+  --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
+  --evidence TEXT                 Supporting ref or URL (repeatable).
+  --related TEXT                  Related ref (repeatable).
+  --link RELATION=ID              A typed link (repeatable). RELATION: supports, contradicts,
+                                  refines, alternative-to, compares-with, uses, part-of, cites,
+                                  same-as (kb item link --help says what each means).
+  --derived-from TEXT             Input ref, for topics and views (repeatable).
+  --license TEXT
+  --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
+  --via TEXT                      Tool or session making the item (e.g. claude-code).
+  --doctype [technote|demo|notebook]
+                                  [default: technote]
+  --drop ID                       Not an input after all (repeatable).
+  --input ID                      An input kb didn't see read (repeatable).
+  --with-session                  Also what was read elsewhere in the same sessions.
+  --json
+  -h, --help                      Show this message and exit.
+```
+
+## kb artifact steps
+
+```
+Usage: kb artifact steps [OPTIONS] REF
+
+  How an artifact was made: the steps of its process record (reads, runs, LLM sessions, commits).
+
+Options:
+  --json
+  -h, --help  Show this message and exit.
 ```
 
 ## kb asset
@@ -2285,6 +2429,8 @@ Commands:
   check           PostToolUse: validate an edit Claude made in a kb item checkout; problems go back
                   to Claude (exit 2).
   recall          UserPromptSubmit: print the few items that look relevant to the prompt.
+  artifact        UserPromptSubmit and PostToolUse: in an artifact workspace, note the prompt or the
+                  file written.
   session         SessionStart: one short status note about the store.
   git-pre-commit  git pre-commit: staged bundles verify; existing bundles are untouched.
   git-pre-push    git pre-push: the same for every commit being pushed.
@@ -2309,6 +2455,17 @@ Options:
 Usage: kb hook recall [OPTIONS]
 
   UserPromptSubmit: print the few items that look relevant to the prompt.
+
+Options:
+  -h, --help  Show this message and exit.
+```
+
+## kb hook artifact
+
+```
+Usage: kb hook artifact [OPTIONS]
+
+  UserPromptSubmit and PostToolUse: in an artifact workspace, note the prompt or the file written.
 
 Options:
   -h, --help  Show this message and exit.

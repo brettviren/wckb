@@ -471,6 +471,9 @@ class Store:
         from .config import coauthors
         if coauthors():                  # every write says who took part, as Co-Authored-By does
             detail = {**(detail or {}), "with": coauthors()}
+        if action == "create" and item:  # what was found while making an artifact is part of its story
+            from .journal import append
+            append("wrote", self, item=item, store=self.cfg.id)
         self.conn.execute("INSERT INTO events (at, item, action, actor, approved, detail) VALUES (?,?,?,?,?,?)",
                           (now(precise=True), item, action, actor or self.cfg.user, approved,
                            json.dumps(detail) if detail is not None else None))

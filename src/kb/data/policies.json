@@ -63,6 +63,14 @@
     "description": "Research a question; record sources, one-claim observations and a topic."
   },
   {
+    "name": "kb-artifact",
+    "type": "skill",
+    "version": 1,
+    "file": "skills/kb-artifact/SKILL.md",
+    "title": "kb-artifact",
+    "description": "Make an artifact (technote, demo, notebook) from KB knowledge, recorded for tracing and remaking."
+  },
+  {
     "name": "kb-correct",
     "type": "skill",
     "version": 3,
@@ -125,6 +133,22 @@
     "file": "policies/kb-recall-hook.json",
     "title": "Recall on prompt",
     "description": "UserPromptSubmit: a quick local search on the prompt; relevant item lines are added to the context."
+  },
+  {
+    "name": "kb-artifact-prompt-hook",
+    "type": "hook",
+    "version": 1,
+    "file": "policies/kb-artifact-prompt-hook.json",
+    "title": "Artifact prompts",
+    "description": "UserPromptSubmit: in an artifact workspace, notes the prompt in its journal (kb artifact finish makes it a prompt document)."
+  },
+  {
+    "name": "kb-artifact-edit-hook",
+    "type": "hook",
+    "version": 1,
+    "file": "policies/kb-artifact-edit-hook.json",
+    "title": "Artifact edits",
+    "description": "PostToolUse: in an artifact workspace, notes the files an LLM writes in its journal."
   },
   {
     "name": "kb-session-hook",

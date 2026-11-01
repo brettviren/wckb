@@ -45,6 +45,12 @@ class Ctx:
 pass_ctx = click.make_pass_decorator(Ctx)
 
 
+def _served(kb, refs, how: str) -> None:
+    """Note in the journal (of the artifact workspace here, if any) that kb gave someone these items to read."""
+    from .journal import served
+    served(kb, list(refs), how)
+
+
 def handle_errors(fn):
     @functools.wraps(fn)
     def wrapper(*a, **kw):
@@ -187,7 +193,7 @@ item_grp = group("item", "Items: change, correct, withdraw, link, edit, inspect 
 rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract text, get a file, verify.",
                       order=["path", "add", "extract", "summary", "transforms", "locate", "verify"])
 artifact_grp = group("artifact", "Artifacts: technotes, demos and notebooks made here to present knowledge.",
-                     order=["list"])
+                     order=["list", "start", "status", "run", "inputs", "finish", "steps"])
 asset_grp = group("asset", "Assets: abstract files and file sets, their versions, and the sources that supply them.")
 source_grp = group("source", "Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.",
                    order=["list", "show", "add", "share", "clone", "link", "types"])
@@ -576,6 +582,149 @@ def artifact_list_cmd(c, doctypes, stale_only, include_old, json_out):
         ui.info("no artifacts (documents of doctype technote, demo or notebook)")
 
 
+@command(artifact_grp, "start", no_args_is_help=True)
+@click.argument("path", type=click.Path(file_okay=False, path_type=Path))
+@click.option("--title", required=True, help="What the artifact is to be.")
+@click.option("--no-prompts", is_flag=True, help="Don't keep the prompts given to an LLM here.")
+@pass_ctx
+def artifact_start_cmd(c, path, title, no_prompts):
+    """Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is made.
+
+    Work there as usual. kb notes, without being asked, what it gives you
+    to read there (the artifact's inputs), what you run with kb artifact
+    run, and (with kb's hooks) the prompts and edits of an LLM session.
+    There is no workspace to switch to or from: kb finds it from the
+    working directory. When the artifact is ready: kb artifact finish.
+
+    \b
+      kb artifact start ~/work/noise-note --title "TPC noise after the grounding fix"
+      cd ~/work/noise-note
+    """
+    from .artifacts import start
+    ws, data = start(c.kb, path, title, prompts=not no_prompts)
+    click.echo(str(ws))
+    ui.info(f"artifact workspace {data['id']} ({data['title']}); its dataset is source {data['source']}")
+
+
+@command(artifact_grp, "status")
+@pass_ctx
+def artifact_status_cmd(c):
+    """The artifact workspace here (from the working directory), and what its journal holds so far."""
+    from . import journal
+    from .artifacts import _journals, _here
+    ws = _here()
+    data = journal.read_workspace(ws)
+    here, store = _journals(c.kb, ws)
+    counts: dict[str, int] = {}
+    for e in here:
+        counts[e.get("kind", "?")] = counts.get(e.get("kind", "?"), 0) + 1
+    click.echo(f"{ws}\t{data['title']}")
+    ui.info(f"started {data['started'][:16]}; " + ", ".join(f"{n} {k}" for k, n in sorted(counts.items()))
+            + (f"; {len(store)} entries elsewhere in the same sessions" if store else "")
+            + (f"; finished as {data['artifact']}" if data.get("artifact") else ""))
+
+
+@command(artifact_grp, "run", no_args_is_help=True)
+@click.argument("command", nargs=-1, required=True)
+@click.option("--input", "inputs", multiple=True, metavar="REF",
+              help="An item (or ID#NAME) the command reads: copied into inputs/ and declared (repeatable).")
+@click.option("--output", "outputs", multiple=True, help="A file the command makes (repeatable; else what changed).")
+@click.option("-m", "--message", help="The commit message.")
+@pass_ctx
+def artifact_run_cmd(c, command, inputs, outputs, message):
+    """Run COMMAND in the artifact workspace under datalad run, recording what it read and made.
+
+    \b
+      kb artifact run --input dat-… -- python fit.py inputs/dat-…-noise.csv
+      kb artifact run -- latexmk -pdf note.tex
+    """
+    from .artifacts import run
+    r = run(c.kb, list(command), list(inputs), list(outputs), message)
+    click.echo(r["commit"] or "(nothing changed)")
+    ui.info(f"ran {r['command']}" + (f"; made {', '.join(r['outputs'][:5])}" if r["outputs"] else ""))
+
+
+@command(artifact_grp, "inputs")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def artifact_inputs_cmd(c, json_out):
+    """The items read while making the artifact here: its candidate inputs, for kb artifact finish.
+
+    'here' means read in the workspace; 'session' means read elsewhere in
+    the same session (kept only with finish --with-session). Prune with
+    finish --drop ID; add one with finish --input ID.
+    """
+    from .artifacts import candidates
+    rows = candidates(c.kb)
+    if json_out:
+        return ui.emit_json(rows)
+    for r in rows:
+        click.echo(f"{r['id']:<16} {r['where']:<8} {r['reads']:>3}x {','.join(r['how']):<14} {r['title']}")
+    if not rows:
+        ui.info("nothing read here yet")
+
+
+@command(artifact_grp, "finish", no_args_is_help=True)
+@click.argument("output", type=click.Path(dir_okay=False, exists=True, path_type=Path))
+@item_options
+@click.option("--doctype", type=click.Choice(["technote", "demo", "notebook"]), default="technote", show_default=True)
+@click.option("--drop", multiple=True, metavar="ID", help="Not an input after all (repeatable).")
+@click.option("--input", "add", multiple=True, metavar="ID", help="An input kb didn't see read (repeatable).")
+@click.option("--with-session", is_flag=True, help="Also what was read elsewhere in the same sessions.")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def artifact_finish_cmd(c, output, doctype, drop, add, with_session, json_out, via, **kw):
+    """Harvest the workspace: OUTPUT (its PDF, or its demo's page) becomes an artifact document.
+
+    Its inputs are the items read in the workspace (kb artifact inputs;
+    --drop, --input, --with-session adjust them), pinned as they are now. Its
+    process record (the 'process' rendition: reads, runs, LLM sessions,
+    commits; kb artifact steps ID) says how it was made, and its provenance
+    is 'recorded' if it has runs or LLM steps, else 'cited'. Prompts given
+    here become prompt documents, part of it. Finishing again makes a new
+    version that supersedes the last.
+
+    \b
+      kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-11-02 --subject ...
+      kb artifact finish site/index.html --doctype demo --drop obs-… --summary ...
+    """
+    from .artifacts import finish
+    fields = _fields(kw)
+    fields["doctype"] = doctype
+    r = finish(c.kb, output, fields, list(drop), list(add), with_session)
+    if json_out:
+        return ui.emit_json(r)
+    click.echo(r["artifact"])
+    ui.info(f"{len(r['inputs'])} input(s), {len(r['process']['steps'])} step(s), provenance "
+            f"{r['process']['level']}" + (f", {len(r['prompts'])} prompt document(s)" if r["prompts"] else ""))
+
+
+@command(artifact_grp, "steps", no_args_is_help=True)
+@click.argument("ref")
+@click.option("--json", "json_out", is_flag=True)
+@pass_ctx
+def artifact_steps_cmd(c, ref, json_out):
+    """How an artifact was made: the steps of its process record (reads, runs, LLM sessions, commits)."""
+    from .artifacts import steps_view
+    p = steps_view(c.kb, ref)
+    if json_out:
+        return ui.emit_json(p)
+    click.echo(f"{p['title']}: provenance {p['level']}, workspace {p['workspace']}")
+    for s in p["steps"]:
+        if s["type"] == "kb":
+            line = f"read {len(s['reads'])} item(s): " + ", ".join(r.split("@")[0] for r in s["reads"][:6])
+        elif s["type"] == "code":
+            line = f"ran {s['command']} ({s['commit'][:8]}) -> {', '.join(s['outputs'][:4]) or '-'}"
+        elif s["type"] == "llm":
+            line = (f"LLM session {str(s['session'])[:8]} ({s.get('model') or 'model not recorded'}): "
+                    f"{s['prompts']} prompt(s), edited {', '.join(s['files'][:4]) or 'nothing'}")
+        else:
+            line = f"commit {s['commit'][:8]} by {s.get('author')}: {s.get('message', '')}"
+        click.echo(f"  {s['id']:<4} {s['type']:<6} {line}")
+    if p.get("wrote"):
+        click.echo(f"  wrote {', '.join(p['wrote'])}")
+
+
 @command(rendition_grp, "summary", no_args_is_help=True)
 @click.argument("ref")
 @click.argument("file", type=click.Path(dir_okay=False, exists=True, path_type=Path))
@@ -669,6 +818,7 @@ def show_cmd(c, ref, fmt, depth):
     from . import render as r
     kb = c.kb
     rec = kb.get(ref)
+    _served(kb, [rec.id], "show")
     if fmt == "json":
         return ui.emit_json(rec.data)
     if fmt == "llm":
@@ -707,7 +857,8 @@ def open_cmd(c, ref, text, print_only, no_fetch):
       kb open doc-…#slides --print      # just the path, for other tools
     """
     from . import opener
-    _, _, path = opener.path(c.kb, ref, text, fetch=not no_fetch)
+    rec, r, path = opener.path(c.kb, ref, text, fetch=not no_fetch)
+    _served(c.kb, [f"{rec.id}#{r['name']}"], "open")
     click.echo(str(path))
     if not print_only:
         opener.launch(c.kb, path)
@@ -807,7 +958,11 @@ def context_cmd(c, target, runs, budget, reach, only):
     """What the KB knows about a subject, an item, or some words; compact markdown for LLMs."""
     from .context import parse_run_window
     from .federated import context
-    click.echo(context(c.kb, " ".join(target), parse_run_window(runs), budget, reach, list(only)), nl=False)
+    from .ids import is_ref
+    text = " ".join(target)
+    click.echo(context(c.kb, text, parse_run_window(runs), budget, reach, list(only)), nl=False)
+    if is_ref(text) and text.split("#")[0] in c.kb.items:        # one item, read in full
+        _served(c.kb, [text], "context")
 
 
 @command(rendition_grp, "path", no_args_is_help=True)
@@ -818,6 +973,7 @@ def path_cmd(c, ref, no_fetch):
     """A local file with a rendition's content (ID#NAME), fetched or materialized as needed."""
     from .edit import rendition_path
     click.echo(str(rendition_path(c.kb, ref, fetch=not no_fetch)))
+    _served(c.kb, [ref], "path")
 
 
 @command(rendition_grp, "verify")
@@ -1207,6 +1363,14 @@ def hook_recall_cmd(c):
         click.echo(text)
 
 
+@command(hook_grp, "artifact")
+@pass_ctx
+def hook_artifact_cmd(c):
+    """UserPromptSubmit and PostToolUse: in an artifact workspace, note the prompt or the file written."""
+    from .hooks import run
+    run("artifact", sys.stdin.read(), c.root)
+
+
 @command(hook_grp, "session")
 @pass_ctx
 def hook_session_cmd(c):
@@ -1523,6 +1687,7 @@ def content_cmd(c, ref, name, file):
         t = rec.text(name)
         if t is None:
             raise KBError(f"{rec.id}#{name} is not text held in the store (kb rendition path {rec.id}#{name})")
+        _served(kb, [f"{rec.id}#{name}"], "content")
         return click.echo(t, nl=False)
     text = sys.stdin.read() if file == "-" else Path(file).read_text()
     click.echo(set_content(kb, rec.id, text, name).id)

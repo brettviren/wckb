@@ -111,18 +111,47 @@ def coauthor(event: dict) -> str:
 
 
 def _set_coauthor(event: dict) -> None:
-    """Give every command of the session KB_COAUTHOR, through Claude Code's session environment file
-    (unless the person set one)."""
+    """Give every command of the session KB_COAUTHOR (unless the person set one) and KB_SESSION (for the
+    journals of artifact workspaces), through Claude Code's session environment file."""
     import os
     import shlex
     env_file = os.environ.get("CLAUDE_ENV_FILE")
-    if not env_file or os.environ.get("KB_COAUTHOR"):
+    if not env_file:
         return
+    lines = []
+    if not os.environ.get("KB_COAUTHOR"):
+        lines.append(f"export KB_COAUTHOR={shlex.quote(coauthor(event))}")
+    if event.get("session_id"):
+        lines.append(f"export KB_SESSION={shlex.quote(str(event['session_id']))}")
     try:
         with open(env_file, "a") as f:
-            f.write(f"export KB_COAUTHOR={shlex.quote(coauthor(event))}\n")
+            f.write("".join(line + "\n" for line in lines))
     except OSError:
         pass
+
+
+def artifact(event: dict) -> None:
+    """In an artifact workspace, note what the LLM session does there: the prompts it is given
+    (UserPromptSubmit; unless the workspace says prompts=false) and the files it writes (PostToolUse)."""
+    from . import journal
+    sid = event.get("session_id")
+    name = event.get("hook_event_name")
+    if name == "UserPromptSubmit":
+        cwd = Path(event.get("cwd") or ".")
+        ws = journal.workspace(cwd)
+        if ws is None or not journal.read_workspace(ws).get("prompts", True):
+            return
+        journal.append("prompt", start=cwd, prompt=event.get("prompt", ""), **({"session": sid} if sid else {}))
+    elif name == "PostToolUse":
+        path = (event.get("tool_input") or {}).get("file_path")
+        if not path:
+            return
+        p = Path(path).resolve()
+        ws = journal.workspace(p.parent)
+        if ws is None or not p.is_relative_to(ws):
+            return
+        journal.append("edit", start=p.parent, file=str(p.relative_to(ws)), tool=event.get("tool_name"),
+                       **({"session": sid} if sid else {}))
 
 
 def session(event: dict, root: Path | None = None) -> str:
@@ -132,6 +161,10 @@ def session(event: dict, root: Path | None = None) -> str:
     from .push import candidates
     _set_coauthor(event)
     kb = _open(event, root)
+    if kb is not None and event.get("session_id"):
+        from . import journal
+        journal.append("session", kb, start=Path(event.get("cwd") or "."), session=str(event["session_id"]),
+                       model=coauthor(event))
     if kb is None:
         return ""
     recs = kb.items
@@ -171,6 +204,9 @@ def run(kind: str, stdin_text: str, root: Path | None = None) -> tuple[int, str]
             return 0, recall(event, root)
         if kind == "session":
             return 0, session(event, root)
+        if kind == "artifact":
+            artifact(event)
+            return 0, ""
     except Exception:  # noqa: BLE001 - a hook must never break the session
         return 0, ""
     return 0, ""

@@ -263,6 +263,26 @@ to be right; please fix the other place.
   *Code:* `kb.artifacts`, `graph.is_artifact`, `kb artifact list`;
   decisions/0004.
 
+**artifact workspace**
+: A DataLad dataset where an artifact is made, marked by
+  `.kb-artifact/workspace.json` and found from the working directory (no
+  switching). kb notes in its journal what it served there, what ran there
+  (`kb artifact run`), and (by hooks) an LLM's prompts and edits;
+  `kb artifact finish` harvests it into an artifact document with a
+  process record. *Code:* `kb.journal`, `kb.artifacts.start|run|finish`.
+
+**journal**
+: A log of what happened while artifacts were made: a workspace's
+  (`.kb-artifact/journal.jsonl`), or the store's (`.kb/journal.jsonl`) for
+  work outside any workspace. Entries: `served`, `wrote`, `run`, `prompt`,
+  `edit`, `session`, each with where, when and the session. A help, not a
+  record of record. *Code:* `kb.journal`.
+
+**process record**
+: An artifact's `process` rendition: the steps that made it (`kb` reads,
+  `code` runs, `llm` sessions, `human` commits), from its workspace's
+  journal and git history. *Code:* `artifacts.process`, `kb artifact steps`.
+
 **co-author**
 : Who took part in a write besides the person (`created.by`): an LLM
   (`claude-opus-5-5 (Claude Code)`) or another person, as git's

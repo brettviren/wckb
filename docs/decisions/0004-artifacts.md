@@ -2,7 +2,7 @@
 
 Status: **accepted in outline** (2026-11-01): AR1–AR5 decided as recorded
 below ("Decisions"); AR6 (the gallery) and replaying LLM steps stay open.
-Phase 1 is built (2026-11-01); see "Phases" and howto/artifacts.md.
+Phases 1 and 2 are built (2026-11-01); see "Phases" and howto/artifacts.md.
 
 ## The need
 
