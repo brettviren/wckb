@@ -20,7 +20,6 @@ import os
 import shlex
 import stat
 import subprocess
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +31,9 @@ _ALIASES = {"cmd": "command", "command": "command", "file": "file", "env": "env"
 
 
 def _warn(msg: str) -> None:
-    print(f"kb: warning: {msg}", file=sys.stderr)
+    import logging
+    from .logs import tell
+    tell(logging.getLogger(__name__), logging.WARNING, msg)
 
 
 @dataclass

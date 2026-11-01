@@ -85,6 +85,7 @@ A store is a directory:
 ```
 kb.sqlite        the store (WAL mode; never write it on a network filesystem)
 .kb/             this machine's: local.toml (paths), cache/, build/, checkout/
+                 (a store may itself be a .kb/ directory: .kb/kb.sqlite)
 .gitignore       "*", when the store sits inside a project's git working tree
 ```
 
@@ -106,14 +107,27 @@ Tables in `kb.sqlite`:
 Configuration is layered, last one wins:
 
 1. the store's settings (`kb config`, `kb edge`, `kb policy`);
-2. the user's `~/.config/kb/config.toml` (forges, user-wide neighbors);
+2. the config files: the user's `~/.config/kb/config.toml` (forges,
+   user-wide neighbors), then `.kb/config.toml`, `.kb.toml` and `kb.toml`
+   from the farthest directory above the working directory to the nearest
+   (none of these with `--no-init-file`), then the file given with `-c`;
 3. `.kb/local.toml` (this machine's paths);
 4. `KB_*` environment variables.
 
-**Finding the store.** `kb` walks up from the working directory to the
-nearest `kb.sqlite`, or `kb/kb.sqlite`. Inside a project it finds the
-project's store; elsewhere under your home directory, `~/kb`. `-C` and
-`KB_ROOT` override this.
+**Finding the store.** A command uses the store of its *store context*, a
+short name: `--context`, else `$KB_CONTEXT`, else `kb_context` in the config
+files, else `git-directory`. `git-directory` and `current-directory` are
+made into names from the nearest git working tree or the working
+directory (`/home/ann/ana` gives `home-ann-ana`). The store is at
+`context.NAME.location` if the config files say so, else at the nearest
+`kb.sqlite`, `.kb/kb.sqlite` or `kb/kb.sqlite` here or above, else in
+`$XDG_DATA_HOME/kb/contexts/NAME`. `-C` and `KB_ROOT` name the directory
+outright. With no git working tree and no store above, and no name given,
+`kb` stops and says how to give one. See [howto/contexts](howto/contexts.md).
+
+**Logs.** Python logging, by default to `~/.cache/kb/logs/kb-DATE.log` from
+level warning, each record with the store context's name (`-l`, `-L`,
+`--debug`). Command output (data) goes to stdout and is not logged.
 
 **Network filesystems.** SQLite's locking is unreliable on NFS, EOS FUSE,
 CIFS and sshfs, so `kb` refuses to *write* a store there

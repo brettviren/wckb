@@ -16,13 +16,28 @@ Usage: kb [OPTIONS] COMMAND [ARGS]...
 
   Every command has --help.  Words: docs/glossary.md.  How-tos: docs/howto/.
 
+  The store is the store context's (--context): by default that of the git working tree here; see
+  docs/howto/contexts.md.
+
 Options:
-  -C, --kb DIRECTORY  Store directory (default: nearest with kb.sqlite, or ./kb/kb.sqlite).
-  --version           Show the version and exit.
-  -h, --help          Show this message and exit.
+  -C, --kb DIRECTORY              Store directory, whatever the store context says.
+  --context NAME                  Store context (overrides $KB_CONTEXT and kb_context): a name,
+                                  current-directory or git-directory (the default).
+  -c, --config FILE               A config file to apply after the others (even with --no-init-
+                                  file).
+  --no-init-file                  Skip ~/.config/kb/config.toml and the .kb/config.toml, .kb.toml
+                                  and kb.toml files here and above.
+  -l, --log-level [debug|info|warning|error|critical]
+                                  Log from this level (default: warning).
+  -L, --log-sink SINK             Log to this file (appended to), or stdout or stderr (default:
+                                  ~/.cache/kb/logs/kb-DATE.log).
+  --debug                         Log everything to stdout: -l debug -L stdout.
+  --version                       Show the version and exit.
+  -h, --help                      Show this message and exit.
 
 Everyday:
-  init       Make PATH a kb store (one SQLite file, kb.sqlite).
+  init       Make PATH a kb store (one SQLite file, kb.sqlite); by default, the store of the store
+             context.
   status     The store at a glance: items, inbox, edges, content stores, and what needs attention.
   add        Add files or URLs as a new primary item (default kind: document).
   new        Make a new item of KIND.
@@ -73,8 +88,13 @@ Integration:
 ```
 Usage: kb init [OPTIONS] [PATH]
 
-  Make PATH a kb store (one SQLite file, kb.sqlite).
+  Make PATH a kb store (one SQLite file, kb.sqlite); by default, the store of the store context.
 
+  Without PATH the store goes where the context says (context.NAME.location), else in
+  ~/.local/share/kb/contexts/NAME; its policy is enacted in the directory the context is named for
+  (the git working tree, by default).
+
+    kb init --scope project                         # this git working tree's store
     kb init ~/kb --scope home                       # your personal store
     kb init ./kb --scope project --up ~/kb          # a project store beside the working files
     kb init /data/kb/tpc --scope group              # a group store (one writer; shared by bundles)

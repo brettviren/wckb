@@ -14,9 +14,12 @@ def git(root: Path, *args) -> str:
 
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch, tmp_path_factory):
-    """No user config, a fixed user, and no stray KB_ROOT."""
+    """No user config, a fixed user, no stray KB_ROOT or KB_CONTEXT, and logs in the test's cache."""
+    from kb import config, logs
     home = tmp_path_factory.mktemp("home")
-    monkeypatch.setenv("KB_CONFIG", str(home / "none.toml"))
+    monkeypatch.setattr(config, "INVOCATION", config.Invocation())
+    monkeypatch.delenv("KB_CONTEXT", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(home / "data"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home / ".claude"))
     monkeypatch.setenv("KB_USER", "per-tester")
     monkeypatch.delenv("KB_ROOT", raising=False)
@@ -30,6 +33,8 @@ def _isolate(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.org")
     monkeypatch.setenv("GIT_COMMITTER_NAME", "t")
     monkeypatch.setenv("GIT_COMMITTER_EMAIL", "t@example.org")
+    yield
+    logs.reset()
 
 
 @pytest.fixture

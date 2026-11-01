@@ -90,7 +90,7 @@ def test_a_new_machine_clones_into_the_source_directory(kb, origin, tmp_path, mo
     b = bundle.make(Store.open(kb.root), make_kset(Store.open(kb.root), [rec.id], "shallow").id)
 
     # Another machine: another host name, another user config (so no registry), its own clone directory.
-    monkeypatch.setenv("KB_CONFIG", str(tmp_path / "elsewhere.toml"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "elsewhere"))
     there = make_store(tmp_path / "there", "home", "there")
     there.set_setting("host", "elsewhere")
     there.set_setting("sources", {"datalad": {"dir": str(tmp_path / "clones")}})
@@ -105,7 +105,7 @@ def test_a_new_machine_clones_into_the_source_directory(kb, origin, tmp_path, mo
 
 def test_ask_for_a_location_or_stop_with_instructions(kb, origin, tmp_path, monkeypatch):
     src = datasets.describe(kb, str(origin))
-    monkeypatch.setenv("KB_CONFIG", str(tmp_path / "fresh.toml"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "fresh"))
     kb.set_setting("host", "elsewhere")
     kb.set_setting("sources", {"datalad": {"new": "ask"}})
     kb = Store.open(kb.root)
@@ -182,7 +182,7 @@ def test_doctor_knows_datalad(kb, origin, tmp_path, monkeypatch):
     assert [f.code for f in doctor.diagnose(kb, ["gitattributes"])] == ["gitattributes"]
     ignore.unlink()
     datasets.add_places(kb, kb.get(src), [origin.as_uri()], [])
-    monkeypatch.setenv("KB_CONFIG", str(tmp_path / "fresh.toml"))           # a machine without the clone
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "fresh"))           # a machine without the clone
     kb = Store.open(kb.root)
     kb.set_setting("host", "elsewhere")
     kb = Store.open(kb.root)

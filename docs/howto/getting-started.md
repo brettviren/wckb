@@ -52,6 +52,10 @@ holds this machine's settings (`local.toml`), a cache and a build area.
   `kb config get` and `kb config set`.
 - **The database enforces append-only.** You never edit it directly; every
   change goes through `kb`.
+- **Each command uses its store context's store.** In a git working tree
+  that is the tree's store, wherever it is kept; `kb init --scope project`
+  there makes one in `~/.local/share/kb/contexts/`. `kb status` says which
+  store, and why ([contexts](contexts.md)).
 - **Stores are not git repositories.** Knowledge moves between stores as
   transfers and bundles ([stores-and-promotion](stores-and-promotion.md),
   [review](review.md)).

@@ -20,6 +20,7 @@ item comes again from the store it first came from, or the edge prefers
 
 import copy
 import hashlib
+import logging
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -33,6 +34,8 @@ REF_FIELDS = ("members", "supersedes", "retracts", "derived_from", "evidence", "
 MUTABLE_LISTS = ("subject", "tags", "evidence", "related", "urls", "paths")
 MUTABLE_SCALARS = ("status", "summary", "license")
 MUTABLE = MUTABLE_SCALARS + MUTABLE_LISTS + ("identifiers",)
+
+log = logging.getLogger(__name__)
 
 
 # -- knowledge sets -------------------------------------------------------------
@@ -377,6 +380,7 @@ def transfer(sender, dst: Store, kset: dict, *, prefer: str = "ours", access: st
         report["result"] = "nothing to transfer"
         return report
     report.update(apply(sender, dst, p, kset, approved=approved, edge=edge, direction=direction, extra=extra))
+    log.info("%s %s from %s to %s: %s", direction, kset["id"], sender.cfg.name, dst.cfg.name, p.summary())
     if log_source and isinstance(sender, Store) and not sender.readonly:
         with sender.tx():
             sender.log_event("transfer-out", kset["id"], {

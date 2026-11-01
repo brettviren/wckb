@@ -35,9 +35,32 @@ to be right; please fix the other place.
 
 **settings**
 : A store's configuration, held in the store (`settings` table). It is
-  overlaid by the user's `~/.config/kb/config.toml`, the machine's
-  `.kb/local.toml` and `KB_*` environment variables. *Code:* `kb config`,
+  overlaid by the *config files*, the machine's `.kb/local.toml` and
+  `KB_*` environment variables. *Code:* `kb config`,
   `kb.config.from_settings`, `Store.setting/set_setting`.
+
+**store context**
+: The short name under which a command finds its store, usable as a
+  config table label (`[context.NAME]`). It comes from `--context`,
+  `$KB_CONTEXT` or `kb_context`, else `git-directory`. The special names
+  `current-directory` and `git-directory` are made into names from a
+  directory's path. The store's directory is its *location*:
+  `context.NAME.location`, else a store found here or above, else
+  `$XDG_DATA_HOME/kb/contexts/NAME`. Not to be confused with a *context
+  pack* (`kb context`). *Code:* `kb.config.resolve_context`,
+  `StoreContext`.
+
+**config files**
+: TOML files that lay over a store's settings, in order: the user's
+  `~/.config/kb/config.toml`, then `.kb/config.toml`, `.kb.toml` and
+  `kb.toml` from the farthest directory above down to the working
+  directory, then the file given with `-c`. `--no-init-file` skips all but
+  the last. *Code:* `kb.config.config_files`, `cascade`.
+
+**log**
+: kb's record of what it did, through Python logging: by default a file
+  per day under `~/.cache/kb/logs/`, from level warning. A command's
+  output is never logged. *Code:* `kb.logs`, `-l`, `-L`, `--debug`.
 
 **snapshot**
 : A consistent single-file copy of a store (`VACUUM INTO`). It is used to
@@ -575,5 +598,6 @@ to be right; please fix the other place.
 | source record / source item | primary item |
 | blob store | content store (cas); "blob" means content in the store's database |
 | the KB file / the database | the store (`kb.sqlite`) |
+| project (for what names a store) | store context |
 | clone of a store | snapshot (read-only copy) or twin (a synced copy) |
 | candidate (for assets) | offer |

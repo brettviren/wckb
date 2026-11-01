@@ -9,6 +9,7 @@ that small content lives in.
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from functools import cached_property
 from pathlib import Path
@@ -16,6 +17,8 @@ from pathlib import Path
 from . import db as dbm
 from .errors import KBError
 from .ids import PRIMARY_KINDS, parse_ref
+
+log = logging.getLogger(__name__)
 
 # Fields of a frozen item (source, released policy) that never change: what it asserts.
 IMMUTABLE = ("id", "kind", "created", "asserted_by", "creators", "date", "valid", "doctype",
@@ -214,6 +217,7 @@ class Store:
         if not path.exists():
             raise KBError(f"{root} is not a kb store (no {dbm.DB_NAME}); kb init makes one")
         conn = dbm.connect(path, readonly=readonly)
+        log.debug("opened the store %s%s", root, " read-only" if readonly else "")
         settings = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM settings")}
         cfg = config_mod.from_settings(root, settings)
         check_revision(cfg.schema)

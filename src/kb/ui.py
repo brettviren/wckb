@@ -46,7 +46,10 @@ def summary_counts(probs) -> None:
 
 
 def info(msg: str) -> None:
-    click.echo(msg, err=True)
+    """A message for the person (on stderr), logged at level info as well."""
+    import logging
+    from .logs import tell
+    tell(logging.getLogger("kb.cli"), logging.INFO, msg)
 
 
 def stderr(msg: str) -> None:
@@ -68,6 +71,10 @@ def status(v: dict) -> None:
     s, it = v["store"], v["items"]
     click.echo(click.style(f"{s['name']}", bold=True) + f"  {s['scope']} store, access {s['access']}, id {s['id']}")
     click.echo(f"  at {s['root']}, as {s['user']} on {s['host']}")
+    if v.get("context"):
+        x = v["context"]
+        click.echo(f"context   {x['name']} (named by {x['named_by']}; store: {x['located_by']})")
+    click.echo("config    " + (", ".join(v.get("config_files") or []) or "no config files"))
     kinds = ", ".join(f"{n} {k}" for k, n in it["by_kind"].items()) or "none yet"
     click.echo(f"items     {it['current']} current ({kinds})" + (f"; {it['replaced']} superseded or retracted"
                                                                   if it["replaced"] else ""))

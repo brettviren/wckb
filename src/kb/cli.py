@@ -19,17 +19,23 @@ class Ctx:
     def __init__(self, root: Path | None):
         self.root = root
         self._kb = None
+        self.context = None     # the store context, once the store is opened
 
     @property
     def kb(self):
         if self._kb is None:
+            from .config import store_context
             from .items import Store
+            self.context = store_context(root=self.root)
+            root = self.context.location
             try:
-                self._kb = Store.open(self.root)
+                self._kb = Store.open(root)
             except KBError as exc:
                 if "network filesystem" not in str(exc):
                     raise
-                self._kb = Store.open(self.root, readonly=True)   # reading is fine; writes will say why not
+                import logging
+                logging.getLogger(__name__).warning("%s: opened read-only instead", exc)
+                self._kb = Store.open(root, readonly=True)   # reading is fine; writes will say why not
             if sys.stdin.isatty():           # a person is here: ask where new DataLad clones go (if so configured)
                 from . import datasets
                 datasets.ASK = _ask_location
@@ -45,6 +51,8 @@ def handle_errors(fn):
         try:
             return fn(*a, **kw)
         except KBError as exc:
+            import logging
+            logging.getLogger(__name__).error("kb %s: %s", " ".join(sys.argv[1:2]), exc)
             raise click.ClickException(str(exc)) from None
     return wrapper
 
@@ -104,10 +112,23 @@ class TopGroup(Group):
 
 @click.group(cls=TopGroup, context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("-C", "--kb", "root", type=click.Path(file_okay=False, path_type=Path),
-              envvar="KB_ROOT", help="Store directory (default: nearest with kb.sqlite, or ./kb/kb.sqlite).")
+              envvar="KB_ROOT", help="Store directory, whatever the store context says.")
+@click.option("--context", "context_name", metavar="NAME",
+              help="Store context (overrides $KB_CONTEXT and kb_context): a name, current-directory or "
+                   "git-directory (the default).")
+@click.option("-c", "--config", "config_file", type=click.Path(dir_okay=False, path_type=Path),
+              help="A config file to apply after the others (even with --no-init-file).")
+@click.option("--no-init-file", is_flag=True,
+              help="Skip ~/.config/kb/config.toml and the .kb/config.toml, .kb.toml and kb.toml files here and above.")
+@click.option("-l", "--log-level", type=click.Choice(["debug", "info", "warning", "error", "critical"],
+                                                     case_sensitive=False),
+              help="Log from this level (default: warning).")
+@click.option("-L", "--log-sink", metavar="SINK",
+              help="Log to this file (appended to), or stdout or stderr (default: ~/.cache/kb/logs/kb-DATE.log).")
+@click.option("--debug", is_flag=True, help="Log everything to stdout: -l debug -L stdout.")
 @click.version_option(__version__, prog_name="kb")
 @click.pass_context
-def main(ctx, root):
+def main(ctx, root, context_name, config_file, no_init_file, log_level, log_sink, debug):
     """kb: knowledge stores shared by people and their LLMs.
 
     \b
@@ -117,7 +138,13 @@ def main(ctx, root):
     Share:    kb push --to NEIGHBOR ..., kb inbox list
 
     Every command has --help.  Words: docs/glossary.md.  How-tos: docs/howto/.
+
+    The store is the store context's (--context): by default that of the
+    git working tree here; see docs/howto/contexts.md.
     """
+    from . import config, logs
+    logs.setup("debug" if debug else (log_level or logs.DEFAULT_LEVEL), "stdout" if debug else log_sink)
+    config.INVOCATION = config.Invocation(context=context_name, config=config_file, no_init_file=no_init_file)
     ctx.obj = Ctx(root)
 
 
@@ -219,7 +246,7 @@ def _done(kb, rec, json_out=False):
 # -- making items -------------------------------------------------------------
 
 @command(main, "init")
-@click.argument("path", type=click.Path(file_okay=False, path_type=Path), default=".")
+@click.argument("path", type=click.Path(file_okay=False, path_type=Path), required=False)
 @click.option("--scope", default="other", type=click.Choice(["project", "home", "group", "org", "other"]),
               show_default=True, help="What this store holds knowledge for; sets defaults for access, policy, autonomy.")
 @click.option("--name", help="Store name (default: directory name, or the project's for ./kb).")
@@ -229,16 +256,33 @@ def _done(kb, rec, json_out=False):
 @click.option("--up", type=click.Path(file_okay=False, exists=True, path_type=Path),
               help="An existing store to link as this one's 'up' neighbor (e.g. your home store).")
 @click.option("--no-enact", is_flag=True, help="Select policy but do not enact it yet.")
-def init_cmd(path, scope, name, access, target, up, no_enact):
-    """Make PATH a kb store (one SQLite file, kb.sqlite).
+@pass_ctx
+def init_cmd(c, path, scope, name, access, target, up, no_enact):
+    """Make PATH a kb store (one SQLite file, kb.sqlite); by default, the store of the store context.
+
+    Without PATH the store goes where the context says (context.NAME.location),
+    else in ~/.local/share/kb/contexts/NAME; its policy is enacted in the
+    directory the context is named for (the git working tree, by default).
 
     \b
+      kb init --scope project                         # this git working tree's store
       kb init ~/kb --scope home                       # your personal store
       kb init ./kb --scope project --up ~/kb          # a project store beside the working files
       kb init /data/kb/tpc --scope group              # a group store (one writer; shared by bundles)
     """
     from .scaffold import init
     try:
+        if path is None:
+            from .config import DEFAULT_LOCATED, resolve_context
+            here = resolve_context(root=c.root)
+            if here.exists:
+                raise KBError(f"the context {here.name} has a store already: {here.location} ({here.located_by}); "
+                              f"give PATH, or set context.{here.name}.location, to make another")
+            path = here.location
+            if here.directory is not None:
+                name = name or here.directory.name
+                if here.located_by == DEFAULT_LOCATED:
+                    target = target or str(here.directory)
         for f in init(path, name, access, scope, target, False, not no_enact, up):
             click.echo(f"created {f}")
     except KBError as exc:
@@ -673,7 +717,7 @@ def _hook_check(c):
 def status_cmd(c, json_out):
     """The store at a glance: items, inbox, edges, content stores, and what needs attention."""
     from .status import status
-    v = status(c.kb)
+    v = status(c.kb, c.context)
     if json_out:
         return ui.emit_json(v)
     ui.status(v)

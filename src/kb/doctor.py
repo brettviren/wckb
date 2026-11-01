@@ -14,6 +14,7 @@ meant to grow with user testing.  When run by an agent, a fix follows the
 autonomy of the remedy's action (``curate`` unless it says otherwise).
 """
 
+import logging
 import os
 import shutil
 import stat
@@ -24,6 +25,8 @@ from pathlib import Path
 
 from .errors import KBError
 from .items import Store
+
+log = logging.getLogger(__name__)
 
 MODES = ("auto", "ask", "manual")
 
@@ -102,6 +105,7 @@ def treat(kb: Store, findings: list[Finding], confirm: Callable[[Finding], bool]
     for f in findings:
         r = REMEDIES.get(f.code)
         res = {"code": f.code, "where": f.where, "summary": f.summary}
+        log.debug("%s %s: %s (%s)", f.code, f.where, f.summary, f.mode)
         if f.mode == "manual" or r is None or r.apply is None:
             results.append(res | {"result": "advice", "detail": f.fix})
             continue
@@ -114,7 +118,9 @@ def treat(kb: Store, findings: list[Finding], confirm: Callable[[Finding], bool]
             continue
         try:
             results.append(res | {"result": "fixed", "detail": r.apply(kb, f)})
+            log.info("fixed %s %s: %s", f.code, f.where, results[-1]["detail"])
         except KBError as exc:
+            log.error("fixing %s %s failed: %s", f.code, f.where, exc)
             results.append(res | {"result": "failed", "detail": str(exc)})
         kb.reload()
     return results

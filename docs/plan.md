@@ -12,7 +12,9 @@ Deliverables:
 |---|---|---|
 | JSON Schemas v1 for nine kinds | `src/kb/schemas/v1/` | done |
 | Item model, IDs, canonical JSON and digest | `src/kb/items.py`, `ids.py` | done |
-| Configuration: store settings, user config, `.kb/local.toml`, `KB_*` env | `src/kb/config.py` | done |
+| Configuration: store settings, config files (user, here and above, `-c`), `.kb/local.toml`, `KB_*` env | `src/kb/config.py` | done |
+| Store contexts: which store a command uses (`--context`, `KB_CONTEXT`, `git-directory`) | `src/kb/config.py` | done |
+| Logging: daily files, `-l`, `-L`, `--debug` | `src/kb/logs.py` | done |
 | The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `items.py` | done |
 | Data sources (polymorphic): db, cas, url, local, asset, datalad | `src/kb/locations.py`, `content.py` | done |
 | DataLad datasets: source items, clones by dataset ID, `datalad` locations and asset source (optional extra) | `src/kb/datasets.py` | done |

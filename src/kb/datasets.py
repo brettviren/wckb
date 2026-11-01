@@ -271,8 +271,9 @@ def _same_history(root: Path, url: str) -> bool:
 
 
 def _warn(msg: str) -> None:
-    import sys
-    print(f"kb: warning: {msg}", file=sys.stderr)
+    import logging
+    from .logs import tell
+    tell(logging.getLogger(__name__), logging.WARNING, msg)
 
 
 NO_ID_WARNING = ("no .datalad/config: this dataset has no DataLad dataset ID (datalad create may have stopped "

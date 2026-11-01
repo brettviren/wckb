@@ -15,11 +15,32 @@ Status:
 ## S. The knowledge store (see decisions/0001, accepted)
 
 **S1. Where does a project's database live?** *(leaning)*
-- Today: `<project>/kb/kb.sqlite`, with a `.gitignore` of `*` so the
-  project's repository doesn't version it. Knowledge reaches collaborators
-  by bundles.
+- Today: in the store context's location. For a git working tree with no
+  store in or above it and no `context.NAME.location`, that is
+  `$XDG_DATA_HOME/kb/contexts/NAME`, outside the tree. `<project>/kb/kb.sqlite`
+  (with a `.gitignore` of `*`) is still found. Knowledge reaches
+  collaborators by bundles.
+- Open: `kb init` in the working tree's own directory writes a `.gitignore`
+  of `*` there, which hides the whole tree from git (wckb's own repository
+  has one). Should `kb init` refuse a git working tree's top, or write
+  `kb.sqlite*` and `.kb/` instead?
 - Open: should a JSONL export be committed with the code, for projects
   whose collaborators don't use kb?
+
+**S8. Store contexts: details.** *(leaning)*
+- Today: stores of contexts without a location go in
+  `$XDG_DATA_HOME/kb/contexts/NAME` (the request said
+  `$XDG_DATA_HOME/contexts/NAME`; `kb/` was added to keep kb's data in one
+  place). Outside a git working tree, with no name given, a store found
+  above names the context (else a home store such as `~/kb` would need
+  `--context` everywhere). With `-C`, and no name given, the directory
+  names the context.
+- Open: should `[context.NAME]` hold settings other than `location`, laid
+  over the store's when that context is used? Should `kb init` from a
+  `git-directory` context default to `--scope project`? The user cache is
+  still `~/.cache/wckb` (snapshots, clones) while logs go to
+  `~/.cache/kb/logs`: should both be `~/.cache/kb`? `KB_CONFIG` is gone
+  (use `-c`, or `XDG_CONFIG_HOME`).
 
 **S2. Who writes a group store?** *(open)*
 - A maintainer, a CI job applying accepted bundles, or a small service? How

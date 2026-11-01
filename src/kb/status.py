@@ -10,8 +10,10 @@ from . import doctor
 from .items import Store
 
 
-def status(kb: Store) -> dict:
+def status(kb: Store, context=None) -> dict:
+    """``context``: the :class:`kb.config.StoreContext` the store was found by, if it was."""
     from .bundle import entries
+    from .config import config_files
     from .federation import neighbors
     cfg = kb.cfg
     current = [r for r in kb.items.values() if kb.is_current(r.id)]
@@ -20,6 +22,9 @@ def status(kb: Store) -> dict:
     return {
         "store": {"name": cfg.name, "scope": cfg.scope, "access": cfg.access, "id": cfg.id,
                   "root": str(kb.root), "user": cfg.user, "host": cfg.host},
+        "context": context and {"name": context.name, "named_by": context.named_by,
+                                "located_by": context.located_by},
+        "config_files": [str(f) for f in config_files()],
         "items": {"current": len(current), "replaced": len(kb.items) - len(current),
                   "by_kind": dict(sorted(Counter(r.kind for r in current).items()))},
         "last_change": dict(last) if last else None,

@@ -99,9 +99,10 @@ def test_token_file_permissions_ask_first(kb, tmp_path, monkeypatch):
     tok = tmp_path / "token"
     tok.write_text("secret\n")
     tok.chmod(0o644)
-    cfg = tmp_path / "config.toml"
+    cfg = tmp_path / "xdg" / "kb" / "config.toml"
+    cfg.parent.mkdir(parents=True)
     cfg.write_text(f'[forges.gh]\ntype = "github"\nhost = "github.com"\ntoken = {{file = "{tok}"}}\n')
-    monkeypatch.setenv("KB_CONFIG", str(cfg))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     kb = Store.open(kb.root)
     found = doctor.diagnose(kb, ["secret-perms"])
     assert [f.mode for f in found] == ["ask"] and "secret" not in found[0].summary
@@ -166,9 +167,10 @@ def test_cli_status_and_doctor(kb):
 
 def test_user_is_set_up_in_two_steps(kb, tmp_path, monkeypatch):
     from kb import authoring
-    cfg = tmp_path / "config.toml"
+    cfg = tmp_path / "xdg" / "kb" / "config.toml"
+    cfg.parent.mkdir(parents=True)
     cfg.write_text('[forges.gh]\ntype = "github"\nhost = "github.com"\n')
-    monkeypatch.setenv("KB_CONFIG", str(cfg))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.delenv("KB_USER")
     monkeypatch.setattr("getpass.getuser", lambda: "bv")
     kb = Store.open(kb.root)
