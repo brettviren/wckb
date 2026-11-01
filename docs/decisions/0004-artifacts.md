@@ -1,6 +1,8 @@
 # 0004. Artifacts: technotes, demos and other made things
 
-Status: **proposed** (2026-11-01). Nothing here is built yet; see "Phases".
+Status: **accepted in outline** (2026-11-01): AR1–AR5 decided as recorded
+below ("Decisions"); AR6 (the gallery) and replaying LLM steps stay open.
+Nothing is built yet; see "Phases".
 
 ## The need
 
@@ -205,6 +207,64 @@ old, so links and citations keep pointing at what was said when.
 A `kb-artifact` skill would carry these habits for Claude, as `kb-research`
 does for research.
 
+## Decisions (2026-11-01)
+
+- **AR1. An artifact is a document**, with doctypes `technote`, `demo` and
+  `notebook`.
+- **AR2. Three provenance levels**: `cited`, `recorded`, `rebuildable`.
+- **AR3. The artifact workspace**, with what kb served as the proxy for
+  inputs. People bounce between artifacts, and between an artifact and
+  other work, and won't keep workspaces apart by switching. So kb keeps no
+  "current workspace" state to switch. Instead:
+  - **The workspace is where the work is.** kb finds it from the working
+    directory, as it finds a store context: the nearest directory that is
+    an artifact workspace.
+  - **Every journal entry says where and when.** It records the working
+    directory, the time and the session (Claude Code's session ID, when
+    there is one). Work done outside any workspace goes to the store's own
+    journal.
+  - **Harvest offers candidates and asks.** It proposes, from every
+    journal, what falls in the artifact's time span or session, marked by
+    how sure kb is: done in the workspace, or only in the same session.
+    The person or LLM claims or rejects each.
+  - **Misplaced work can be moved.** A step logged in the wrong workspace is
+    reassigned at harvest, not lost.
+- **AR4. Every write says who made it, people and LLMs alike**, as git's
+  `Co-Authored-By` does. A write records the person (`created.by`, as now)
+  and the co-authors that took part: an LLM (`claude-opus-5-5 via Claude
+  Code`) or another person.
+  - **How it is given:** `--coauthor NAME`, or `KB_COAUTHOR`. kb's
+    SessionStart hook sets `KB_COAUTHOR` for every command the session
+    runs (through Claude Code's session environment file), so LLMs don't
+    have to remember it.
+  - **Where it is kept:** in the item (`created.with`) and in the event
+    log, so `kb log` shows it.
+- **AR4. Prompts can be documents**: doctype `prompt`, captured by a
+  UserPromptSubmit hook when the prompt is given in an artifact workspace
+  (opt-in, and never outside one). The prompt's text is the item's
+  content, and its co-author is the model that answered. It is linked
+  `part-of` the artifact at harvest. What else an LLM step would need for
+  replay stays open (AR4b).
+- **AR4. LLM summaries of anything.** A rendition `summary` (role `derived`,
+  fidelity `llm`, `derived_from` the rendition it summarizes, the model as
+  its transform and co-author). It is to an LLM what extracted text is to
+  pdftotext: kb supports it for any document (and any item with content),
+  indexes it like other text, and search hits say `in #summary`. kb does
+  not call an LLM itself: an LLM writes the summary and registers it
+  (`kb rendition summary ID FILE`, a shorthand for `kb rendition add ...
+  --name summary --role derived --fidelity llm --from original`). A summary
+  goes stale when what it summarizes changes, as extracted text does; the
+  doctor lists stale summaries for an LLM to rewrite. (A summary is a
+  rendition, not an item of its own: it belongs to its document, travels
+  with it, and is replaced, not superseded, when rewritten.)
+- **AR5. A multi-file HTML artifact lives in a source** (a DataLad
+  dataset, usually the artifact's workspace, or a git or filesystem
+  source). The document's rendition points at the entry page in that source
+  (a `datalad` or `source` location), and `kb open` opens it there so its
+  scripts and data load.
+- **Open**: AR6 (the gallery, which may take several forms by person) and
+  AR4b (capturing enough of an LLM step to replay it).
+
 ## Options considered
 
 - **A new item kind `artifact`.** Clearer in listings, but it duplicates
@@ -224,19 +284,25 @@ does for research.
 
 ## Phases
 
-1. **Artifacts as documents.**
-   - doctypes `demo` and `notebook`;
+1. **Artifacts as documents, attribution and summaries.**
+   - doctypes `demo`, `notebook` and `prompt`;
+   - co-authors on every write (`--coauthor`, `KB_COAUTHOR`, set by the
+     session hook);
+   - LLM `summary` renditions for any item, indexed, going stale with what
+     they summarize;
    - `derived_from` and stamping for documents, so they go stale like
      topics;
-   - HTML bundles (an entry page plus files), with `kb open` serving them;
+   - HTML bundles in a source (an entry page plus files), with `kb open`
+     opening them there;
    - text extraction for HTML artifacts (figures' captions, tables);
    - `kb artifact list`.
 
    Value with no new habits: tracing (`cited`) and finding.
 2. **Workspaces and harvest.**
    - `kb artifact start`, `run` and `finish`;
-   - the journal of what kb served;
-   - the Claude Code hook for LLM steps;
+   - the journals of what kb served (located by working directory, time and
+     session, with no workspace switching);
+   - the Claude Code hooks for LLM steps and `prompt` documents;
    - `process.json`;
    - the `kb-artifact` skill.
 

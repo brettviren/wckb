@@ -542,39 +542,35 @@ Status:
 - Register `Source` classes through Python entry points
   (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
-## AR. Artifacts (see decisions/0004, proposed)
+## AR. Artifacts (see decisions/0004)
 
-**AR1. Is an artifact a document, or a kind of its own?** *(proposed: a document)*
-- Proposed: a `document` with doctype `technote`, `demo` or `notebook`, a
-  `provenance` level and a process record. A kind of its own would list
-  more clearly but duplicate documents.
-
-**AR2. How much provenance, by default?** *(proposed: three levels)*
-- `cited` (inputs only, harvested afterwards), `recorded` (steps captured
-  passively in a workspace), `rebuildable` (a view recipe). Which should be
-  the default, and should `kb lint` nudge artifacts upward?
-
-**AR3. Capturing inputs by what kb served.** *(open)*
-- Proposed: kb commands run in an artifact workspace log the items they
-  served, and harvest proposes them as inputs. Is "served" a good enough
-  proxy for "used", once a person or LLM prunes the list?
-
-**AR4. LLM steps.** *(open)*
-- What is kept of an LLM step: the prompt, the model, a summary, a pointer
-  to the transcript? Where do transcripts live, and at what access level?
-  Should remaking replay prompts automatically, or only list them?
-
-**AR5. HTML artifacts.** *(open)*
-- A multi-file HTML bundle (page, scripts, data): an asset file set, a
-  directory in the content dataset, or a zip rendition? It must open in a
-  browser from the cache with its scripts working.
+**AR4b. What of an LLM step is needed to replay it?** *(open, set aside 2026-11-01)*
+- Kept today, per the design: the prompt (a `prompt` document), the model
+  (co-author), the files it changed and the items it read. Is that enough
+  to redo a step under supervision? What of the conversation before the
+  prompt, tool results, and the model's settings?
 
 **AR6. The gallery.** *(open)*
 - A built-in view publishing an index of artifacts (title, summary,
-  thumbnail, inputs, links). Per store or per subject? Where is it
-  published for the group (EOS web space)?
+  thumbnail, inputs, links). Different people will want different forms
+  (per store, per subject, per person; a web page, a slide, a list). Which
+  first, and where is it published for the group?
 
 ## Decided
+
+**AR1–AR5. Artifacts.** *(decided 2026-11-01; decisions/0004)*
+- AR1: an artifact is a document (doctypes `technote`, `demo`, `notebook`).
+- AR2: three provenance levels, `cited`, `recorded`, `rebuildable`.
+- AR3: the artifact workspace, inputs by what kb served. People will bounce
+  between workspaces, so kb keeps no current-workspace state: entries are
+  located by working directory, time and session, and harvest asks.
+- AR4: every write records its co-authors (`--coauthor`, `KB_COAUTHOR`, set
+  by the session hook), as `Co-Authored-By` does in git. Prompts can be
+  documents (doctype `prompt`). LLM summaries are `summary` renditions for
+  any document, indexed, going stale with what they summarize. Replay of LLM
+  steps: AR4b, open.
+- AR5: a multi-file HTML artifact lives in a source; its rendition points
+  at the entry page there.
 
 **S12. Lessons from a research session run through kb.** *(decided and built 2026-11-01)*
 - Back links: every reference is shown from both ends (`kb item links`,
