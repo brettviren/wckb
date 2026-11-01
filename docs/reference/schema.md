@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.4) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.5) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -203,8 +203,9 @@ One concrete data source that renditions and asset bindings refer to, such as a 
 
 | field | required | type | description |
 |---|---|---|---|
-| `source_type` | yes | `datalad` \| `git` \| `filesystem` | The kind of source (kb source types lists them). |
-| `source_id` | yes | string | The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a git repository, git:<first commit>; for a filesystem, its root name (as in filesystems.NAME and fs bindings). |
+| `source_type` | yes | `datalad` \| `git` \| `filesystem` \| `indico` | The kind of source (kb source types lists them). |
+| `service` |  | string | For a source kb fills from a web service: the service's URL (for indico, the Indico site, such as https://indico.bnl.gov). |
+| `source_id` | yes | string | The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a git repository, git:<first commit>; for a filesystem, its root name (as in filesystems.NAME and fs bindings); for indico (a DataLad dataset filled from an Indico site), the dataset ID. |
 | `urls` |  | list of string | Where it can be cloned or fetched from (for DataLad: anything datalad clone accepts: https, ssh, ria+...). |
 | `paths` |  | list of object | Local file trees holding it, by host (a shared filesystem path is usable by everyone on that host). |
 

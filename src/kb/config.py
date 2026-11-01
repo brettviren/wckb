@@ -175,6 +175,20 @@ def find_root(start: Path | None = None, root: Path | None = None) -> Path:
     return store_context(start, root).location
 
 
+def toml_text(data: dict, about: str = "") -> str:
+    """DATA as TOML, in the form of a config file (TOML has no null: such keys are left out)."""
+    import tomli_w
+
+    def clean(v):
+        if isinstance(v, dict):
+            return {k: clean(x) for k, x in v.items() if x is not None}
+        if isinstance(v, list):
+            return [clean(x) for x in v if x is not None]
+        return v
+    head = f"# {about}\n" if about else ""
+    return head + tomli_w.dumps(clean(data))
+
+
 def _merge(base: dict, over: dict) -> dict:
     out = dict(base)
     for k, v in over.items():

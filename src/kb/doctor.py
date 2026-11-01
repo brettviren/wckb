@@ -354,7 +354,8 @@ def _refresh(kb, f):
 
 
 def _datalad_sources(kb):
-    return [r for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") == "datalad"]
+    from .datasets import ANNEX_TYPES
+    return [r for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") in ANNEX_TYPES]
 
 
 @remedy("datalad-support", "DataLad sources in use, but DataLad support is not installed")
@@ -394,7 +395,7 @@ def _clones(kb):
     for rec in kb.items.values():
         if rec.kind != "source" or rec.data.get("source_type") not in REPO_TYPES:
             continue
-        if rec.data["source_type"] == "datalad" and available() is not None:
+        if rec.data["source_type"] != "git" and available() is not None:
             continue
         if rec.id in used and locate(kb, rec) is None:
             out.append(Finding("clones", f"{rec.id} ({rec.data.get('title')}) is not cloned here",

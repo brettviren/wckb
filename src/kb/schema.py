@@ -18,7 +18,7 @@ from .errors import KBError
 from .ids import KINDS
 
 MAJOR = 1
-REVISION = "1.4"
+REVISION = "1.5"
 BASE_URI = "https://schemas.kb.invalid/v%d/"
 
 

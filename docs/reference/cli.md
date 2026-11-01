@@ -370,7 +370,8 @@ Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  show  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
+  show  All store settings, as TOML that could be a config file (the config files and .kb/local.toml
+        apply on top).
   get   One setting (KEY or KEY.SUB).
   set   Set KEY (or KEY.SUB) to VALUE (JSON if it parses, else a string); 'null' removes it.
 ```
@@ -380,9 +381,11 @@ Commands:
 ```
 Usage: kb config show [OPTIONS]
 
-  All store settings (this machine's .kb/local.toml and your config.toml apply on top).
+  All store settings, as TOML that could be a config file (the config files and .kb/local.toml apply
+  on top).
 
 Options:
+  --json      As JSON instead of TOML.
   -h, --help  Show this message and exit.
 ```
 
@@ -941,12 +944,13 @@ Commands:
   show   One source: its identity, where it can be had from, its clone here, and the items using it.
   add    Describe a source (local paths and/or URLs naming it) as a source item, so items can refer
          to it.
+  share  Share a source directory among the users of this computer (or stop, with --unshare).
   clone  Make sure this machine has a clone of source REF (content is still fetched only when
          needed).
   link   Tell kb that PATH is a clone of source REF (checked by dataset ID); every store of yours
          will use it.
-  types  Kinds of data source: location sources (where a rendition's bytes are) and asset sources
-         (what bindings use).
+  types  Kinds of data source: source items (what kb source add makes), location sources (where a
+         rendition's bytes are) and asset sources (what bindings use).
 ```
 
 ## kb source list
@@ -980,25 +984,71 @@ Usage: kb source add [OPTIONS] TARGETS...
 
   Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
-  The type is guessed from TARGETS unless --type says: datalad (a DataLad dataset), git (a git
+  The type is guessed from TARGETS unless --type says: datalad (a DataLad dataset), indico (an
+  Indico site's dataset: a URL whose host has the label 'indico', or such a dataset), git (a git
   repository without DataLad), filesystem (a plain directory: only with --type filesystem). Adding a
   source this store already describes gives it the new URLs and paths instead.
+
+  From the URL of a category or event of an Indico site, kb makes the site's DataLad dataset (once)
+  and ingests what the URL names into it with git-annex-remote-indico, under datalad run.
 
     kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
     kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
     kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+    kb source add https://indico.bnl.gov/category/201/ -o since=2025-01-01   # the site's dataset, ingested
+    kb source add --shared --target /srv/datalad/indico/bnl https://indico.bnl.gov/event/27078/   # as its owner
+    kb source add --shared /srv/datalad/indico/bnl     # a shared clone of it, for you
     kb source add --type filesystem /eos/group/talks --name eos-talks   # a directory tree (never guessed)
     kb source add --just-guess https://example.org/x   # what kind of source is this?
 
 Options:
-  --type TEXT     The kind of source (kb source types); default: guessed from TARGETS.
-  --just-guess    Only say which type would be used (or why none fits); add nothing.
-  --name TEXT     Identity for a source without one of its own (a filesystem tree; default: its
-                  directory name).
+  --type TEXT             The kind of source (kb source types); default: guessed from TARGETS.
+  --just-guess            Only say which type would be used (or why none fits); add nothing.
+  --name TEXT             Identity for a source without one of its own (a filesystem tree; default:
+                          its directory name).
   --title TEXT
   --summary TEXT
-  --no-check      Don't check that the TARGETS name one and the same source.
-  -h, --help      Show this message and exit.
+  --no-check              Don't check that the TARGETS name one and the same source.
+  --target DIRECTORY      Where a source made from a URL goes (a clone, an Indico site's dataset);
+                          default: derived from the URL. With --shared and a local dataset: where
+                          your shared clone goes.
+  --shared                Share it among the users of this computer: a source made from a URL is
+                          made shared (as its owner); a local dataset gets a shared clone here (its
+                          annex is the owner's).
+  --group TEXT            With --shared: the Unix group (default: that of the target's directory).
+  -o, --option KEY=VALUE  An option of the source type (kb source types lists them), e.g. -o
+                          since=2025-01-01.
+  -h, --help              Show this message and exit.
+```
+
+## kb source share
+
+```
+Usage: kb source share [OPTIONS] TARGET
+
+  Share a source directory among the users of this computer (or stop, with --unshare).
+
+  TARGET is a directory, or a source item (src-...) that is on this machine. What is done depends on
+  the directory's role:
+
+  - an owner's directory (a dataset, repository or directory tree): shared
+    with the group: core.sharedRepository=group, the group's permissions,
+    setgid directories (run again, it repairs); --unshare takes the group's
+    write permission away (it may still read);
+  - a shared clone of someone's dataset (kb source add --shared PATH made
+    one): set up to put what it gets where the group can read it, trusting
+    the owner's repository; --unshare gives it an annex of its own (what it
+    had must be got again).
+
+    kb source share /srv/datalad/indico/bnl            # as its owner
+    kb source share ~/.cache/wckb/indico/bnl-1a2b3c4d  # your clone made by hand
+    kb source share --unshare src-...
+
+Options:
+  --unshare     Stop sharing it instead.
+  --type TEXT   The kind of source (default: guessed from the directory).
+  --group TEXT  The Unix group to share with (default: that of the directory).
+  -h, --help    Show this message and exit.
 ```
 
 ## kb source clone
@@ -1031,8 +1081,8 @@ Options:
 ```
 Usage: kb source types [OPTIONS]
 
-  Kinds of data source: location sources (where a rendition's bytes are) and asset sources (what
-  bindings use).
+  Kinds of data source: source items (what kb source add makes), location sources (where a
+  rendition's bytes are) and asset sources (what bindings use).
 
 Options:
   --json

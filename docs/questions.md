@@ -492,9 +492,27 @@ Status:
   With it, Indico material reaches kb as a `datalad` source with no
   `indico` source type in kb. Its token comes from git config
   (`indico.<url>.tokencommand`, pass style), not `kb.secrets`.
+- Built (2026-11-01): kb's source type `indico`. `kb source add URL`
+  recognizes Indico URLs (a host label `indico`, or `--type indico`), makes
+  the site's dataset and ingests the URL under `datalad run`. `--shared`
+  makes shared datasets and shared clones; `kb source share` shares or
+  unshares (DS6).
 - Open: does kb still want a native `indico` asset source, or should
   `PlannedSource("indico")` be dropped in favour of the dataset route?
-  Should `kb source add` recognize an Indico URL and suggest the ingest?
+  `git indico ingest` prints "staged; commit with git commit, or datalad
+  save" even under `datalad run`, which commits; should it know?
+
+**DS6. Sharing sources on one computer.** *(exploring)*
+- Today: for DataLad and Indico datasets, the owner's shared dataset and
+  users' ephemeral shared clones (`kb.sharing`). `git` and `filesystem`
+  sources are shared only as owners, by permissions (`kb source share`).
+  `kb source add --shared` with a git URL is refused.
+- Open: sharing arbitrary URL downloads (`sources.url.dir`) and future web
+  services (DocDB). Do they want a group cache directory, with hardlinks
+  (which `fs.protected_hardlinks` blocks for read-only files of other
+  users)? Is one shared directory per source type (`sources.<type>.shared_dir`)
+  the right default place? Should `--unshare` of the owner's dataset also
+  take the group's read permission away?
 
 **DS3. Credentials for sources.** *(leaning)*
 - Reuse `kb.secrets` specs per source, as forges do (for example

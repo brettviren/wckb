@@ -257,8 +257,11 @@ to be right; please fix the other place.
   Source types: `datalad` (identity: the dataset ID, or `git:<first commit>`
   for a dataset without one, accepted with a warning), `git` (a git
   repository without DataLad or git-annex; identity: `git:<first commit>`)
-  and `filesystem` (a named directory tree; identity: its name; never
-  guessed, only with `--type filesystem`).
+  `filesystem` (a named directory tree; identity: its name; never
+  guessed, only with `--type filesystem`) and `indico` (a DataLad dataset
+  filled from an Indico site by git-annex-remote-indico; identity: the
+  dataset ID; `service`: the site's URL). A type may *make* its source from
+  a URL (`--target` says where); `-o KEY=VALUE` gives a type its own options.
   `kb source add` guesses a target's source type (or takes `--type`).
   *Code:* kind `source`, `kb.sources` (types, `guess`, `add`),
   `kb.datasets`, `kb source list|show|add`.
@@ -269,6 +272,15 @@ to be right; please fix the other place.
   (`kb.datasets.locate`: explicit `datasets.<id>.path`, kb's clone registry
   `datasets.toml`, the item's paths for this host, the source directory).
   *Code:* `kb source clone`, `kb source link`.
+
+**shared source**
+: A source directory shared by a Unix group on one computer, in one of two
+  roles. The *owner's* directory (a *shared dataset*) has its permissions
+  open to the group: `core.sharedRepository=group`, setgid directories. A
+  *shared clone* is a user's DataLad clone of a shared dataset made with
+  `--reckless ephemeral`; its annex is the owner's, so a file got in any
+  clone is stored once. *Code:* `kb.sharing`, `kb source add --shared`,
+  `kb source share [--unshare]`.
 
 **source directory**
 : Where a source type keeps new local copies: `sources.<type>.dir`, by

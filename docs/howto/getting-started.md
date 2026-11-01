@@ -49,7 +49,8 @@ A store is one SQLite file, `kb.sqlite`, in a directory. Next to it, `.kb/`
 holds this machine's settings (`local.toml`), a cache and a build area.
 
 - **Settings live in the store.** Manage them with `kb config show`,
-  `kb config get` and `kb config set`.
+  `kb config get` and `kb config set`. `kb config show` prints TOML that
+  could serve as a config file (`--json` for JSON).
 - **The database enforces append-only.** You never edit it directly; every
   change goes through `kb`.
 - **Each command uses its store context's store.** In a git working tree

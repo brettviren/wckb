@@ -162,7 +162,7 @@ rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract 
                       order=["path", "add", "extract", "transforms", "locate", "verify"])
 asset_grp = group("asset", "Assets: abstract files and file sets, their versions, and the sources that supply them.")
 source_grp = group("source", "Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.",
-                   order=["list", "show", "add", "clone", "link", "types"])
+                   order=["list", "show", "add", "share", "clone", "link", "types"])
 kset_grp = group("kset", "Knowledge sets: selections of items, the unit of transfer.")
 edge_grp = group("edge", "Edges to neighbor stores (up, down, peer, twin), and what moved along them.",
                  order=["list", "add", "remove", "fetch", "candidates", "ledger"])
@@ -1192,10 +1192,14 @@ def kset_expand_cmd(c, ref, json_out):
 # -- store settings, content, history ------------------------------------------------
 
 @command(config_grp, "show")
+@click.option("--json", "json_out", is_flag=True, help="As JSON instead of TOML.")
 @pass_ctx
-def config_show_cmd(c):
-    """All store settings (this machine's .kb/local.toml and your config.toml apply on top)."""
-    ui.emit_json(c.kb.settings())
+def config_show_cmd(c, json_out):
+    """All store settings, as TOML that could be a config file (the config files and .kb/local.toml apply on top)."""
+    if json_out:
+        return ui.emit_json(c.kb.settings())
+    from .config import toml_text
+    sys.stdout.write(toml_text(c.kb.settings(), f"settings of the store {c.kb.cfg.name} ({c.kb.root})"))
 
 
 @command(config_grp, "get", no_args_is_help=True)
@@ -1480,16 +1484,20 @@ def asset_resolve_cmd(c, ref, member, dest, no_remote, json_out):
 @command(source_grp, "types")
 @click.option("--json", "json_out", is_flag=True)
 def source_types_cmd(json_out):
-    """Kinds of data source: location sources (where a rendition's bytes are) and asset sources (what bindings use)."""
+    """Kinds of data source: source items (what kb source add makes), location sources (where a rendition's
+    bytes are) and asset sources (what bindings use)."""
     from .assets import sources_table as asset_sources
     from .locations import sources_table as location_sources
-    rows = location_sources() + asset_sources()
+    from .sources import types_table
+    rows = types_table() + location_sources() + asset_sources()
     if json_out:
         return ui.emit_json(rows)
     for r in rows:
         state = r["status"] if r["available"] or r["status"] != "implemented" else "unavailable"
         click.echo(f"{r['interface']:<9} {r['type']:<8} {state:<12} {r['what']}"
                    + (f"  locator {r['locator']}" if r.get("locator") else ""))
+        for k, v in (r.get("options") or {}).items():
+            click.echo(f"{'':<31}-o {k}=...: {v}")
         if r.get("needs"):
             click.echo(f"{'':<31}needs: {r['needs']}")
 
@@ -1526,19 +1534,38 @@ def source_list_cmd(c, json_out):
 @click.option("--title")
 @click.option("--summary")
 @click.option("--no-check", is_flag=True, help="Don't check that the TARGETS name one and the same source.")
+@click.option("--target", type=click.Path(file_okay=False, path_type=Path),
+              help="Where a source made from a URL goes (a clone, an Indico site's dataset); default: derived from "
+                   "the URL. With --shared and a local dataset: where your shared clone goes.")
+@click.option("--shared", is_flag=True,
+              help="Share it among the users of this computer: a source made from a URL is made shared (as its "
+                   "owner); a local dataset gets a shared clone here (its annex is the owner's).")
+@click.option("--group", help="With --shared: the Unix group (default: that of the target's directory).")
+@click.option("-o", "--option", "options", multiple=True, metavar="KEY=VALUE",
+              help="An option of the source type (kb source types lists them), e.g. -o since=2025-01-01.")
 @pass_ctx
-def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no_check):
+def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no_check, target, shared, group,
+                   options):
     """Describe a source (local paths and/or URLs naming it) as a source item, so items can refer to it.
 
     The type is guessed from TARGETS unless --type says: datalad (a DataLad
-    dataset), git (a git repository without DataLad), filesystem (a plain
-    directory: only with --type filesystem). Adding a source this store
-    already describes gives it the new URLs and paths instead.
+    dataset), indico (an Indico site's dataset: a URL whose host has the
+    label 'indico', or such a dataset), git (a git repository without
+    DataLad), filesystem (a plain directory: only with --type filesystem).
+    Adding a source this store already describes gives it the new URLs and
+    paths instead.
+
+    From the URL of a category or event of an Indico site, kb makes the
+    site's DataLad dataset (once) and ingests what the URL names into it
+    with git-annex-remote-indico, under datalad run.
 
     \b
       kb source add ~/data/tpc-calib                     # a DataLad dataset you have (its remotes are recorded)
       kb source add ~/data/tpc-calib https://github.com/org/tpc-calib.git   # a clone and where it is shared
       kb source add https://github.com/org/tpc-calib.git  # cloned into sources.datalad.dir to learn its ID
+      kb source add https://indico.bnl.gov/category/201/ -o since=2025-01-01   # the site's dataset, ingested
+      kb source add --shared --target /srv/datalad/indico/bnl https://indico.bnl.gov/event/27078/   # as its owner
+      kb source add --shared /srv/datalad/indico/bnl     # a shared clone of it, for you
       kb source add --type filesystem /eos/group/talks --name eos-talks   # a directory tree (never guessed)
       kb source add --just-guess https://example.org/x   # what kind of source is this?
     """
@@ -1553,9 +1580,55 @@ def source_add_cmd(c, targets, source_type, just_guess, name, title, summary, no
             return
         click.echo(f"cannot guess: {g.explain()}")
         sys.exit(1)
-    rec = sources.add(c.kb, list(targets), source_type, title, summary, check=not no_check, name=name)
+    opts = {}
+    for o in options:
+        k, eq, v = o.partition("=")
+        if not eq or not k:
+            raise KBError(f"-o wants KEY=VALUE, got {o!r}")
+        opts[k.strip()] = v.strip()
+    if group and not shared:
+        raise KBError("--group goes with --shared")
+    rec = sources.add(c.kb, list(targets), source_type, title, summary, check=not no_check, name=name,
+                      target=target, shared=shared, group=group, options=opts)
     click.echo(rec.id)
     ui.info(f"{rec.data['title']}: {rec.data['source_type']} source {rec.data['source_id']}")
+
+
+@command(source_grp, "share", no_args_is_help=True)
+@click.argument("target")
+@click.option("--unshare", is_flag=True, help="Stop sharing it instead.")
+@click.option("--type", "source_type", help="The kind of source (default: guessed from the directory).")
+@click.option("--group", help="The Unix group to share with (default: that of the directory).")
+@pass_ctx
+def source_share_cmd(c, target, unshare, source_type, group):
+    """Share a source directory among the users of this computer (or stop, with --unshare).
+
+    TARGET is a directory, or a source item (src-...) that is on this machine.
+    What is done depends on the directory's role:
+
+    \b
+    - an owner's directory (a dataset, repository or directory tree): shared
+      with the group: core.sharedRepository=group, the group's permissions,
+      setgid directories (run again, it repairs); --unshare takes the group's
+      write permission away (it may still read);
+    - a shared clone of someone's dataset (kb source add --shared PATH made
+      one): set up to put what it gets where the group can read it, trusting
+      the owner's repository; --unshare gives it an annex of its own (what it
+      had must be got again).
+
+    \b
+      kb source share /srv/datalad/indico/bnl            # as its owner
+      kb source share ~/.cache/wckb/indico/bnl-1a2b3c4d  # your clone made by hand
+      kb source share --unshare src-...
+    """
+    from . import sources
+    kb = None
+    if target.startswith("src-"):
+        kb = c.kb
+    kind, path, done = sources.share(kb, target, source_type, group, unshare)
+    for line in done or ["nothing to do"]:
+        ui.info(line)
+    click.echo(f"{path}\t{kind}\t{'not shared' if unshare else 'shared'}")
 
 
 @command(source_grp, "show", no_args_is_help=True)
@@ -1576,7 +1649,7 @@ def source_show_cmd(c, ref, json_out):
         click.echo(f"  url    {u}")
     for p in r["paths"]:
         click.echo(f"  path   {p['host']}:{p['path']}")
-    hint = f"kb source clone {r['id']}" if r["type"] == "datalad" else "mount it, or set filesystems." + r["source_id"] + ".path"
+    hint = f"kb source clone {r['id']}" if r["type"] in ("datalad", "indico", "git") else "mount it, or set filesystems." + r["source_id"] + ".path"
     click.echo(f"  here   {r['here'] or 'not on this machine (' + hint + ')'}")
     if r["same_as"]:
         click.echo(f"  same source as {', '.join(r['same_as'])} (one local copy serves them all)")

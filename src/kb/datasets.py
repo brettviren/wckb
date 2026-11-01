@@ -49,8 +49,11 @@ from .errors import KBError
 from .items import Item, Store
 
 SOURCE_TYPE = "datalad"
-REPO_TYPES = ("datalad", "git")
-LABEL = {"datalad": "DataLad dataset", "git": "git repository"}
+#: Source types that are DataLad datasets (git + git-annex), identified by dataset ID: ``indico`` is a
+#: dataset filled from an Indico site (see kb.indico).
+ANNEX_TYPES = ("datalad", "indico")
+REPO_TYPES = ANNEX_TYPES + ("git",)
+LABEL = {"datalad": "DataLad dataset", "indico": "DataLad dataset of an Indico site", "git": "git repository"}
 INSTALL = "pip install 'wckb[datalad]' (or uv tool install --editable '.[datalad]'), and git-annex"
 
 # Set by the CLI when a person can be asked where a new clone goes: (source item, suggestion) -> path or None.
@@ -174,7 +177,9 @@ def _slug(text: str) -> str:
 # -- source items -------------------------------------------------------------------------
 
 def sources_for(kb: Store, uuid: str, kind: str = SOURCE_TYPE) -> list[Item]:
-    return [r for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") == kind
+    """Source items for the repository with this identity (any of ANNEX_TYPES for a dataset)."""
+    kinds = ANNEX_TYPES if kind in ANNEX_TYPES else (kind,)
+    return [r for r in kb.items.values() if r.kind == "source" and r.data.get("source_type") in kinds
             and r.data.get("source_id") == uuid]
 
 
@@ -281,12 +286,14 @@ NO_ID_WARNING = ("no .datalad/config: this dataset has no DataLad dataset ID (da
 
 
 def describe(kb: Store, targets: list[str] | str, title: str | None = None, summary: str | None = None,
-             check: bool = True, kind: str = SOURCE_TYPE, warn: Callable[[str], None] = _warn) -> Item:
+             check: bool = True, kind: str = SOURCE_TYPE, warn: Callable[[str], None] = _warn,
+             dest: Path | None = None, extra: dict | None = None) -> Item:
     """The source item for one dataset given by TARGETS: local clones and/or URLs it can be cloned from.
 
     With a local clone, nothing is cloned; given URLs are checked to share its history (unless not
-    CHECK).  With URLs only, the first is cloned to learn the dataset's identity.  An existing item
-    for the same dataset gains the new URLs and paths."""
+    CHECK).  With URLs only, the first is cloned (to DEST, else into the source directory) to learn
+    the dataset's identity.  An existing item for the same dataset gains the new URLs and paths.
+    EXTRA: more fields for a new item."""
     targets = [targets] if isinstance(targets, str) else list(targets)
     local = [Path(t).expanduser().resolve() for t in targets if Path(t).expanduser().exists()]
     given = [t for t in targets if not Path(t).expanduser().exists()]
@@ -297,11 +304,11 @@ def describe(kb: Store, targets: list[str] | str, title: str | None = None, summ
     if local:
         ids = {}
         for root in local:
-            ok, why = (recognize if kind == "datalad" else recognize_git)(str(root))
+            ok, why = (recognize if kind in ANNEX_TYPES else recognize_git)(str(root))
             uuid = identity(root, kind) if ok else None
             if uuid is None:
                 raise KBError(f"{root}: {why}")
-            if kind == "datalad" and dataset_id(root) is None:
+            if kind in ANNEX_TYPES and dataset_id(root) is None:
                 warn(f"{root}: {NO_ID_WARNING}")
             ids[root] = uuid
         if len(set(ids.values())) > 1:
@@ -316,12 +323,12 @@ def describe(kb: Store, targets: list[str] | str, title: str | None = None, summ
         urls = list(dict.fromkeys(given + known))
         paths = [{"host": kb.cfg.host, "path": str(r)} for r in local]
     else:
-        root = _clone_from(kb, given, None, title or _slug(Path(given[0].rstrip("/")).name.removesuffix(".git")),
+        root = _clone_from(kb, given, dest, title or _slug(Path(given[0].rstrip("/")).name.removesuffix(".git")),
                            kind)
         uuid = identity(root, kind)
         if uuid is None:
             raise KBError(f"cloned {given[0]} to {root}, but it is not a {label} (or has no commits)")
-        if kind == "datalad" and dataset_id(root) is None:
+        if kind in ANNEX_TYPES and dataset_id(root) is None:
             warn(f"{given[0]}: {NO_ID_WARNING}")
         urls, paths = list(dict.fromkeys(given + remote_urls(root))), []
     remember(uuid, root)
@@ -332,7 +339,7 @@ def describe(kb: Store, targets: list[str] | str, title: str | None = None, summ
     name = title or root.name
     return authoring.new(kb, "source", {
         "title": name, "summary": summary or f"The {label} {name}.",
-        "source_type": kind, "source_id": uuid, "urls": urls, "paths": paths})
+        "source_type": kind, "source_id": uuid, "urls": urls, "paths": paths, **(extra or {})})
 
 
 def add_places(kb: Store, rec: Item, urls: list[str], paths: list[dict]) -> Item:
@@ -437,7 +444,7 @@ def _clone(kb: Store, uuid: str, kind: str = SOURCE_TYPE, dest: Path | None = No
 
 
 def _clone_from(kb: Store, origins: list[str], dest: Path | None, name: str, kind: str = SOURCE_TYPE) -> Path:
-    if kind == "datalad":
+    if kind in ANNEX_TYPES:
         need()
     if not origins:
         raise KBError(f"no URL or local path to clone the {LABEL[kind]} from (kb source add URL adds one)")
@@ -452,7 +459,7 @@ def _clone_from(kb: Store, origins: list[str], dest: Path | None, name: str, kin
     errors = []
     for o in origins:
         try:
-            if kind == "datalad":
+            if kind in ANNEX_TYPES:
                 import datalad.api as dl
                 dl.clone(source=o, path=str(dest), result_renderer="disabled")
             else:

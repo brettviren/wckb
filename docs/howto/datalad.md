@@ -116,6 +116,87 @@ kb source clone src-… [--to DIR]
 URL downloads follow the same pattern: `sources.url.dir`, by default
 `~/.cache/wckb/url/`.
 
+## Indico sites
+
+An Indico site becomes a DataLad dataset filled by
+[git-annex-remote-indico](https://github.com/brettviren/git-annex-remote-indico)
+(install it: `uv tool install git+https://github.com/brettviren/git-annex-remote-indico`).
+Give `kb source add` the URL of a category or event:
+
+```
+kb source add https://indico.bnl.gov/category/201/ -o since=2025-01-01
+kb source add https://indico.bnl.gov/event/27078/            # into the same dataset
+datalad get ~/.cache/wckb/indico/indico.bnl.gov/indico.bnl.gov/event/27078
+```
+
+- A URL is an Indico URL when a label of its host name is `indico`;
+  otherwise say `--type indico`.
+- kb makes the site's dataset once, in `sources.indico.dir/HOST` (by default
+  `~/.cache/wckb/indico/indico.bnl.gov`), or at `--target DIR`. Each add
+  ingests what the URL names under `datalad run`, so `datalad rerun`
+  refreshes it.
+- The source item (type `indico`, identity the dataset ID) records the site
+  as `service`. Later URLs of the site go into the dataset that item has here.
+- `-o KEY=VALUE` passes options to `git indico ingest`: `since`, `until`,
+  `max-size`, `type`, `materials`, `events` (`kb source types` lists them).
+- Tokens are git-annex-remote-indico's (git config `indico.<url>.tokencommand`),
+  not kb's.
+
+## Sharing among the users of one computer
+
+Several people on one computer can share a dataset, so that each file is
+stored once. One user owns the **shared dataset** (a person, or an account
+such as `datalad`). Everyone else works in a **shared clone** of it, whose
+annex is the owner's. Both need a Unix group they are all in.
+
+As the owner, make the source shared:
+
+```
+kb source add --shared --target /srv/datalad/indico/bnl https://indico.bnl.gov/category/201/ -o since=2025-01-01
+kb source add --shared --target /srv/datalad/tpc-calib https://github.com/org/tpc-calib.git
+```
+
+`--shared` with a URL makes the source as its owner would. The dataset gets
+`core.sharedRepository=group`, the group's permissions and setgid
+directories. `--group` names the group; by default it is the group of the
+target's directory. Without `--target`, shared sources go in
+`sources.<type>.shared_dir`.
+
+As a user, make your shared clone:
+
+```
+kb source add --shared /srv/datalad/indico/bnl
+```
+
+`--shared` with a local dataset makes a DataLad clone with `--reckless
+ephemeral`, in your source directory or at `--target`. The clone has
+`core.sharedRepository` set. If the dataset belongs to another user, kb
+adds it to git's `safe.directory`. `datalad get` in your clone stores the
+file once, in the owner's dataset. Adding another URL of an Indico site
+whose dataset you have as a shared clone ingests it into the owner's
+dataset, then merges it into your clone.
+
+`kb source share` does the same to a directory you already have, by its
+role:
+
+```
+kb source share /srv/datalad/indico/bnl              # the owner's: (re)share it, repair permissions
+kb source share ~/indico/bnl                         # a shared clone made by hand: set it up
+kb source share --unshare /srv/datalad/indico/bnl    # the owner's: the group may read, no longer add
+kb source share --unshare ~/indico/bnl               # a shared clone: give it an annex of its own
+kb source share --type filesystem /eos/group/talks   # a plain directory tree (only with --type)
+```
+
+Things to know:
+
+- **Don't drop in a shared clone.** `datalad drop` there removes the file
+  for everyone. Drop in the owner's dataset.
+- **What you get, the group can read.** git-annex-remote-indico refuses the
+  files of protected events in a shared dataset or clone, unless
+  `indico.<url>.shareprotected` is true.
+- **The owner's dataset doesn't know what clones got** until
+  `git annex fsck --fast` runs in it.
+
 ## Versioned material: assets from a dataset
 
 An [asset](assets.md) can bind to a dataset. Its versions are the dataset's

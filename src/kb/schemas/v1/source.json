@@ -22,11 +22,17 @@
       "enum": [
         "datalad",
         "git",
-        "filesystem"
+        "filesystem",
+        "indico"
       ]
     },
+    "service": {
+      "description": "For a source kb fills from a web service: the service's URL (for indico, the Indico site, such as https://indico.bnl.gov).",
+      "type": "string",
+      "minLength": 1
+    },
     "source_id": {
-      "description": "The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a git repository, git:<first commit>; for a filesystem, its root name (as in filesystems.NAME and fs bindings).",
+      "description": "The source's own global identity: for DataLad, the dataset ID (a UUID), or git:<first commit> for a dataset without one; for a git repository, git:<first commit>; for a filesystem, its root name (as in filesystems.NAME and fs bindings); for indico (a DataLad dataset filled from an Indico site), the dataset ID.",
       "type": "string",
       "minLength": 1
     },
