@@ -16,6 +16,7 @@ Deliverables:
 | Store contexts: which store a command uses (`--context`, `KB_CONTEXT`, `git-directory`) | `src/kb/config.py` | done |
 | Logging: daily files, `-l`, `-L`, `--debug` | `src/kb/logs.py` | done |
 | Indico sources: DataLad datasets filled by git-annex-remote-indico (`kb source add URL`) | `src/kb/indico.py`, `sources.py` | done |
+| `kb add`: metadata found (arXiv, PDF, EXIF); `--target` copies into a source | `src/kb/metadata.py`, `authoring.py` | done |
 | Shared sources on one computer: shared datasets, shared clones (`--shared`, `kb source share`) | `src/kb/sharing.py` | done |
 | The SQLite store: items, blobs, events, settings, inbox; guard triggers; transactions | `src/kb/db.py`, `items.py` | done |
 | Data sources (polymorphic): db, cas, url, local, asset, datalad | `src/kb/locations.py`, `content.py` | done |

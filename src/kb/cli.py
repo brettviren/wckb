@@ -338,15 +338,27 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.option("--supersedes", "supersedes", help="This is a new version of that item.")
 @click.option("--extract", is_flag=True, help="Run kb rendition extract afterwards.")
 @click.option("--force", is_flag=True, help="Add even if an identifier is already in this store.")
+@click.option("--target", type=click.Path(),
+              help="Copy the file(s) here (a directory: one that exists, or a path ending in /; else the new file's path). In a source (a DataLad dataset, a "
+                   "git repository or filesystem tree described here) the source takes it in: datalad save, git commit.")
+@click.option("--no-guess", is_flag=True, help="Don't look for metadata in the files or at arXiv.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract, force, json_out, via, **kw):
+def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract, force, target, no_guess,
+            json_out, via, **kw):
     """Add files or URLs as a new primary item (default kind: document).
 
+    Metadata is looked for in what is added, and given options override
+    it: an arXiv URL (or --identifier arxiv=ID, or an arXiv ID on a PDF's
+    first page) gives title, authors, date, abstract and more from arXiv; a
+    PDF its document information and DOI; an image its EXIF. kb says what
+    it found; --no-guess turns this off.
+
     \b
+      kb add https://arxiv.org/abs/2601.01234            # everything from arXiv; the PDF is added
       kb add slides.pdf --url https://indico.example/... --set doctype=presentation \\
          --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
-      kb add https://arxiv.org/pdf/2601.01234 --identifier arxiv=2601.01234 --set doctype=preprint ...
+      kb add slides.pdf --target ~/data/talks/          # copied into a dataset there, and datalad saved
       kb add noise.csv make_noise.py --kind dataset --set format=csv --title ... --runs 1200-1300
     """
     from . import authoring, transforms
@@ -355,7 +367,7 @@ def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract
     if supersedes:
         fields["supersedes"] = [kb.get(supersedes).id]
     rec = authoring.add(kb, kind, list(sources), fields, mode=mode, cas_name=cas_name, url=url,
-                        fetch=not no_fetch, force=force, via=via)
+                        fetch=not no_fetch, force=force, via=via, target=target, guess=not no_guess)
     if extract:
         try:
             r = transforms.extract(kb, rec)

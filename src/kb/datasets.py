@@ -354,11 +354,17 @@ def add_places(kb: Store, rec: Item, urls: list[str], paths: list[dict]) -> Item
     return kb.save(Item(data, kb), "source", {"urls": urls, "paths": paths})
 
 
-def ensure_source(kb: Store, root: Path) -> Item:
-    """The source item for the dataset at *root*, made if this store has none."""
+def ensure_source(kb: Store, root: Path, kind: str = SOURCE_TYPE) -> Item:
+    """The source item for the dataset at *root*, made (as KIND) if this store has none."""
     uuid = identity(root)
     have = sources_for(kb, uuid) if uuid else []
-    return have[0] if have else describe(kb, [str(root)])
+    if have:
+        return have[0]
+    extra = None
+    if kind == "indico":
+        from .indico import sites
+        extra = {"service": sites(root)[0]} if sites(root) else None
+    return describe(kb, [str(root)], kind=kind, extra=extra)
 
 
 # -- local clones -------------------------------------------------------------------------

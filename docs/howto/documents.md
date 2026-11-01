@@ -15,12 +15,14 @@ kb add ~/Downloads/noise-update.pdf \
   --extract
 ```
 
-**A paper on arXiv.** It's fetchable, so `kb` downloads it to hash it:
+**A paper on arXiv.** Give its URL (the abstract page or the PDF); `kb`
+asks arXiv for the rest and adds the PDF:
 
 ```
-kb add https://arxiv.org/pdf/2601.01234 --set doctype=preprint \
-  --identifier arxiv=2601.01234 --title "..." --summary "..." --creators "..." --date 2026-01 --extract
+kb add https://arxiv.org/abs/2601.01234 --subject detector/tpc/noise --extract
 ```
+
+See "Metadata kb finds" below.
 
 **A public URL you don't want to download now:**
 `--no-fetch` records the URL without a hash. `kb lint` will remind you, and
@@ -45,10 +47,52 @@ Where content can live is a pluggable set of *data sources* (`db`, `cas`,
 `url`, `local`, and `datalad` for DataLad datasets);
 see [storage](storage.md).
 
+## Metadata kb finds
+
+`kb add` looks for metadata in what it adds, and tells you what it found
+(`found title, creators, date in arXiv 2601.01234`). Options you give
+override it: `--title`, `--summary` and any `--set` win over any guess.
+`--no-guess` turns all of this off.
+
+| from | gives |
+|---|---|
+| an arXiv URL, `--identifier arxiv=ID`, or `arXiv:ID` on a PDF's first page | title, authors, date of the first version, abstract (its first sentences as the summary, all of it as the rendition `abstract`), categories as tags, DOI, journal reference (`venue`, and `doctype` paper; preprint otherwise), version |
+| a PDF's document information | title (not the "Microsoft Word - x.docx" kind), authors, subject as summary, creation date |
+| a PDF's first page | a DOI; a page wider than tall makes it a `presentation` |
+| an image's EXIF (or PNG text) | description as title, artist, date taken (`doctype` other) |
+
+PDFs are read with PyMuPDF if it is installed (`pip install 'wckb[pdf]'`),
+else with poppler's `pdfinfo` and `pdftotext`. Images are read with Pillow,
+else with `exiftool`. A file whose name doesn't say what it is (no
+extension) is recognized by its first bytes. An arXiv lookup that fails is
+a warning: give the metadata as options.
+
+## Copying into a source: `--target`
+
+`--target PATH` copies the file there: into the directory `PATH` if it
+exists or ends in `/`, else to the new file's path `PATH`. If the copy lands
+in a source, the source takes it in, and the rendition names the source:
+
+| the copy lands in | kb | the rendition's location |
+|---|---|---|
+| a DataLad dataset (an `indico` one too) | `datalad save`s it | `datalad` (source item, path, annex key) |
+| a git repository described here (`kb source add REPO`) | commits it (`git commit`) | `source` (source item, path) |
+| a filesystem tree described here (`--type filesystem`) | nothing more | `source` (source item, path) |
+| anything else | nothing more (a git repository that is not a source here is not committed into; kb says so) | as above, plus `local` for the copy |
+
+A dataset that is not yet a source here gets a source item, as for files
+already committed in one. A URL is fetched and then copied.
+
+```
+kb add slides.pdf --target ~/data/talks/2026/        # in a DataLad dataset: copied and saved
+kb add https://arxiv.org/abs/2601.01234 --target ~/papers/
+```
+
 ## Duplicates
 
 When an identifier (`doi`, `arxiv`, `indico`, ...) already appears in the
-KB, `kb add` refuses and names the existing item. Use `--force` only for
+KB, `kb add` refuses and names the existing item. Identifiers kb finds count
+too, and the check comes before anything is copied or committed. Use `--force` only for
 a genuinely different document that happens to share it.
 
 ## Text extraction

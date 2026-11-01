@@ -134,9 +134,15 @@ Usage: kb add [OPTIONS] SOURCES...
 
   Add files or URLs as a new primary item (default kind: document).
 
+  Metadata is looked for in what is added, and given options override it: an arXiv URL (or
+  --identifier arxiv=ID, or an arXiv ID on a PDF's first page) gives title, authors, date, abstract
+  and more from arXiv; a PDF its document information and DOI; an image its EXIF. kb says what it
+  found; --no-guess turns this off.
+
+    kb add https://arxiv.org/abs/2601.01234            # everything from arXiv; the PDF is added
     kb add slides.pdf --url https://indico.example/... --set doctype=presentation \
        --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
-    kb add https://arxiv.org/pdf/2601.01234 --identifier arxiv=2601.01234 --set doctype=preprint ...
+    kb add slides.pdf --target ~/data/talks/          # copied into a dataset there, and datalad saved
     kb add noise.csv make_noise.py --kind dataset --set format=csv --title ... --runs 1200-1300
 
 Options:
@@ -173,6 +179,11 @@ Options:
   --supersedes TEXT               This is a new version of that item.
   --extract                       Run kb rendition extract afterwards.
   --force                         Add even if an identifier is already in this store.
+  --target PATH                   Copy the file(s) here (a directory: one that exists, or a path
+                                  ending in /; else the new file's path). In a source (a DataLad
+                                  dataset, a git repository or filesystem tree described here) the
+                                  source takes it in: datalad save, git commit.
+  --no-guess                      Don't look for metadata in the files or at arXiv.
   --json
   -h, --help                      Show this message and exit.
 ```

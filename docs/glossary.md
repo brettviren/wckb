@@ -238,6 +238,13 @@ to be right; please fix the other place.
   | `local` | one host's path |
   | `asset` | an asset version (and `path`) |
   | `datalad` | a file in a DataLad dataset (a source item, a path, an annex key) |
+  | `source` | a file in a source's directory tree: a git repository or filesystem tree (a source item, a path) |
+
+**found metadata**
+: Fields `kb add` fills in from what it adds: arXiv's record, a PDF's
+  document information and first page, an image's EXIF. Given options
+  always win; `--no-guess` turns it off. *Code:* `kb.metadata`
+  (`Found`, `for_source`, `for_file`, `for_identifiers`).
 
 **data source**
 : Anything that can supply content. There are two interfaces:

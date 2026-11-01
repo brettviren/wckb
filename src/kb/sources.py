@@ -73,6 +73,11 @@ class SourceType:
         """Share (or stop sharing) the source directory PATH: what was done."""
         raise KBError(f"sharing {self.name} sources is not supported (yet)")
 
+    def put(self, kb: Store, rec: Item, root: Path, rel: str, message: str) -> dict:
+        """Take the file at REL in the source's tree (at ROOT here) into the source, as this type does;
+        the location that names it."""
+        return {"type": "source", "source": rec.id, "path": rel}
+
     def locate(self, kb: Store, rec: Item) -> Path | None:
         """Where the source is on this machine, if it is."""
         return None
@@ -151,6 +156,17 @@ class DataladType(SourceType):
                                 extra=self._extra(origin))
         datasets.remember(uuid, have)          # this user's clone, not the owner's directory
         return rec
+
+    def put(self, kb, rec, root, rel, message):
+        from . import content, datasets
+        datasets.need()
+        import datalad.api as dl
+        res = dl.save(dataset=str(root), path=[str(root / rel)], message=message, result_renderer="disabled",
+                      on_failure="ignore", return_type="list")
+        bad = [r for r in res if r.get("status") in ("error", "impossible")]
+        if bad:
+            raise KBError(f"datalad save {rel} in {root}: {bad[0].get('message')}")
+        return content.dataset_location(kb, root, rel)
 
     def share(self, path, how, unshare=False):
         from . import sharing
@@ -265,6 +281,13 @@ class GitType(DataladType):
         from . import sharing
         return sharing.unshare(path) if unshare else sharing.share(path, how.group)
 
+    def put(self, kb, rec, root, rel, message):
+        from .datasets import _git
+        _git(root, "add", "--", rel)
+        if _git(root, "diff", "--cached", "--quiet", "--", rel, check=False).returncode:
+            _git(root, "commit", "-q", "-m", message, "--", rel)
+        return SourceType.put(self, kb, rec, root, rel, message)      # a file in the tree, not a dataset
+
 
 class FilesystemType(SourceType):
     """A directory tree, named: the name is its identity, so the same tree mounted at different places
@@ -323,6 +346,28 @@ def _tell(line: str) -> None:
 def _origin_or(root: Path) -> Path:
     from .sharing import origin_of
     return origin_of(root) or root
+
+
+def containing(kb: Store, path: Path) -> tuple[Item, Path] | None:
+    """The source that holds PATH here: the innermost tree of a source item of this store, else a DataLad
+    dataset (described now, as its type); with its root here.  A git repository that is not a source here
+    is not taken (kb would commit into it): kb source add makes it one."""
+    path = Path(path).parent.resolve() / Path(path).name
+    best = None
+    for rec in kb.items.values():
+        t = TYPES.get(rec.data.get("source_type")) if rec.kind == "source" else None
+        root = t.locate(kb, rec) if t else None
+        if root is not None and path.is_relative_to(root.resolve()):
+            if best is None or len(root.resolve().parts) > len(best[1].parts):
+                best = (rec, root.resolve())
+    if best:
+        return best
+    from . import datasets, indico
+    root = datasets.dataset_root(path.parent)
+    if root is None:
+        return None
+    kind = "indico" if indico.sites(root) else "datalad"
+    return datasets.ensure_source(kb, root, kind), root
 
 
 def find(kb: Store, source_type: str, source_id: str) -> Item | None:

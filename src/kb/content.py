@@ -42,6 +42,24 @@ def media_type(name: str) -> str:
     return guess or "application/octet-stream"
 
 
+#: Leading bytes of kinds of file whose name may not say what they are.
+_MAGIC = ((b"%PDF-", "application/pdf"), (b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"),
+          (b"GIF8", "image/gif"), (b"II*\x00", "image/tiff"), (b"MM\x00*", "image/tiff"))
+
+
+def sniff(path: Path, name: str) -> str:
+    """The media type of the file at PATH: by NAME, else (when that says nothing) by its first bytes."""
+    mtype = media_type(name)
+    if mtype != "application/octet-stream":
+        return mtype
+    try:
+        with open(path, "rb") as f:
+            head = f.read(16)
+    except OSError:
+        return mtype
+    return next((t for magic, t in _MAGIC if head.startswith(magic)), mtype)
+
+
 def is_text(mtype: str) -> bool:
     return mtype.startswith("text/") or mtype in (
         "application/json", "application/jsonl", "application/yaml", "application/toml")
@@ -171,7 +189,16 @@ def _datalad_location(kb, src: Path, required: bool) -> dict | None:
         if required:
             raise KBError(f"{rel} is not committed (or has changed) in the dataset at {root}: datalad save it first")
         return None
-    srcitem = datasets.ensure_source(kb, root)
+    return dataset_location(kb, root, rel, tf)
+
+
+def dataset_location(kb, root: Path, rel: str, tf=None) -> dict:
+    """The datalad location of the committed file REL of the dataset at ROOT (its source item made if needed)."""
+    from . import datasets, indico
+    tf = tf or datasets.tracked(root, rel)
+    if tf is None:
+        raise KBError(f"{rel} is not committed (or has changed) in the dataset at {root}")
+    srcitem = datasets.ensure_source(kb, root, "indico" if indico.sites(root) else "datalad")
     loc = {"type": "datalad", "source": srcitem.id, "path": rel}
     if tf.key:
         loc["key"] = tf.key

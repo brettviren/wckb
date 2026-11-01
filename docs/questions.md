@@ -408,6 +408,18 @@ Status:
 - Should a broken diagnosis (an exception in a remedy) be reported more
   loudly than as a finding?
 
+**F4. Which metadata should `kb add` find next?** *(exploring)*
+- Today (`kb.metadata`): arXiv (URL, identifier, or the stamp on a PDF's
+  first page), a PDF's document information, a DOI on its first page, page
+  shape for presentations, and an image's EXIF. A DOI is recorded but not
+  looked up.
+- Open: look DOIs up (doi.org content negotiation, Crossref)? INSPIRE-HEP
+  for HEP papers (collaboration, report numbers)? Indico attachments added
+  by URL (the event's title and date, through git-annex-remote-indico's
+  `event.json`)? A title from a PDF's first page (largest font) when its
+  document information has none? Should PyMuPDF become a dependency rather
+  than the `pdf` extra?
+
 ## G. Git, forges and secrets
 
 **G2. API tokens vs git credentials.** *(open)*

@@ -135,7 +135,8 @@ def _rendition_view(r: dict, store_kb=None) -> dict:
             where.append(locations.for_location(loc).describe(store_kb, loc))
         else:
             where.append({"cas": f"content store '{loc.get('name')}'", "local": f"only on {loc.get('host')}",
-                          "datalad": f"DataLad dataset ({loc.get('source')}): {loc.get('path')}"}.get(loc["type"], loc["type"]))
+                          "datalad": f"DataLad dataset ({loc.get('source')}): {loc.get('path')}",
+                          "source": f"source {loc.get('source')}: {loc.get('path')}"}.get(loc["type"], loc["type"]))
     return {"name": r["name"], "label": label, "type": TYPE_LABEL.get(r["media_type"], r["media_type"]),
             "size": size(r.get("size")), "where": where, "links": locations.links(r)}
 

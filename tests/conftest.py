@@ -15,9 +15,10 @@ def git(root: Path, *args) -> str:
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch, tmp_path_factory):
     """No user config, a fixed user, no stray KB_ROOT or KB_CONTEXT, and logs in the test's cache."""
-    from kb import config, logs
+    from kb import config, logs, metadata
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setattr(config, "INVOCATION", config.Invocation())
+    monkeypatch.setattr(metadata, "LOOKUP", False)      # no arXiv from tests, unless a test serves a fake
     monkeypatch.delenv("KB_CONTEXT", raising=False)
     monkeypatch.setenv("XDG_DATA_HOME", str(home / "data"))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home / ".claude"))

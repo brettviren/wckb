@@ -183,53 +183,156 @@ def find_by_identifier(kb: Store, identifiers: dict) -> list[str]:
     return hits
 
 
+#: Fields found in files that only documents have.
+_DOCUMENT_ONLY = ("doctype", "venue", "version", "event")
+
+
 def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "auto",
         cas_name: str | None = None, url: str | None = None, fetch: bool = True,
-        force: bool = False, via: str | None = None) -> Item:
-    """A primary item whose originals are *sources* (paths or URLs)."""
+        force: bool = False, via: str | None = None, target: str | Path | None = None,
+        guess: bool = True) -> Item:
+    """A primary item whose originals are *sources* (paths or URLs).
+
+    TARGET: copy each file there (a directory, or the file's new path when there is one source).  If it
+    lands in a source (a DataLad dataset, a git repository or filesystem tree described here), the
+    source's type takes it in (datalad save, git commit) and the rendition names the source.
+    GUESS: fill in metadata found in the files and at arXiv (kb.metadata); FIELDS always win."""
+    from . import metadata
     if not sources:
         raise KBError("nothing to add: give one or more files or URLs")
     if url and len(sources) != 1:
         raise KBError("--url names the canonical location of a single file")
-    ids = fields.get("identifiers", {})
-    if ids and not force:
-        dup = find_by_identifier(kb, ids)
-        if dup:
-            raise KBError(f"already in this store as {', '.join(dup)} (same identifier); use --force to add anyway")
-    data = deep_merge(_skeleton(kb, kind, via=via), fields)
+    if target and not fetch and any("://" in s for s in sources):
+        raise KBError("--target copies the content, so URLs must be fetched (drop --no-fetch)")
+    found = metadata.Found()
+    if guess:
+        for src in sources:
+            found.take(metadata.for_source(src))
+        found.take(metadata.for_identifiers(fields.get("identifiers", {})))
+    sources = [found.instead.get(s, s) for s in sources]
+    known = {**found.fields.get("identifiers", {}), **fields.get("identifiers", {})}
+    if known and not force and find_by_identifier(kb, known):     # before anything is copied or committed
+        raise KBError(f"already in this store as {', '.join(find_by_identifier(kb, known))} (same identifier); "
+                      "use --force to add anyway")
     with kb.tx():
-        renditions = []
+        # first what each source is (fetched, its type, what it says of itself), so a duplicate is refused
+        # before anything is copied or committed; then where its content goes
+        got = []
         used: set[str] = set()
         for src in sources:
             is_url = "://" in src
             filename = _safe_name(Path(src.split("?", 1)[0].rstrip("/")).name)
+            if is_url and src in found.instead.values() and not filename.endswith(".pdf"):
+                filename += ".pdf"
             name = "original" if len(sources) == 1 else _safe_name(Path(filename).stem)
             while name in used:
                 name += "_"
             used.add(name)
-            r = {"name": name, "role": "original", "media_type": content.media_type(filename), "locations": []}
-            if is_url:
-                r["locations"].append(content.url_location(src, retrieved=fetch))
-                if fetch:
-                    path, sha, size = content.fetch(kb, src)
-                    m = mode if mode != "auto" else ("db" if size <= kb.cfg.max_inline_bytes
-                                                      else ("cas" if cas_name else "none"))
-                    locs, sha, size = content.place(kb, path, filename, m, cas_name)
-                    r.update(sha256=sha, size=size)
-                    r["locations"] += locs
-            else:
+            path = None
+            if is_url and fetch:
+                path = content.fetch(kb, src)[0]
+            elif not is_url:
                 path = Path(src).expanduser()
                 if not path.is_file():
                     raise KBError(f"no such file: {src}")
-                locs, sha, size = content.place(kb, path, filename, mode, cas_name)
-                r.update(sha256=sha, size=size, locations=locs)
-                if url:
-                    r["locations"].append(content.url_location(url, retrieved=False))
+            mtype = content.sniff(path, filename) if path is not None else content.media_type(filename)
+            if guess and path is not None and not got:
+                found.take(metadata.for_file(path, mtype))
+            got.append((src, is_url, filename, name, path, mtype))
+        guessed = {k: v for k, v in found.fields.items() if kind == "document" or k not in _DOCUMENT_ONLY}
+        ids = {**guessed.get("identifiers", {}), **fields.get("identifiers", {})}
+        if ids and not force:
+            dup = find_by_identifier(kb, ids)
+            if dup:
+                raise KBError(f"already in this store as {', '.join(dup)} (same identifier); use --force to add anyway")
+        renditions = []
+        for src, is_url, filename, name, path, mtype in got:
+            r = {"name": name, "role": "original", "media_type": mtype, "locations": []}
+            if is_url:
+                r["locations"].append(content.url_location(src, retrieved=fetch))
+            if target is not None:
+                dest = _copy(path, target, filename, several=len(sources) > 1)
+                locs, sha, size = _place_copy(kb, dest, filename, mode, cas_name)
+                r.update(sha256=sha, size=size)
+                r["locations"] = locs + r["locations"]
+            elif path is not None:
+                m = mode
+                if is_url and mode == "auto":
+                    m = "db" if path.stat().st_size <= kb.cfg.max_inline_bytes else ("cas" if cas_name else "none")
+                locs, sha, size = content.place(kb, path, filename, m, cas_name)
+                r.update(sha256=sha, size=size)
+                r["locations"] += locs
+            if url and not is_url:
+                r["locations"].append(content.url_location(url, retrieved=False))
             if not r["locations"]:
                 raise KBError(f"{src}: store mode 'none' needs a URL (--url) to say where it lives")
             renditions.append(r)
+        data = deep_merge(deep_merge(_skeleton(kb, kind, via=via), guessed), fields)
+        if found.abstract and "abstract" not in used:
+            renditions.append(_content_rendition(kb, kind, found.abstract, ("abstract", "abstract.md")))
         data["renditions"] = renditions + data.get("renditions", [])
+        _report_guesses(found, fields)
         return _finish(kb, data)
+
+
+def _copy(path: Path, target: str | Path, filename: str, several: bool) -> Path:
+    """Copy PATH to TARGET (a directory: one that exists, or a path ending in /; else the new file's path),
+    unless the same bytes are there."""
+    import os
+    import shutil
+    into = str(target).endswith(os.sep)
+    target = Path(target).expanduser()
+    dest = target / filename if several or into or target.is_dir() else target
+    if dest.exists() or dest.is_symlink():
+        if dest.resolve() == path.resolve() or (dest.is_file() and
+                                                content.sha256_file(dest)[0] == content.sha256_file(path)[0]):
+            return dest
+        raise KBError(f"{dest} exists, with other content")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(path, dest)
+    return dest
+
+
+def _place_copy(kb: Store, dest: Path, filename: str, mode: str, cas_name: str | None):
+    """Locations for a file kb copied to DEST: the source holding it (which takes it in), else as MODE says,
+    noting the copy itself."""
+    import logging
+    from . import sources
+    from .logs import tell
+    held = sources.containing(kb, dest)
+    sha, size = content.sha256_file(dest)
+    if held:
+        rec, root = held
+        rel = (dest.parent.resolve() / dest.name).relative_to(root).as_posix()
+        loc = sources.TYPES[rec.data["source_type"]].put(kb, rec, root, rel, f"Add {rel} (kb add)")
+        extra = content.place(kb, dest, filename, mode, cas_name)[0] if mode not in ("auto", "datalad") else []
+        return [loc] + extra, sha, size
+    from .datasets import _toplevel
+    top = _toplevel(dest)
+    if top is not None:
+        tell(logging.getLogger(__name__), logging.INFO,
+             f"{dest} is in the git repository {top}, which is not a source here: copied only "
+             f"(kb source add {top} makes it one, and kb add --target then commits into it)")
+    locs, sha, size = content.place(kb, dest, filename, mode, cas_name)
+    if not any(l["type"] == "local" for l in locs):
+        locs.append({"type": "local", "host": kb.cfg.host, "path": str(dest.resolve())})
+    return locs, sha, size
+
+
+def _report_guesses(found, fields: dict) -> None:
+    import logging
+    from .logs import tell
+    log = logging.getLogger(__name__)
+    kept = {k: w for k, w in found.whence.items()
+            if k.split(".")[0] not in fields or (k.startswith("identifiers.")
+                                                 and k.split(".", 1)[1] not in fields.get("identifiers", {}))}
+    by: dict[str, list[str]] = {}
+    for k, w in kept.items():
+        by.setdefault(w, []).append(k)
+    if by:
+        tell(log, logging.INFO, "found " + "; ".join(f"{', '.join(ks)} in {w}" for w, ks in by.items()))
+    for note in found.notes:
+        tell(log, logging.WARNING, note)
 
 
 _NOT_INHERITED = {"id", "created", "renditions", "summary", "status", "supersedes", "retracts",

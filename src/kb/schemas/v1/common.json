@@ -313,6 +313,30 @@
           "additionalProperties": false
         },
         {
+          "description": "A file at a path in a source that is a directory tree (a git repository, a named filesystem tree), described by a source item.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "source"
+            },
+            "source": {
+              "description": "The source item (src-...).",
+              "type": "string",
+              "pattern": "^src-"
+            },
+            "path": {
+              "description": "Path within the source's tree.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "source",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        {
           "description": "Content supplied by an asset (an abstract file or file set) at a version; see kb asset.",
           "type": "object",
           "properties": {

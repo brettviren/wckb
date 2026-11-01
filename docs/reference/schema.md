@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.5) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.6) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 
@@ -236,6 +236,7 @@ Where a rendition's bytes are. Each type is served by a data source (kb.sources)
 - `url`: `url`, `retrieved`, `auth`
 - `local`: `host`, `path`
 - `datalad`: `source`, `path`, `key`
+- `source`: `source`, `path`
 - `asset`: `asset`, `version`, `path`
 
 ### valid

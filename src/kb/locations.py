@@ -14,6 +14,8 @@ nothing else in kb needs to change.
     asset  a file of an asset (an abstract file or file set) at a version; the
            asset's own bindings say which sources supply it (kb.assets)
     datalad  a file in a DataLad dataset, described by a source item (see kb.datasets)
+    source   a file in another source that is a directory tree (a git repository, a named filesystem
+             tree), described by a source item (see kb.sources)
 """
 
 import shutil
@@ -186,6 +188,41 @@ class DataladSource(LocationSource):
         return None
 
 
+class TreeSource(LocationSource):
+    """A file in a source item's directory tree (git, filesystem): {source: src-..., path}.  The source's
+    type finds the tree on this machine; the file must still have the recorded bytes."""
+    type, label = "source", "a source's directory tree"
+
+    def resolve(self, kb, rec, rendition, loc, fetch):
+        from .sources import TYPES
+        src = kb.items.get(loc["source"])
+        t = TYPES.get(src.data.get("source_type")) if src is not None else None
+        root = t.locate(kb, src) if t else None
+        if root is None and fetch and src is not None and src.data.get("source_type") == "git":
+            from . import datasets
+            root = datasets.locate(kb, src, clone=True)
+        if root is None:
+            return None
+        p = Path(root) / loc["path"]
+        if not p.is_file():
+            return None
+        sha = rendition.get("sha256")
+        if sha:
+            from .content import sha256_file
+            if sha256_file(p)[0] != sha:
+                return None          # the tree now has other bytes at that path
+        return p
+
+    def available(self, kb, rendition, loc):
+        return loc["source"] in kb.items
+
+    def describe(self, kb, loc):
+        src = kb.items.get(loc["source"])
+        if src is None:
+            return f"source {loc['source']} (not in this store): {loc['path']}"
+        return f"{src.data.get('source_type')} source {src.data.get('title')}: {loc['path']}"
+
+
 class AssetLocation(LocationSource):
     """A rendition supplied by an asset (an abstract file or file set) at a version: see kb.assets."""
     type, label = "asset", "an asset"
@@ -218,7 +255,7 @@ class AssetLocation(LocationSource):
 REGISTRY: dict[str, LocationSource] = {}
 
 # Resolution order: cheapest and most local first; URLs (network) last.
-ORDER = ["db", "cas", "local", "asset", "datalad", "url"]
+ORDER = ["db", "cas", "local", "asset", "datalad", "source", "url"]
 
 
 def register(source: LocationSource, position: int | None = None) -> None:
@@ -227,7 +264,7 @@ def register(source: LocationSource, position: int | None = None) -> None:
         ORDER.insert(len(ORDER) - 1 if position is None else position, source.type)
 
 
-for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), DataladSource()):
+for _s in (DbSource(), CasSource(), UrlSource(), LocalSource(), AssetLocation(), DataladSource(), TreeSource()):
     register(_s)
 
 
