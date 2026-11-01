@@ -542,6 +542,38 @@ Status:
 - Register `Source` classes through Python entry points
   (groups `kb.locations` and `kb.asset_sources`), so groups can add their own without changing kb.
 
+## AR. Artifacts (see decisions/0004, proposed)
+
+**AR1. Is an artifact a document, or a kind of its own?** *(proposed: a document)*
+- Proposed: a `document` with doctype `technote`, `demo` or `notebook`, a
+  `provenance` level and a process record. A kind of its own would list
+  more clearly but duplicate documents.
+
+**AR2. How much provenance, by default?** *(proposed: three levels)*
+- `cited` (inputs only, harvested afterwards), `recorded` (steps captured
+  passively in a workspace), `rebuildable` (a view recipe). Which should be
+  the default, and should `kb lint` nudge artifacts upward?
+
+**AR3. Capturing inputs by what kb served.** *(open)*
+- Proposed: kb commands run in an artifact workspace log the items they
+  served, and harvest proposes them as inputs. Is "served" a good enough
+  proxy for "used", once a person or LLM prunes the list?
+
+**AR4. LLM steps.** *(open)*
+- What is kept of an LLM step: the prompt, the model, a summary, a pointer
+  to the transcript? Where do transcripts live, and at what access level?
+  Should remaking replay prompts automatically, or only list them?
+
+**AR5. HTML artifacts.** *(open)*
+- A multi-file HTML bundle (page, scripts, data): an asset file set, a
+  directory in the content dataset, or a zip rendition? It must open in a
+  browser from the cache with its scripts working.
+
+**AR6. The gallery.** *(open)*
+- A built-in view publishing an index of artifacts (title, summary,
+  thumbnail, inputs, links). Per store or per subject? Where is it
+  published for the group (EOS web space)?
+
 ## Decided
 
 **S12. Lessons from a research session run through kb.** *(decided and built 2026-11-01)*
