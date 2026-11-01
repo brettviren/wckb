@@ -43,7 +43,8 @@ Everyday:
   new        Make a new item of KIND.
   show       One item: facts, links, where the material is, an excerpt (sets: as a tree).
   ls         List items (current ones unless --all), newest first.
-  search     Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
+  search     Search titles, summaries, subjects and the text of items (words; a trailing * matches a
+             prefix).
   context    What the KB knows about a subject, an item, or some words; compact markdown for LLMs.
   log        History: what happened to an item (or the store), when, by whom, with whose approval.
 
@@ -177,7 +178,8 @@ Options:
   --url TEXT                      Canonical URL of a single local file (e.g. Indico behind SSO).
   --no-fetch                      Record URLs without downloading (no hash).
   --supersedes TEXT               This is a new version of that item.
-  --extract                       Run kb rendition extract afterwards.
+  --extract / --no-extract        Extract text from a PDF, slides and the like (when a transform is
+                                  available), for search.  [default: extract]
   --force                         Add even if an identifier is already in this store.
   --target PATH                   Copy the file(s) here (a directory: one that exists, or a path
                                   ending in /; else the new file's path). In a source (a DataLad
@@ -277,7 +279,12 @@ Options:
 ```
 Usage: kb search [OPTIONS] WORDS...
 
-  Search titles, summaries, subjects and text (words; a trailing * matches a prefix).
+  Search titles, summaries, subjects and the text of items (words; a trailing * matches a prefix).
+
+  Text means each item's text renditions that are here: notes and pages, text files, and text
+  extracted from PDFs, slides and the like (kb add extracts it). A hit in such text names the
+  rendition (#text) and the original it came from. --semantic matches meaning (kb store embed
+  first); --hybrid fuses both rankings (reciprocal rank fusion).
 
 Options:
   -s, --semantic   Match meaning (needs kb store embed).
@@ -1735,7 +1742,8 @@ Options:
 Commands:
   snapshot  Write a consistent single-file copy of the store, to publish read-only or as a backup.
   reindex   Rebuild the store's query tables (search, subjects, runs, references) from the items.
-  embed     Embed new or changed text for semantic search (needs [embed] configured).
+  embed     Embed what the search index holds that the model has no vectors for (needs [embed]
+            configured).
   migrate   Upgrade every item to this kb's schema version (in one transaction).
 ```
 
@@ -1768,7 +1776,10 @@ Options:
 ```
 Usage: kb store embed [OPTIONS]
 
-  Embed new or changed text for semantic search (needs [embed] configured).
+  Embed what the search index holds that the model has no vectors for (needs [embed] configured).
+
+  Vectors are a cache in ~/.cache/wckb/vectors.sqlite, by model and text: unchanged text is never
+  embedded twice, and each model keeps its own.
 
 Options:
   -h, --help  Show this message and exit.

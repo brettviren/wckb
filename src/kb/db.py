@@ -10,7 +10,9 @@ One file, ``kb.sqlite``, holds everything canonical about a store:
     reviews    human and LLM reviews of inbox bundles
 
 and derived tables kept in step on every write (subjects, runs, refs,
-identifiers, renditions, fts, vectors).
+identifiers, renditions, fts).  ``fts`` has a row per chunk of each text
+rendition (with the item's title, summary and subjects in every row), so a hit
+names the rendition it is in.  Vectors are not here: see kb.embed.
 
 Guards live in the database itself, so they hold whatever program writes:
 frozen items (sources, released policies) cannot change their core or be
@@ -25,7 +27,10 @@ from pathlib import Path
 from .errors import KBError
 
 DB_NAME = "kb.sqlite"
-DB_VERSION = 1
+#: 2: fts by rendition and chunk; vectors moved out of the store (kept as vectors_v1 until copied).
+DB_VERSION = 2
+#: A settings key the upgrade leaves for Store.open: rebuild the query tables, then forget it.
+REINDEX = "_reindex"
 
 DDL = """
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -89,10 +94,10 @@ CREATE INDEX IF NOT EXISTS refs_src ON refs(src);
 CREATE INDEX IF NOT EXISTS refs_dst ON refs(dst);
 CREATE INDEX IF NOT EXISTS identifiers_id ON identifiers(id);
 CREATE INDEX IF NOT EXISTS renditions_id ON renditions(id);
-CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(id UNINDEXED, title, summary, subjects, body,
-  tokenize='porter unicode61');
-CREATE TABLE IF NOT EXISTS vectors (identity TEXT, id TEXT, chunk INTEGER, text_hash TEXT, dim INTEGER,
-  vec BLOB, PRIMARY KEY (identity, id, chunk));
+-- one row per chunk: rendition '' chunk 0 is the item's head (title and summary); hash: sha256 of what is
+-- embedded for the row (kb.embed), by which vectors are found
+CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(id UNINDEXED, rendition UNINDEXED, chunk UNINDEXED,
+  hash UNINDEXED, title, summary, subjects, body, tokenize='porter unicode61');
 
 -- guards
 CREATE TRIGGER IF NOT EXISTS items_keep BEFORE DELETE ON items
@@ -166,6 +171,11 @@ def connect(path: Path, readonly: bool = False, create: bool = False) -> sqlite3
         if version > DB_VERSION:
             raise KBError(f"{path} was written by a newer kb (database version {version}); upgrade kb")
         if version < DB_VERSION:
+            if version == 1:          # fts is rebuilt (Store.open reindexes); vectors are kept to be copied out
+                conn.execute("DROP TABLE IF EXISTS fts")
+                if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'vectors'").fetchone():
+                    conn.execute("ALTER TABLE vectors RENAME TO vectors_v1")
+                conn.execute("INSERT OR REPLACE INTO settings VALUES (?, 'true')", (REINDEX,))
             conn.executescript(DDL)
             conn.execute(GUARD)
             conn.execute(f"PRAGMA user_version = {DB_VERSION}")

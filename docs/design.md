@@ -102,7 +102,7 @@ Tables in `kb.sqlite`:
 | `blobs` | small content by sha256: notes, pages, extracted text, view sources, manifests |
 | `events` | append-only history: create, set, content, checkin, extract, stamp, build, publish, transfer-in/out, inbox and review actions |
 | `inbox`, `reviews` | received bundles; reviews by people and LLMs |
-| `subjects`, `runs`, `refs`, `identifiers`, `renditions`, `fts`, `vectors` | query tables kept in step on every write |
+| `subjects`, `runs`, `refs`, `identifiers`, `renditions`, `fts` | query tables kept in step on every write (`fts`: a row per item head and per chunk of each text rendition) |
 
 Configuration is layered, last one wins:
 
@@ -377,7 +377,25 @@ Views should pin their environment (`pixi.lock`, `uv.lock`,
 - `kb search` is BM25 over title, summary, subjects and text renditions;
   `-s` searches by meaning (an OpenAI-compatible embedding service; vectors
   per model identity, only changed text embedded); `--hybrid` fuses the
-  two.
+  two by reciprocal rank.
+- **What is indexed is items, never whole sources.** An Indico site's
+  dataset, a DataLad dataset or a filesystem tree is not indexed; the items
+  that use files from them are. Each item's head (title, summary,
+  subjects) is one row of `fts`, and each chunk (about 1500 characters) of
+  each of its text renditions is another, with the head's words repeated
+  so a query can match words of both. A hit names its rendition, and for
+  extracted text the original it came from.
+- **Text from what is not text.** `kb add` extracts text from PDFs, slides
+  and the like with a transform (a `derived` rendition, `text`, with its
+  `derived_from` and `source_sha256`). Its text is indexed wherever it is
+  kept, as long as it is on this machine. When the original changes, the
+  `stale` remedy re-extracts (and so re-indexes); `unextracted` catches what
+  was never extracted.
+- **Indexes are not precious.** `fts` is rebuilt from the items
+  (`kb store reindex`; an upgrade of the database does it once). Vectors are
+  a cache outside the store (`~/.cache/wckb/vectors.sqlite`), addressed by
+  model identity and the hash of the text, so reindexing, re-chunking an
+  unchanged text or changing model never throws vectors away.
 - `kb context` is a compact markdown pack for LLMs: topics first, then
   current items, then history, within a character budget.
 - All of these take `--reach N` / `--in NAME` to include neighbor stores

@@ -411,16 +411,40 @@ def _clone(kb, f):
     return f"cloned {f.where} to {path}"
 
 
-@remedy("embeddings", "Items without embeddings for semantic search")
+@remedy("unextracted", "Items with a PDF, slides or the like but no text from it, so search can't see inside")
+def _unextracted(kb):
+    from .transforms import unextracted
+    todo = [(rec.id, src, t.name) for rec in kb.items.values() if kb.is_current(rec.id)
+            for src, t in unextracted(kb, rec)]
+    if todo:
+        names = ", ".join(f"{i}#{s}" for i, s, _ in todo[:5]) + (" ..." if len(todo) > 5 else "")
+        return [Finding("unextracted", f"{len(todo)} rendition(s) without extracted text: {names}",
+                        "extract their text (kb rendition extract ID; may fetch content)", "auto",
+                        data={"ids": sorted({i for i, _, _ in todo})})]
+    return []
+
+
+@_unextracted.fixer
+def _extract(kb, f):
+    from .transforms import extract_missing
+    made, failed = [], []
+    for ident in f.data["ids"]:
+        m, bad = extract_missing(kb, kb.get(ident))
+        made += m
+        failed += bad
+    return f"extracted {len(made)} text rendition(s)" + (f"; failed: {'; '.join(failed)}" if failed else "")
+
+
+@remedy("embeddings", "Text in the search index without embeddings for semantic search")
 def _embeddings(kb):
     c = kb.cfg.embed
     if not c or "model" not in c:
         return []
+    from .embed import missing
     identity = c.get("identity") or c["model"]
-    have = kb.conn.execute("SELECT count(DISTINCT id) FROM vectors WHERE identity = ?", (identity,)).fetchone()[0]
-    missing = len(kb.items) - have
-    if missing > 0:
-        return [Finding("embeddings", f"{missing} item(s) have no embeddings ({identity})",
+    n, total = missing(kb, identity)
+    if n > 0:
+        return [Finding("embeddings", f"{n} of {total} indexed text(s) have no embeddings ({identity})",
                         "embed them (kb store embed; contacts the embedding service)", "ask")]
     return []
 
@@ -429,7 +453,7 @@ def _embeddings(kb):
 def _embed(kb, f):
     from .embed import embed
     r = embed(kb)
-    return f"embedded {r['embedded']} chunk(s)"
+    return f"embedded {r['embedded']} text(s)"
 
 
 @remedy("schema-version", "Items written by an older kb", quick=False)

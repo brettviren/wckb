@@ -5,6 +5,9 @@ the store's database and are kept in step on every write (``Store.save``);
 ``kb store reindex`` (``Store.reindex``) rebuilds them only after a repair.
 """
 
+import sqlite3
+
+from .errors import KBError
 from .items import Store
 
 
@@ -44,26 +47,54 @@ def ls(kb: Store, kind=None, subject=None, runs=None, status=None, include_old=F
     return rows[:limit] if limit else rows
 
 
-def fts(kb: Store, text: str, limit: int = 20, include_old: bool = False) -> list[dict]:
+def match_expression(text: str) -> str:
+    """What somebody typed, as an FTS5 query: every word quoted (punctuation is not syntax), ANDed; a
+    trailing * keeps prefix search."""
     terms = []
     for w in text.split():
         star = w.endswith("*")
         w = w.rstrip("*").replace('"', '""')
         if w:
             terms.append(f'"{w}"' + ("*" if star else ""))
-    if not terms:
+    return " ".join(terms)
+
+
+def fts(kb: Store, text: str, limit: int = 20, include_old: bool = False) -> list[dict]:
+    """Items matching TEXT, best first, each with the rendition (and chunk) of its best row: '' for the
+    item's head (title, summary, subjects), else the text rendition the words are in."""
+    q = match_expression(text)
+    if not q:
         return []
-    q = """SELECT f.id, bm25(fts, 0, 5.0, 3.0, 2.0, 1.0) AS score,
-                  snippet(fts, 4, '[', ']', '…', 12) AS snip, i.kind,
-                  json_extract(i.json, '$.title') AS title, json_extract(i.json, '$.summary') AS summary,
-                  json_extract(i.json, '$.status') AS status
-           FROM fts f JOIN items i ON i.id = f.id WHERE fts MATCH ? ORDER BY score LIMIT ?"""
-    rows = [dict(r) for r in kb.conn.execute(q, (" ".join(terms), limit * 3))]
+    # the rows scored first (MATERIALIZED: bm25 and snippet need the MATCH), then the best row per item
+    sql = """WITH h AS MATERIALIZED (
+               SELECT id, rendition, chunk, bm25(fts, 0, 0, 0, 0, 5.0, 3.0, 2.0, 1.0) AS score,
+                      snippet(fts, -1, '[', ']', '…', 12) AS snip
+               FROM fts WHERE fts MATCH ?)
+             SELECT h.id, h.rendition, h.chunk, min(h.score) AS score, h.snip, i.kind,
+                    json_extract(i.json, '$.title') AS title, json_extract(i.json, '$.summary') AS summary,
+                    json_extract(i.json, '$.status') AS status
+             FROM h JOIN items i ON i.id = h.id GROUP BY h.id ORDER BY score LIMIT ?"""
+    try:
+        rows = [dict(r) for r in kb.conn.execute(sql, (q, limit * 3))]
+    except sqlite3.OperationalError as exc:
+        if "no such column" not in str(exc):
+            raise
+        raise KBError(f"{kb.root}: its search index predates this kb; open the store once for writing "
+                      "(any kb command there upgrades it), or search a fresh snapshot") from None
     for r in rows:
         r["current"] = int(kb.is_current(r["id"]))
+        r.update(_via(kb, r["id"], r["rendition"]))
     if not include_old:
         rows = [r for r in rows if r["current"]]
     return rows[:limit]
+
+
+def _via(kb: Store, ident: str, rendition: str) -> dict:
+    """Where a hit is: the rendition, and the one it was derived from (the original of extracted text)."""
+    rec = kb.items.get(ident)
+    if not rendition or rec is None or not rec.has_rendition(rendition):
+        return {"rendition": rendition or None, "from": None}
+    return {"rendition": rendition, "from": rec.rendition(rendition).get("derived_from")}
 
 
 def subjects(kb: Store) -> dict[str, int]:

@@ -45,7 +45,8 @@ What `kb doctor` knows today (`kb doctor --list` is authoritative):
 | `stale` | derived renditions, views or topics whose inputs changed | re-extract (auto); rebuild views (ask); revise topics (advice: an LLM's job) |
 | `datalad-support` | DataLad sources in use, but DataLad not installed | install the extra (advice) |
 | `gitattributes` | your git ignore rules ignore `.gitattributes`, which DataLad needs | remove the pattern (advice) |
-| `embeddings` | items without embeddings for semantic search | `kb store embed` (ask) |
+| `unextracted` | a PDF, slides or the like with no text extracted from it, so search can't see inside | extract it (auto; may fetch the content) |
+| `embeddings` | indexed text without embeddings for semantic search | `kb store embed` (ask) |
 | `schema-version` | items written by an older kb | `kb store migrate` (ask) |
 | `dangling` | references to items not in this store | `kb pull --dangling` (ask) |
 | `clones` | DataLad datasets used here but not cloned on this machine | `kb source clone` (ask) |

@@ -292,7 +292,12 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
     kb.cfg.kbdir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=kb.cfg.kbdir) as tmp:
         out = Path(tmp) / filename
-        t.run(src, out, src_r["media_type"])
+        try:
+            t.run(src, out, src_r["media_type"])
+        except KBError:
+            raise
+        except Exception as exc:          # a library's own error (a damaged or mislabelled file)
+            raise KBError(f"transform {t.name} failed on {rec.id}#{source}: {exc}") from None
         if not out.is_file():
             raise KBError(f"transform {t.name} produced nothing")
         with kb.tx():
@@ -311,3 +316,35 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
             data["renditions"] = [r for r in data.get("renditions", []) if r["name"] != name] + [derived]
             kb.save(Item(data, kb), "extract", {"rendition": name, "transform": t.name})
     return derived
+
+
+def text_name(source: str) -> str:
+    """The name of the text extracted from rendition SOURCE: ``text`` for the original, else SOURCE-text."""
+    return "text" if source == "original" else f"{source}-text"
+
+
+def unextracted(kb: Store, rec: Item) -> list[tuple[str, Transform]]:
+    """The renditions of REC that are not text and have no text extracted yet, with the transform that
+    would extract it here (renditions no available transform handles are left out)."""
+    from .content import is_text
+    have = {r.get("derived_from") for r in rec.renditions if r["role"] == "derived"}
+    out = []
+    for r in rec.renditions:
+        if r["role"] not in ("original", "content") or is_text(r["media_type"]) or r["name"] in have:
+            continue
+        try:
+            out.append((r["name"], choose(kb, r["media_type"])))
+        except KBError:
+            continue
+    return out
+
+
+def extract_missing(kb: Store, rec: Item) -> tuple[list[dict], list[str]]:
+    """Extract text from every rendition of REC that needs it (unextracted): (what was made, what failed)."""
+    made, failed = [], []
+    for source, t in unextracted(kb, rec):
+        try:
+            made.append(extract(kb, rec, source, t.name, text_name(source)))
+        except KBError as exc:
+            failed.append(f"{rec.id}#{source}: {exc}")
+    return made, failed

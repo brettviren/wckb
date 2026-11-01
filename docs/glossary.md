@@ -240,6 +240,19 @@ to be right; please fix the other place.
   | `datalad` | a file in a DataLad dataset (a source item, a path, an annex key) |
   | `source` | a file in a source's directory tree: a git repository or filesystem tree (a source item, a path) |
 
+**search index**
+: The store's `fts` table: a row for each item's head (title, summary,
+  subjects) and for each chunk of each of its text renditions, so a hit
+  names the rendition. Only items are indexed, never whole sources. It is
+  rebuilt from the items (`kb store reindex`). *Code:* `kb.items.index_rows`,
+  `kb.query.fts`.
+
+**vector cache**
+: Embeddings for semantic search, outside any store
+  (`~/.cache/wckb/vectors.sqlite`), keyed by model identity and the hash of
+  the text. Unchanged text is never embedded twice; each model keeps its
+  own. *Code:* `kb.embed`, `kb store embed`.
+
 **found metadata**
 : Fields `kb add` fills in from what it adds: arXiv's record, a PDF's
   document information and first page, an image's EXIF. Given options

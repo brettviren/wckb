@@ -42,6 +42,65 @@ Status:
   `~/.cache/kb/logs`: should both be `~/.cache/kb`? `KB_CONFIG` is gone
   (use `-c`, or `XDG_CONFIG_HOME`).
 
+**S9. A dataset of the store's own, for content kept outside `kb.sqlite`?** *(open: proposed, not built)*
+- Proposed: a DataLad dataset that kb owns, beside `kb.sqlite`, for
+  generated text files and other content that shouldn't live in the
+  database.
+- Today:
+  - extracted text is a `derived` rendition held like any other content:
+    in the database up to `limits.max_inline_bytes` (1 MiB, which covers
+    most papers' text), else in a content store (`cas`), else extraction
+    refuses;
+  - a large original with no content store is recorded as `local` (on one
+    host).
+- What should go where depends on whether it is precious:
+  - **reproducible** (extracted text, the search index, vectors): needs no
+    history, only to be reachable. In a git history it is just weight.
+    Small extracted text in the database has a virtue, though: it travels
+    with the item in bundles, so a receiver can search it without the
+    original or the transform (an SSO-only PDF, say).
+  - **precious** (large originals with no other home): wants versioning,
+    integrity, copies elsewhere and a way for other machines to get it,
+    which is what a DataLad dataset gives.
+- Leaning: a store's *content dataset*. It is not a special mechanism but
+  an ordinary `datalad` source item that the store's settings name as its
+  default home for large content (`content.dataset = src-…`). By default
+  it lives in `content/` beside `kb.sqlite` (or anywhere else, such as off
+  a network filesystem); kb makes it on first need, or `kb init
+  --content-dataset` does.
+  - Everything in it is annexed (no text2git).
+  - kb puts files there as `kb add --target` does now: copy, `datalad
+    save`, a `datalad` location. So it reuses the source machinery,
+    sharing (`--shared`) and transport (`datalad push` to a sibling or a
+    RIA store; receivers clone it from the URL its source item records).
+  - Placement order becomes database (small), content store (if
+    configured), content dataset (if any), local.
+  - Extracted text larger than the database limit goes there instead of
+    being refused.
+- Costs:
+  - It needs DataLad and git-annex (an optional extra today), so the old
+    order must remain without them.
+  - One commit per `kb add`; bulk adds need batching.
+  - Receivers need a reachable URL to clone it, or the content is
+    unreachable for them, as with any dataset.
+- Rejected:
+  - a dataset for the derived text alone (version-controlled cache);
+  - keeping the dataset inside `.kb/`, which is this machine's alone.
+- Open: is that the design? Should the content dataset become the default
+  instead of `local` when DataLad is installed?
+
+**S10. Search: next steps.** *(open)*
+- Vectors are compared in Python: fine for thousands of chunks, slow for
+  hundreds of thousands. Should it use sqlite-vec (orgface's vec0 table per
+  model) when that is installed?
+- Text that is not on this machine (a URL not fetched, a dataset not
+  cloned) is not indexed until it is. Should `kb store reindex --fetch`
+  fetch it?
+- Images have no text: OCR (tesseract) as a transform? Captions from a
+  vision model?
+- Chunks are about 1500 characters by paragraph, the same for FTS and
+  embeddings. Should they be per page for PDFs, so a hit can name the page?
+
 **S2. Who writes a group store?** *(open)*
 - A maintainer, a CI job applying accepted bundles, or a small service? How
   is the read-only snapshot published (EOS, web)?

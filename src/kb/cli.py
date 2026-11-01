@@ -336,7 +336,8 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.option("--url", help="Canonical URL of a single local file (e.g. Indico behind SSO).")
 @click.option("--no-fetch", is_flag=True, help="Record URLs without downloading (no hash).")
 @click.option("--supersedes", "supersedes", help="This is a new version of that item.")
-@click.option("--extract", is_flag=True, help="Run kb rendition extract afterwards.")
+@click.option("--extract/--no-extract", default=True, show_default=True,
+              help="Extract text from a PDF, slides and the like (when a transform is available), for search.")
 @click.option("--force", is_flag=True, help="Add even if an identifier is already in this store.")
 @click.option("--target", type=click.Path(),
               help="Copy the file(s) here (a directory: one that exists, or a path ending in /; else the new file's path). In a source (a DataLad dataset, a "
@@ -369,11 +370,12 @@ def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract
     rec = authoring.add(kb, kind, list(sources), fields, mode=mode, cas_name=cas_name, url=url,
                         fetch=not no_fetch, force=force, via=via, target=target, guess=not no_guess)
     if extract:
-        try:
-            r = transforms.extract(kb, rec)
-            ui.info(f"extracted {rec.id}#{r['name']} with {r['transform']['name']}")
-        except KBError as exc:
-            ui.info(f"extract skipped: {exc}")
+        made, failed = transforms.extract_missing(kb, rec)
+        for r in made:
+            ui.info(f"extracted {rec.id}#{r['name']} from #{r['derived_from']} with {r['transform']['name']}")
+        for why in failed:
+            ui.info(f"warning: text not extracted: {why} (kb doctor unextracted retries)")
+        rec = kb.get(rec.id)
     _done(kb, rec, json_out)
 
 
@@ -585,15 +587,25 @@ def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subj
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
 def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
-    """Search titles, summaries, subjects and text (words; a trailing * matches a prefix)."""
+    """Search titles, summaries, subjects and the text of items (words; a trailing * matches a prefix).
+
+    Text means each item's text renditions that are here: notes and pages,
+    text files, and text extracted from PDFs, slides and the like (kb add
+    extracts it). A hit in such text names the rendition (#text) and the
+    original it came from. --semantic matches meaning (kb store embed
+    first); --hybrid fuses both rankings (reciprocal rank fusion).
+    """
     from .federated import search
     rows = search(c.kb, " ".join(words), mode or "text", limit, include_old, reach, list(only))
     if json_out:
         return ui.emit_json(rows)
     for r in rows:
         click.echo(ui.item_line(r, store=r["store"] if (reach or only) else None))
+        pad = "" .ljust(29 if (reach or only) else 16)
+        if r.get("rendition"):
+            click.echo(f"{pad} in #{r['rendition']}" + (f" (from #{r['from']})" if r.get("from") else ""))
         if r.get("snip"):
-            click.echo(f"{'':<{29 if (reach or only) else 16}} {' '.join(r['snip'].split())}")
+            click.echo(f"{pad} {' '.join(r['snip'].split())}")
 
 
 @command(main, "context", no_args_is_help=True)
@@ -849,10 +861,15 @@ def reindex_cmd(c):
 @command(store_grp, "embed")
 @pass_ctx
 def embed_cmd(c):
-    """Embed new or changed text for semantic search (needs [embed] configured)."""
+    """Embed what the search index holds that the model has no vectors for (needs [embed] configured).
+
+    Vectors are a cache in ~/.cache/wckb/vectors.sqlite, by model and text:
+    unchanged text is never embedded twice, and each model keeps its own.
+    """
     from .embed import embed
     r = embed(c.kb)
-    ui.info(f"{r['identity']}: embedded {r['embedded']}, removed {r['removed']}, {r['total']} chunks in all")
+    ui.info(f"{r['identity']}: embedded {r['embedded']} of {r['total']} texts; "
+            f"{r['cached']} vectors of this model in {r['file']}")
 
 
 # -- views ----------------------------------------------------------------------

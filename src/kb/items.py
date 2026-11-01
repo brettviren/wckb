@@ -185,17 +185,53 @@ def blob_shas(data: dict) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def text_of(kb: "Store", rec: Item) -> str:
-    """Searchable text: the item's textual renditions held in the database."""
+#: The most text of one rendition that is indexed.
+INDEX_CHARS = 2_000_000
+
+
+def rendition_texts(kb: "Store", rec: Item) -> list[tuple[str, str]]:
+    """Searchable text, by rendition: each textual rendition (an original, a note, text extracted from a
+    PDF ...) whose content is here, wherever it is (the database, a content store, a dataset); nothing is
+    fetched.  View sources are left out."""
     from .content import is_text
-    parts = []
+    out = []
     for r in rec.renditions:
         if r["role"] == "source" or not is_text(r["media_type"]):
             continue
-        t = rec.text(r["name"]) if any(l["type"] == "db" for l in r.get("locations", [])) else None
+        t = None
+        if any(l["type"] == "db" for l in r.get("locations", [])):
+            t = rec.text(r["name"])
+        if t is None and r.get("locations"):
+            from . import locations
+            try:
+                p = locations.resolve(kb, rec, r, fetch=False)
+            except KBError:
+                p = None
+            if p is not None:
+                with open(p, encoding="utf-8", errors="replace") as f:
+                    t = f.read(INDEX_CHARS)
         if t:
-            parts.append(t[:2_000_000])
-    return "\n\n".join(parts)
+            out.append((r["name"], t[:INDEX_CHARS]))
+    return out
+
+
+def text_of(kb: "Store", rec: Item) -> str:
+    """Searchable text: the item's textual renditions, all together."""
+    return "\n\n".join(t for _, t in rendition_texts(kb, rec))
+
+
+def index_rows(kb: "Store", rec: Item) -> list[tuple]:
+    """The fts rows of an item: its head (rendition '', chunk 0) and each chunk of each text rendition, every
+    row with the item's title, summary and subjects (so words of both match together)."""
+    from .embed import chunks, head_text, text_hash as h
+    d = rec.data
+    title, summary = d.get("title", ""), d.get("summary", "")
+    subjects = " ".join(s.replace("/", " ") for s in d.get("subject", []))
+    head = head_text(title, summary)
+    rows = [(rec.id, "", 0, h(head), title, summary, subjects, "")]
+    for name, text in rendition_texts(kb, rec):
+        rows += [(rec.id, name, i, h(c), title, summary, subjects, c) for i, c in enumerate(chunks(text), 1)]
+    return rows
 
 
 class Store:
@@ -219,9 +255,15 @@ class Store:
         conn = dbm.connect(path, readonly=readonly)
         log.debug("opened the store %s%s", root, " read-only" if readonly else "")
         settings = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM settings")}
+        upgraded = settings.pop(dbm.REINDEX, None)
         cfg = config_mod.from_settings(root, settings)
         check_revision(cfg.schema)
-        return cls(root, conn, cfg, readonly)
+        kb = cls(root, conn, cfg, readonly)
+        if upgraded and not readonly:
+            log.info("%s: the database was upgraded: rebuilding its query tables", root)
+            kb.reindex()
+            conn.execute("DELETE FROM settings WHERE key = ?", (dbm.REINDEX,))
+        return kb
 
     @classmethod
     def create(cls, root: Path, settings: dict) -> "Store":
@@ -362,9 +404,7 @@ class Store:
         c.executemany("INSERT INTO renditions VALUES (?,?,?,?,?,?,?,?)", [
             (i, r["name"], r["role"], r["media_type"], r.get("fidelity"), r.get("sha256"), r.get("size"),
              json.dumps(r.get("locations", []))) for r in d.get("renditions", [])])
-        c.execute("INSERT INTO fts VALUES (?,?,?,?,?)", (
-            i, d.get("title", ""), d.get("summary", ""),
-            " ".join(s.replace("/", " ") for s in d.get("subject", [])), text_of(self, rec)))
+        c.executemany("INSERT INTO fts VALUES (?,?,?,?,?,?,?,?)", index_rows(self, rec))
 
     def reindex(self) -> int:
         self._writable()
