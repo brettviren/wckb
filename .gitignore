@@ -1,2 +1,3 @@
-# a kb store: not versioned here (share it with kb bundles)
-*
+kb.sqlite
+kb.sqlite-shm
+kb.sqlite-wal
