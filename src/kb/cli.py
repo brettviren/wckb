@@ -190,7 +190,8 @@ hook_grp = group("hook", "Entry points for Claude Code and git hooks (they read 
 def item_options(fn):
     opts = [
         click.option("--title", help="Short title."),
-        click.option("--summary", help="1-3 sentences for the next reader (an LLM); not the title again."),
+        click.option("--summary", help="1-3 sentences for the next reader (an LLM); not the title again "
+                                       "(at most 400 characters)."),
         click.option("--subject", multiple=True, help="Subject path, e.g. detector/tpc/noise (repeatable)."),
         click.option("--tag", "tags", multiple=True, help="Free label (repeatable)."),
         click.option("--runs", multiple=True, help="Valid for runs: N or FIRST-LAST (repeatable)."),
@@ -198,9 +199,11 @@ def item_options(fn):
         click.option("--end", help="Valid until (date)."),
         click.option("--status", type=click.Choice(["draft", "unverified", "verified", "disputed"])),
         click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"])),
-        click.option("--by", help="Who asserted it (person ID or name)."),
-        click.option("--how", help="How it was asserted: 'verbal at collab meeting', 'elog 5521' ..."),
-        click.option("--when", help="When it was asserted (date)."),
+        click.option("--by", help="Observations and configs: who asserted it (person ID or name; claude for "
+                                   "your own inference)."),
+        click.option("--how", help="Observations and configs: how it was asserted: 'verbal at collab meeting', "
+                                   "'elog 5521', 'read <URL>' ..."),
+        click.option("--when", help="Observations and configs: when it was asserted (date)."),
         click.option("--creators", multiple=True, help="Author (repeatable)."),
         click.option("--date", help="Date of the thing itself (e.g. of a talk)."),
         click.option("--identifier", "identifiers", multiple=True, help="scheme=value: doi=, arxiv=, indico=, inspire= ..."),
@@ -573,18 +576,21 @@ def open_cmd(c, ref, text, print_only, no_fetch):
 @click.option("--all", "include_old", is_flag=True, help="Include superseded and retracted items.")
 @click.option("--limit", type=int)
 @click.option("-l", "--long", is_flag=True, help="Show summaries.")
+@click.option("--tag", "tags", multiple=True, help="Only items with this tag (repeatable: all of them).")
 @click.option("--subjects", is_flag=True, help="List subject paths in use, with counts.")
+@click.option("--tags", "list_tags", is_flag=True, help="List tags in use, with counts.")
 @click.option("--reach", default=0, help="Also list neighbor stores up to this many hops away.")
 @click.option("--in", "only", multiple=True, help="Also list this neighbor store (repeatable).")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subjects, reach, only, json_out):
+def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, tags, subjects, list_tags, reach, only,
+           json_out):
     """List items (current ones unless --all), newest first."""
     from . import query
     from .context import parse_run_window
     kb = c.kb
-    if subjects:
-        counts = query.subjects(kb)
+    if subjects or list_tags:
+        counts = query.subjects(kb) if subjects else query.tags(kb)
         if json_out:
             return ui.emit_json(counts)
         for subj, n in counts.items():
@@ -593,11 +599,11 @@ def ls_cmd(c, kind, subject, runs, status, since, include_old, limit, long, subj
     if reach or only:
         from .federated import ls
         rows = ls(kb, reach, list(only), kind=kind, subject=subject, runs=parse_run_window(runs), status=status,
-                  include_old=include_old, since=since, limit=limit)
+                  include_old=include_old, since=since, limit=limit, tags=tags)
         if json_out:
             return ui.emit_json(rows)
         return ui.item_list(rows, long, with_store=True)
-    rows = query.ls(kb, kind, subject, parse_run_window(runs), status, include_old, since, limit)
+    rows = query.ls(kb, kind, subject, parse_run_window(runs), status, include_old, since, limit, tags)
     if json_out:
         return ui.emit_json(rows)
     ui.item_list(rows, long)
@@ -626,7 +632,15 @@ def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
     rows = search(c.kb, " ".join(words), mode or "text", limit, include_old, reach, list(only))
     if json_out:
         return ui.emit_json(rows)
+    if not rows:
+        ui.info("no matches" + ("" if mode in ("semantic", "hybrid") else
+                                " (words are matched as they are, a trailing * for prefixes; "
+                                "-s searches by meaning, if embeddings are set up)"))
+    some = False
     for r in rows:
+        if r.get("match") == "some" and not some:
+            some = True
+            click.echo("-- items with some of the words:")
         click.echo(ui.item_line(r, store=r["store"] if (reach or only) else None))
         pad = "" .ljust(29 if (reach or only) else 16)
         if r.get("rendition"):

@@ -28,6 +28,12 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
    ```
 
    - If the URL needs SSO and the user has the file: `kb add FILE --url URL ...`.
+   - Web pages (READMEs, model cards, docs): kb finds the page's title and
+     description, and its date if the page or server gives one. Otherwise
+     `--date` is the date the page shows (a release, "last updated"), else
+     the day you read it, and say which in the summary. Never a date from
+     memory: `date` cannot be changed later. The text is extracted from the
+     HTML for search.
    - For papers, add `--identifier arxiv=... --identifier doi=...` when kb
      didn't find them.
    - `--target DIR/` copies the file into a source (a DataLad dataset is
@@ -71,7 +77,7 @@ description: Add a document (paper, preprint, slides, technote, thesis), dataset
      --text-file page.md`.
 6. **Observations in the material.** Statements of fact that other people
    will need, such as "run 1250 excluded because ...", become their own
-   observation items, citing the document as evidence
-   (`--evidence DOC-ID#text`).
+   observation items, citing the document as evidence: `--evidence DOC-ID`
+   (or `DOC-ID#text` when the fact is in its extracted text).
 7. Run `kb check` and `kb lint`, and show the user the result
    (`kb show ID` for the new items).

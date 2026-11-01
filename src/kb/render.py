@@ -120,6 +120,8 @@ def _excerpt(text: str) -> str:
 def _rendition_view(r: dict, store_kb=None) -> dict:
     from . import locations
     label = ROLE_LABEL.get(r["role"], r["role"])
+    if r["role"] == "content" and r["name"] not in ("note", "page", "text"):
+        label = r["name"]                       # an abstract, a digest ...: its own name says more than "text"
     if r["role"] == "derived":
         label = FIDELITY_LABEL.get(r.get("fidelity"), "derived")
         tool = r.get("transform", {}).get("name")
@@ -216,6 +218,8 @@ def _facts(d: dict, look: Lookup) -> list[tuple[str, str]]:
             f.append((f"  source {b['name']}", _binding_text(b)))
     if d.get("subject"):
         f.append(("subjects", ", ".join(d["subject"])))
+    if d.get("tags"):
+        f.append(("tags", ", ".join(d["tags"])))
     if d.get("license"):
         f.append(("license", d["license"]))
     o = d.get("origin")

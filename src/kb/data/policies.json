@@ -2,7 +2,7 @@
   {
     "name": "kb-core",
     "type": "instructions",
-    "version": 5,
+    "version": 6,
     "file": "policies/kb-core.md",
     "order": 10,
     "title": "KB core rules",
@@ -41,7 +41,7 @@
   {
     "name": "kb-capture",
     "type": "skill",
-    "version": 3,
+    "version": 4,
     "file": "skills/kb-capture/SKILL.md",
     "title": "kb-capture",
     "description": "Capture a session into the KB."
@@ -49,7 +49,7 @@
   {
     "name": "kb-ingest",
     "type": "skill",
-    "version": 6,
+    "version": 7,
     "file": "skills/kb-ingest/SKILL.md",
     "title": "kb-ingest",
     "description": "Add documents, datasets, configs, snapshots."

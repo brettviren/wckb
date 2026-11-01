@@ -66,12 +66,29 @@ def validate(data: dict) -> list[str]:
     return [_describe(e) for e in errors]
 
 
+#: The command-line option that gives a field, for messages about a missing or bad one.
+OPTION = {"derived_from": "--derived-from ID", "title": "--title", "summary": "--summary", "creators": "--creators", "date": "--date",
+          "doctype": "--set doctype=paper|preprint|presentation|manual|report|other|...",
+          "asserted_by": "--by, --how, --when", "subject": "--subject", "system": "--set system=...",
+          "parameters": "--set 'parameters={...}'", "query": "--set query=...", "retrieved": "--set retrieved=DATE"}
+
+
 def _describe(error) -> str:
     path = "/".join(str(p) for p in error.absolute_path) or "(item)"
     if error.validator in ("oneOf", "anyOf") and error.context:
         # The nearest sub-error usually says what was actually wrong.
         best = max(error.context, key=lambda e: len(list(e.absolute_path)))
         return f"{path}: {best.message}"
+    if error.validator == "required":
+        missing = error.message.split("'")[1] if "'" in error.message else ""
+        if missing in OPTION:
+            return f"{path}: {error.message} (give {OPTION[missing]})"
+    if error.validator == "maxLength":
+        return f"{path}: too long: {len(error.instance)} characters, at most {error.validator_value}"
+    if error.validator == "unevaluatedProperties" and "asserted_by" in error.message:
+        return (f"{path}: --by/--how/--when attribute the assertion of an observation or config; a "
+                f"{error.instance.get('kind', 'item')} has no such field (its authors are --creators; who "
+                "filed it is recorded anyway)")
     return f"{path}: {error.message}"
 
 

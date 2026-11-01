@@ -17,8 +17,9 @@ Goal: a few high-value, well-attributed items, not a session dump.
 
    Leave out anything already in the KB (`kb context` and `kb search` each
    candidate), anything speculative unless marked as such, and anything
-   personal. Show the list to the user and ask which to keep. Expect them to
-   drop some; three good items beat ten weak ones.
+   personal. Then follow the `capture` autonomy: with `ask`, show the list to
+   the user and file what they keep (expect them to drop some); with `auto`,
+   file it and list what you filed. Three good items beat ten weak ones.
 2. **Write each item with kb**, never by hand:
 
    ```

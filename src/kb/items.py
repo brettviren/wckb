@@ -193,11 +193,11 @@ def rendition_texts(kb: "Store", rec: Item, fetch: bool = False) -> list[tuple[s
     """Searchable text, by rendition: each textual rendition (an original, a note, text extracted from a
     PDF ...) whose content is here, wherever it is (the database, a content store, a dataset); with FETCH,
     also what must be fetched or got first.  View sources are left out."""
-    from .content import is_text
+    from .content import MARKUP, is_text
     out = []
     for r in rec.renditions:
-        if r["role"] == "source" or not is_text(r["media_type"]):
-            continue
+        if r["role"] == "source" or not is_text(r["media_type"]) or r["media_type"] in MARKUP:
+            continue                # markup is searched through the text extracted from it
         t = None
         if any(l["type"] == "db" for l in r.get("locations", [])):
             t = rec.text(r["name"])
@@ -228,7 +228,9 @@ def index_rows(kb: "Store", rec: Item, fetch: bool = False) -> list[tuple]:
     from .embed import chunks, head_text, text_hash as h
     d = rec.data
     title, summary = d.get("title", ""), d.get("summary", "")
-    subjects = " ".join(s.replace("/", " ") for s in d.get("subject", []))
+    # subjects and tags, words apart, so that search finds an item by them too
+    subjects = " ".join([s.replace("/", " ") for s in d.get("subject", [])]
+                        + [t.replace("-", " ") + " " + t for t in d.get("tags", [])])
     head = head_text(title, summary)
     rows = [(rec.id, "", 0, None, h(head), title, summary, subjects, "")]
     for name, text in rendition_texts(kb, rec, fetch):

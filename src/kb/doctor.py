@@ -409,6 +409,39 @@ def _clone(kb, f):
     return f"cloned {f.where} to {path}"
 
 
+@remedy("mistyped", "Files recorded as application/octet-stream that are of a known type (web pages, PDFs ...)")
+def _mistyped(kb):
+    from . import content, locations
+    out = []
+    for rec in kb.items.values():
+        for r in rec.renditions:
+            if r["role"] not in ("original", "content") or r["media_type"] != "application/octet-stream":
+                continue
+            try:
+                p = locations.resolve(kb, rec, r, fetch=False)
+            except KBError:
+                p = None
+            found = content.sniff(p, "") if p is not None else "application/octet-stream"
+            if found != "application/octet-stream":
+                out.append(Finding("mistyped", f"{rec.id}#{r['name']} is {found}, recorded as application/octet-stream",
+                                   f"record it as {found} (then its text can be extracted)", "auto",
+                                   f"{rec.id}#{r['name']}", {"id": rec.id, "rendition": r["name"], "type": found}))
+    return out
+
+
+@_mistyped.fixer
+def _retype(kb, f):
+    import copy
+    from .items import Item
+    rec = kb.get(f.data["id"])
+    data = copy.deepcopy(rec.data)
+    for r in data["renditions"]:
+        if r["name"] == f.data["rendition"]:
+            r["media_type"] = f.data["type"]
+    kb.save(Item(data, kb), "set", {"rendition": f.data["rendition"], "media_type": f.data["type"]})
+    return f"{f.where} is {f.data['type']}"
+
+
 @remedy("unextracted", "Items with a PDF, slides or the like but no text from it, so search can't see inside")
 def _unextracted(kb):
     from .transforms import unextracted
@@ -430,6 +463,8 @@ def _extract(kb, f):
         m, bad = extract_missing(kb, kb.get(ident))
         made += m
         failed += bad
+    if failed and not made:
+        raise KBError("; ".join(failed))
     return f"extracted {len(made)} text rendition(s)" + (f"; failed: {'; '.join(failed)}" if failed else "")
 
 

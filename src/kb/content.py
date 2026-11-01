@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import locations
@@ -43,22 +44,38 @@ def media_type(name: str) -> str:
     return guess or "application/octet-stream"
 
 
+#: Text that is markup: indexed through the text extracted from it (pandoc), not as it is.
+MARKUP = ("text/html", "application/xhtml+xml")
+
+
+def needs_text(mtype: str) -> bool:
+    """Should text be extracted from content of this type, for search (it is not plain text)?"""
+    return not is_text(mtype) or mtype in MARKUP
+
+
 #: Leading bytes of kinds of file whose name may not say what they are.
 _MAGIC = ((b"%PDF-", "application/pdf"), (b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"),
           (b"GIF8", "image/gif"), (b"II*\x00", "image/tiff"), (b"MM\x00*", "image/tiff"))
 
 
-def sniff(path: Path, name: str) -> str:
-    """The media type of the file at PATH: by NAME, else (when that says nothing) by its first bytes."""
+def sniff(path: Path, name: str, said: str | None = None) -> str:
+    """The media type of the file at PATH: by NAME, else what a server SAID, else by its first bytes."""
     mtype = media_type(name)
     if mtype != "application/octet-stream":
         return mtype
+    if said:
+        return said
     try:
         with open(path, "rb") as f:
-            head = f.read(16)
+            head = f.read(512)
     except OSError:
         return mtype
-    return next((t for magic, t in _MAGIC if head.startswith(magic)), mtype)
+    found = next((t for magic, t in _MAGIC if head.startswith(magic)), None)
+    if found:
+        return found
+    if head.lstrip().lower().startswith((b"<!doctype html", b"<html")):
+        return "text/html"
+    return mtype
 
 
 def is_text(mtype: str) -> bool:
@@ -106,15 +123,28 @@ def default_cas(kb) -> str | None:
     return usable[0] if len(usable) == 1 else None
 
 
-def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
-    """Download *url* into the url source directory (content-addressed); return (path, sha256, size)."""
+@dataclass
+class Fetched:
+    path: Path
+    sha256: str
+    size: int
+    #: What the server said: its Content-Type (without parameters) and Last-Modified, when it said.
+    media_type: str | None = None
+    last_modified: str | None = None
+
+
+def fetch_info(kb, url: str, timeout: float = 60) -> Fetched:
+    """Download *url* into the url source directory (content-addressed), with what the server said of it."""
     from .config import source_dir
+    from email.utils import parsedate_to_datetime
     tmpdir = source_dir(kb.cfg.raw, "url")
     tmpdir.mkdir(parents=True, exist_ok=True)
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp, \
                 tempfile.NamedTemporaryFile(dir=tmpdir, delete=False) as tmp:
             shutil.copyfileobj(resp, tmp)
+            ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower() or None
+            modified = resp.headers.get("Last-Modified")
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise KBError(f"cannot fetch {url}: {exc}") from exc
     tmp_path = Path(tmp.name)
@@ -122,7 +152,17 @@ def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
     dest = locations.url_cache_path(kb, sha)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp_path.replace(dest)
-    return dest, sha, size
+    try:
+        modified = parsedate_to_datetime(modified).date().isoformat() if modified else None
+    except (TypeError, ValueError):
+        modified = None
+    return Fetched(dest, sha, size, ctype if ctype != "application/octet-stream" else None, modified)
+
+
+def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:
+    """Download *url* into the url source directory (content-addressed); return (path, sha256, size)."""
+    f = fetch_info(kb, url, timeout)
+    return f.path, f.sha256, f.size
 
 
 def resolve(kb, rec, rendition: dict, fetch_urls: bool = True, verify: bool = False) -> Path | None:

@@ -14,10 +14,7 @@ from .config import find_root
 from .errors import KBError
 from .items import Store
 
-STOP = set("""a an and are as at be but by can could did do does for from had has have how i if in into is it
-its me my no not of on or our please should so than that the their them then there these they this to us
-was we were what when where which who why will with would you your about also any just like make get use
-some more need want know tell show give let new one two""".split())
+from .query import STOP
 
 
 def _open(event: dict, root: Path | None) -> Store | None:
@@ -79,12 +76,14 @@ def recall(event: dict, root: Path | None = None, limit: int = 5) -> str:
     if not words:
         return ""
     q = " OR ".join('"' + w.replace('"', '') + '"' for w in words)
+    # the item heads only (chunk 0): one row per item, matched on what it is about
     rows = [r for r in kb.conn.execute(
         """SELECT i.id, i.kind, json_extract(i.json, '$.status') AS status,
                   json_extract(i.json, '$.title') AS title, json_extract(i.json, '$.summary') AS summary,
-                  (SELECT group_concat(subject, ' ') FROM subjects s WHERE s.id = i.id) AS subj
+                  f.subjects AS subj
            FROM fts f JOIN items i ON i.id = f.id
-           WHERE fts MATCH ? ORDER BY bm25(fts, 0, 5.0, 3.0, 2.0, 1.0) LIMIT 20""", (q,)).fetchall()
+           WHERE fts MATCH ? AND f.rendition = '' ORDER BY bm25(fts, 0, 0, 0, 0, 0, 5.0, 3.0, 2.0, 1.0)
+           LIMIT 20""", (q,)).fetchall()
             if kb.is_current(r["id"])]
     need = 2 if len(words) > 1 else 1
     hits = []

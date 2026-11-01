@@ -228,16 +228,17 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             while name in used:
                 name += "_"
             used.add(name)
-            path = None
+            path, said, modified = None, None, None
             if is_url and fetch:
-                path = content.fetch(kb, src)[0]
+                f = content.fetch_info(kb, src)
+                path, said, modified = f.path, f.media_type, f.last_modified
             elif not is_url:
                 path = Path(src).expanduser()
                 if not path.is_file():
                     raise KBError(f"no such file: {src}")
-            mtype = content.sniff(path, filename) if path is not None else content.media_type(filename)
+            mtype = content.sniff(path, filename, said) if path is not None else content.media_type(filename)
             if guess and path is not None and not got:
-                found.take(metadata.for_file(path, mtype))
+                found.take(metadata.for_file(path, mtype, last_modified=modified))
             got.append((src, is_url, filename, name, path, mtype))
         guessed = {k: v for k, v in found.fields.items() if kind == "document" or k not in _DOCUMENT_ONLY}
         ids = {**guessed.get("identifiers", {}), **fields.get("identifiers", {})}
@@ -257,8 +258,10 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
                 r["locations"] = locs + r["locations"]
             elif path is not None:
                 m = mode
-                if is_url and mode == "auto":
-                    m = "db" if path.stat().st_size <= kb.cfg.max_inline_bytes else ("cas" if cas_name else "none")
+                if is_url and mode == "auto":     # a mirror of what the URL gave, wherever large content goes
+                    size = path.stat().st_size
+                    m = ("db" if size <= kb.cfg.max_inline_bytes else "cas" if cas_name or content.default_cas(kb)
+                         else "content" if content.content_dataset_usable(kb) else "none")
                 locs, sha, size = content.place(kb, path, filename, m, cas_name)
                 r.update(sha256=sha, size=size)
                 r["locations"] += locs
@@ -272,7 +275,9 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             renditions.append(_content_rendition(kb, kind, found.abstract, ("abstract", "abstract.md")))
         data["renditions"] = renditions + data.get("renditions", [])
         _report_guesses(found, fields)
-        return _finish(kb, data)
+        rec = _finish(kb, data)
+        _report_places(kb, renditions)
+        return rec
 
 
 def _copy(path: Path, target: str | Path, filename: str, several: bool) -> Path:
@@ -317,6 +322,25 @@ def _place_copy(kb: Store, dest: Path, filename: str, mode: str, cas_name: str |
     if not any(l["type"] == "local" for l in locs):
         locs.append({"type": "local", "host": kb.cfg.host, "path": str(dest.resolve())})
     return locs, sha, size
+
+
+_PLACES = {"db": "in the store", "cas": "in a content store", "datalad": "in a DataLad dataset",
+           "source": "in a source's tree", "local": "only on this machine", "url": "at its URL",
+           "asset": "through an asset"}
+
+
+def _report_places(kb: Store, renditions: list[dict]) -> None:
+    """Say where each file's content went: a person (or an LLM) should not have to look it up."""
+    import logging
+    from .logs import tell
+    mine = (kb.setting(content.CONTENT_SETTING) or {}).get("dataset")
+    for r in renditions:
+        places = [("the store's content dataset" if loc["type"] == "datalad" and loc.get("source") == mine
+                   else _PLACES.get(loc["type"], loc["type"])) for loc in r["locations"]]
+        where = " and ".join(dict.fromkeys(places))
+        note = "" if "sha256" in r else " (not fetched: no hash yet)"
+        tell(logging.getLogger(__name__), logging.INFO,
+             f"#{r['name']} ({r['media_type']}): kept {where}{note}")
 
 
 def _report_guesses(found, fields: dict) -> None:

@@ -54,7 +54,8 @@ def lint(kb: Store) -> list[Problem]:
                                  "put it in a content store (kb rendition locate) or add a URL others can reach"))
             if r["role"] == "original" and "sha256" not in r:
                 out.append(_warn("unhashed", f"{rec.id}#{r['name']}", "no sha256: changes upstream cannot be detected",
-                                 "fetch it (kb rendition verify --record) or add a local copy"))
+                                 "fetch it (kb rendition verify --record); if the site refuses kb, add the copy "
+                                 "you have: kb rendition add ID FILE --name original-copy"))
         if rec.kind == "view":
             for pub in publications(kb, rec)[-1:]:
                 gone = [i for i in pub.get("inputs", []) if parse_ref(i)[0] in kb.items

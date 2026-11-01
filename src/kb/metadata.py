@@ -235,6 +235,64 @@ def from_pdf(path: Path, lookup: bool = True) -> Found:
     return f
 
 
+# -- web pages -------------------------------------------------------------------------------------
+
+def _html_tags(path: Path) -> dict[str, str]:
+    """The <title> and <meta> name/property -> content of an HTML page (the head is enough)."""
+    from html.parser import HTMLParser
+
+    class P(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.tags, self.in_title, self.title = {}, False, ""
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == "title":
+                self.in_title = True
+            elif tag == "meta":
+                key = (a.get("name") or a.get("property") or a.get("itemprop") or "").lower()
+                if key and a.get("content") and key not in self.tags:
+                    self.tags[key] = a["content"].strip()
+
+        def handle_endtag(self, tag):
+            if tag == "title":
+                self.in_title = False
+
+        def handle_data(self, data):
+            if self.in_title:
+                self.title += data
+
+    p = P()
+    with open(path, encoding="utf-8", errors="replace") as f:
+        p.feed(f.read(400_000))
+    if p.title.strip():
+        p.tags.setdefault("title", " ".join(p.title.split()))
+    return p.tags
+
+
+def from_html(path: Path, last_modified: str | None = None) -> Found:
+    """A web page's own title, description, author and date (Open Graph, citation_*, article:*), else the
+    date the server says it was last modified."""
+    tags = _html_tags(path)
+    f = Found()
+    w = "the page's metadata"
+    title = tags.get("citation_title") or tags.get("og:title") or tags.get("title")
+    if title and len(title) <= 200:
+        f.put("title", title, w)
+    desc = tags.get("description") or tags.get("og:description") or tags.get("twitter:description")
+    if desc:
+        f.put("summary", summary_of(desc), w)
+    f.put("creators", _people(tags.get("citation_author") or tags.get("author") or tags.get("article:author")), w)
+    date = _date(tags.get("citation_publication_date") or tags.get("citation_date")
+                 or tags.get("article:published_time") or tags.get("datepublished") or tags.get("date"))
+    if date:
+        f.put("date", date, w)
+    elif last_modified:
+        f.put("date", last_modified, "the server's Last-Modified")
+    return f
+
+
 # -- images --------------------------------------------------------------------------------------
 
 def _image_tags(path: Path) -> dict:
@@ -290,10 +348,12 @@ def for_source(src: str, lookup: bool = True) -> Found:
     return f
 
 
-def for_file(path: Path, media_type: str, lookup: bool = True) -> Found:
-    """What a local file says of itself."""
+def for_file(path: Path, media_type: str, lookup: bool = True, last_modified: str | None = None) -> Found:
+    """What a local file (or a fetched one: LAST_MODIFIED, as its server said) says of itself."""
     if media_type == "application/pdf":
         return from_pdf(path, lookup)
+    if media_type in ("text/html", "application/xhtml+xml"):
+        return from_html(path, last_modified)
     if media_type.startswith("image/"):
         return from_image(path)
     return Found()

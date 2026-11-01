@@ -151,7 +151,8 @@ Options:
   --kind [document|dataset|config|snapshot|software|observation]
                                   [default: document]
   --title TEXT                    Short title.
-  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again.
+  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again
+                                  (at most 400 characters).
   --subject TEXT                  Subject path, e.g. detector/tpc/noise (repeatable).
   --tag TEXT                      Free label (repeatable).
   --runs TEXT                     Valid for runs: N or FIRST-LAST (repeatable).
@@ -159,9 +160,11 @@ Options:
   --end TEXT                      Valid until (date).
   --status [draft|unverified|verified|disputed]
   --access [public|collaboration|group|private]
-  --by TEXT                       Who asserted it (person ID or name).
-  --how TEXT                      How it was asserted: 'verbal at collab meeting', 'elog 5521' ...
-  --when TEXT                     When it was asserted (date).
+  --by TEXT                       Observations and configs: who asserted it (person ID or name;
+                                  claude for your own inference).
+  --how TEXT                      Observations and configs: how it was asserted: 'verbal at collab
+                                  meeting', 'elog 5521', 'read <URL>' ...
+  --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
   --date TEXT                     Date of the thing itself (e.g. of a talk).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
@@ -208,7 +211,8 @@ Usage: kb new [OPTIONS] {observation|document|dataset|config|snapshot|software|t
 
 Options:
   --title TEXT                    Short title.
-  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again.
+  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again
+                                  (at most 400 characters).
   --subject TEXT                  Subject path, e.g. detector/tpc/noise (repeatable).
   --tag TEXT                      Free label (repeatable).
   --runs TEXT                     Valid for runs: N or FIRST-LAST (repeatable).
@@ -216,9 +220,11 @@ Options:
   --end TEXT                      Valid until (date).
   --status [draft|unverified|verified|disputed]
   --access [public|collaboration|group|private]
-  --by TEXT                       Who asserted it (person ID or name).
-  --how TEXT                      How it was asserted: 'verbal at collab meeting', 'elog 5521' ...
-  --when TEXT                     When it was asserted (date).
+  --by TEXT                       Observations and configs: who asserted it (person ID or name;
+                                  claude for your own inference).
+  --how TEXT                      Observations and configs: how it was asserted: 'verbal at collab
+                                  meeting', 'elog 5521', 'read <URL>' ...
+  --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
   --date TEXT                     Date of the thing itself (e.g. of a talk).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...
@@ -292,7 +298,9 @@ Options:
   --all                           Include superseded and retracted items.
   --limit INTEGER
   -l, --long                      Show summaries.
+  --tag TEXT                      Only items with this tag (repeatable: all of them).
   --subjects                      List subject paths in use, with counts.
+  --tags                          List tags in use, with counts.
   --reach INTEGER                 Also list neighbor stores up to this many hops away.
   --in TEXT                       Also list this neighbor store (repeatable).
   --json
@@ -594,7 +602,8 @@ Usage: kb item supersede [OPTIONS] REF
 
 Options:
   --title TEXT                    Short title.
-  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again.
+  --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again
+                                  (at most 400 characters).
   --subject TEXT                  Subject path, e.g. detector/tpc/noise (repeatable).
   --tag TEXT                      Free label (repeatable).
   --runs TEXT                     Valid for runs: N or FIRST-LAST (repeatable).
@@ -602,9 +611,11 @@ Options:
   --end TEXT                      Valid until (date).
   --status [draft|unverified|verified|disputed]
   --access [public|collaboration|group|private]
-  --by TEXT                       Who asserted it (person ID or name).
-  --how TEXT                      How it was asserted: 'verbal at collab meeting', 'elog 5521' ...
-  --when TEXT                     When it was asserted (date).
+  --by TEXT                       Observations and configs: who asserted it (person ID or name;
+                                  claude for your own inference).
+  --how TEXT                      Observations and configs: how it was asserted: 'verbal at collab
+                                  meeting', 'elog 5521', 'read <URL>' ...
+  --when TEXT                     Observations and configs: when it was asserted (date).
   --creators TEXT                 Author (repeatable).
   --date TEXT                     Date of the thing itself (e.g. of a talk).
   --identifier TEXT               scheme=value: doi=, arxiv=, indico=, inspire= ...

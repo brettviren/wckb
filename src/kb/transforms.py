@@ -158,7 +158,9 @@ class Pandoc(Transform):
         return _cmd_version(["pandoc", "--version"]).replace("pandoc ", "")
 
     def run(self, src, dst, media_type):
-        _run(["pandoc", "-f", _PANDOC_FROM[media_type], "-t", "gfm", "--wrap=none", str(src), "-o", str(dst)])
+        # no raw HTML in the output: it is for reading and searching, and web pages are mostly markup
+        _run(["pandoc", "-f", _PANDOC_FROM[media_type], "-t", "gfm-raw_html", "--wrap=none", str(src),
+              "-o", str(dst)])
 
 
 class Pptx(Transform):
@@ -376,11 +378,11 @@ def text_name(source: str) -> str:
 def unextracted(kb: Store, rec: Item) -> list[tuple[str, Transform]]:
     """The renditions of REC that are not text and have no text extracted yet, with the transform that
     would extract it here (renditions no available transform handles are left out)."""
-    from .content import is_text
+    from .content import needs_text
     have = {r.get("derived_from") for r in rec.renditions if r["role"] == "derived"}
     out = []
     for r in rec.renditions:
-        if r["role"] not in ("original", "content") or is_text(r["media_type"]) or r["name"] in have:
+        if r["role"] not in ("original", "content") or not needs_text(r["media_type"]) or r["name"] in have:
             continue
         try:
             out.append((r["name"], choose(kb, r["media_type"])))

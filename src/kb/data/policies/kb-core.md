@@ -40,8 +40,10 @@ Rules:
    asserts. To correct one, use `kb item supersede ID`; to withdraw one, use
    `kb item retract ID`. You may change `status`, `subject`, `tags`, `summary`,
    `evidence` and `related` with `kb item set`.
-2. **Attribute every assertion** (`--by`, `--how`, `--when`). If you inferred
-   it yourself: `--by claude --how "inferred from <what>"`.
+2. **Attribute every assertion.** Observations and configs: `--by`, `--how`,
+   `--when`; if you inferred it yourself, `--by claude --how "inferred from
+   <what>"`. Documents: their authors are `--creators`. kb records who filed
+   anything (and `--via` the tool).
 3. **`verified` needs evidence** from an authoritative source. Hearsay is
    `unverified`, and a model's reading of a figure is not evidence.
 4. **Write the summary for the next LLM:** one to three sentences, not the
