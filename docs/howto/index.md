@@ -4,6 +4,7 @@ Read these in order if you are new; later on, go straight to the task you need. 
 
 | guide | for |
 |---|---|
+| [install](install.md) | install `kb` with uv, with its optional extras, a modern git-annex and the Indico remote |
 | [getting-started](getting-started.md) | install `kb`, create stores, configure your machine |
 | [contexts](contexts.md) | which store a command uses (store contexts), config files, logs |
 | [health](health.md) | `kb status` and `kb doctor`: what needs attention, and fixing common problems |

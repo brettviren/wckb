@@ -94,6 +94,29 @@ They lay over the store's own settings. The store's `.kb/local.toml` (this
 machine's paths for that store) and `KB_*` environment variables lay over
 them in turn.
 
+### Where a setting comes from
+
+`kb config show` prints the settings in the store's database. To see what is
+in effect, and which layer set each line, add `--blame`:
+
+```
+$ kb config show --blame
+user = "per-ann"  # /home/ann/.config/kb/config.toml
+
+[views]  # /home/ann/ana/.kb.toml, /home/ann/.config/kb/config.toml
+publish_url = "https://www.example.org/kb"  # /home/ann/ana/.kb.toml
+publish_path = "/www"  # $KB_PUBLISH_PATH
+
+[limits]  # /home/ann/ana/kb.sqlite
+max_inline_bytes = 1048576  # /home/ann/ana/kb.sqlite
+```
+
+Each comment is the last layer that set the value: the store's `kb.sqlite`,
+a config file (the user's, one in the directory or above it, `-c FILE`), the
+store's `.kb/local.toml`, or an environment variable. A `[table]` line
+lists every layer that contributed to the table. The output is still valid
+TOML. `--blame` does not combine with `--json`.
+
 ## Logs
 
 kb logs to a file per day, `~/.cache/kb/logs/kb-YYYY-MM-DD.log`, appending,

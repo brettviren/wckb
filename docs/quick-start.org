@@ -42,6 +42,32 @@ $ KB_CONTEXT=~/mykb kb status
 
 The "context" can also be specified in a =kb= config file.  See [[file:howto/contexts.md][how to use contexts]] for information.
 
+* Adding your person to the KB
+
+In the =kb status= examples above you may see:
+
+#+begin_example
+Needs attention (1):
+  manual user            items are attributed to the login name 'bv', not to a person item
+                         fix: make your person item: kb new person --slug bv --set name="Your Name"; then kb doctor user --fix sets user = "per-bv" in /home/bv/.config/kb/config.toml
+
+kb doctor --fix applies the 'auto' fixes and asks about the others; kb doctor runs a full diagnosis.
+#+end_example
+
+Follow the advice to define a person and use that as the user in the future.  Repeating the =kb status= shows
+
+#+begin_example
+items     1 current (1 person)
+#+end_example
+
+And,
+
+#+begin_example
+$ kb ls
+per-bv           person      -          Brett Viren
+#+end_example
+
+
 * See next
 
 See [[file:howto/simple-notes.md][add a simple note]] and other [[file:howto/index.org][how-to's]].

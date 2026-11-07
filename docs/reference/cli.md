@@ -460,8 +460,14 @@ Usage: kb config show [OPTIONS]
   All store settings, as TOML that could be a config file (the config files and .kb/local.toml apply
   on top).
 
+    kb config show             # what is in the store's database
+    kb config show --blame     # what is in effect, and which file or database set each line
+
 Options:
   --json      As JSON instead of TOML.
+  --blame     Show the settings in effect (the store's, then the config files, .kb/local.toml and
+              KB_* variables applied on top), each line ending in a comment naming where its value
+              comes from.
   -h, --help  Show this message and exit.
 ```
 

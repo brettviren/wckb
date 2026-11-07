@@ -1617,9 +1617,23 @@ def kset_expand_cmd(c, ref, json_out):
 
 @command(config_grp, "show")
 @click.option("--json", "json_out", is_flag=True, help="As JSON instead of TOML.")
+@click.option("--blame", is_flag=True,
+              help="Show the settings in effect (the store's, then the config files, .kb/local.toml and KB_* "
+                   "variables applied on top), each line ending in a comment naming where its value comes from.")
 @pass_ctx
-def config_show_cmd(c, json_out):
-    """All store settings, as TOML that could be a config file (the config files and .kb/local.toml apply on top)."""
+def config_show_cmd(c, json_out, blame):
+    """All store settings, as TOML that could be a config file (the config files and .kb/local.toml apply on top).
+
+    \b
+      kb config show             # what is in the store's database
+      kb config show --blame     # what is in effect, and which file or database set each line
+    """
+    if blame:
+        if json_out:
+            raise KBError("--blame comments TOML lines; it does not combine with --json")
+        from .config import blame as find, blame_text
+        raw, source = find(c.kb.root, c.kb.settings())
+        return sys.stdout.write(blame_text(raw, source, f"settings in effect for the store {c.kb.cfg.name} ({c.kb.root})"))
     if json_out:
         return ui.emit_json(c.kb.settings())
     from .config import toml_text
