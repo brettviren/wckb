@@ -75,7 +75,7 @@ kb context detector/tpc              # what the KB knows, compactly
   store; 0002: assets, versions and sources).
 - [docs/rendering.md](docs/rendering.md): rendering for review, now and
   planned (TUI, web).
-- [docs/howto/](docs/howto/): task guides. Start with
+- [docs/howto/](docs/howto/index.md): task guides (the index lists each). Start with
   [getting-started](docs/howto/getting-started.md).
 - [docs/reference/schema.md](docs/reference/schema.md): every item field
   (generated).

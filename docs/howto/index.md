@@ -1,6 +1,6 @@
 # How-tos
 
-Read these in order if you are new; later on, go straight to the task you need.
+Read these in order if you are new; later on, go straight to the task you need. Every guide in this directory is listed here with a one-line description.
 
 | guide | for |
 |---|---|
@@ -8,6 +8,7 @@ Read these in order if you are new; later on, go straight to the task you need.
 | [contexts](contexts.md) | which store a command uses (store contexts), config files, logs |
 | [health](health.md) | `kb status` and `kb doctor`: what needs attention, and fixing common problems |
 | [working-with-claude](working-with-claude.md) | what Claude does by routine, the hooks, capturing, consulting |
+| [simple-notes](simple-notes.md) | jot a brief text note with one command: `kb add --note "..."` |
 | [observations](observations.md) | record facts, hearsay, configurations; attribution, validity, status |
 | [documents](documents.md) | add papers, slides, Indico and arXiv material; extract text |
 | [artifacts](artifacts.md) | technotes, demos and notebooks you make: inputs, staleness, HTML demos, co-authors, LLM summaries |

@@ -9,7 +9,7 @@ Related documents:
 
 - [glossary.md](glossary.md): the terms used here, and their names in the code;
 - [plan.md](plan.md): the implementation plan;
-- [howto/](howto/): task guides;
+- [howto/](howto/index.md): task guides;
 - [questions.md](questions.md): open questions;
 - [decisions/](decisions/): decisions, including
   [0001](decisions/0001-knowledge-store.md), the choice of a SQLite store,

@@ -4,6 +4,48 @@ Prerequisite: [[file:install.org][install]] and optionally understand how =kb= [
 
 * Initialize a new KB
 
-A KB needs a directory for its store 
+A KB is initialized at a filesystem location:
+
+#+begin_example
+$ kb init ~/mykb
+created /home/bv/mykb/kb.sqlite
+created /home/bv/mykb/CLAUDE.md
+created /home/bv/mykb/.claude/skills/kb-consult/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-ingest/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-correct/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-view/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-curate/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-promote/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-review/SKILL.md
+created /home/bv/mykb/.claude/skills/kb-review-prs/SKILL.md
+created /home/bv/mykb/.claude/settings.json
+#+end_example
+
+* Using a KB
+
+Most =kb= commands require locating the KB on which to operate.  Unless otherwise directed, a KB is automatically located in the current working directory or a parent.
+
+#+begin_example
+$ cd ~/mykb
+$ kb status
+mykb  other store, access group, id kb-zvvxgkph30
+  at /home/bv/mykb, as bv on hokum
+...
+#+end_example
+
+Other ways to specify:
+
+#+begin_example
+$ kb -C ~/mykb  [...] 
+$ KB_CONTEXT=~/mykb kb status
+#+end_example
+
+The "context" can also be specified in a =kb= config file.  See [[file:howto/contexts.md][how to use contexts]] for information.
+
+* See next
+
+See [[file:howto/simple-notes.md][add a simple note]] and other [[file:howto/index.org][how-to's]].
+  
+
 
 
