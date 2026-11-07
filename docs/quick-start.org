@@ -1,0 +1,9 @@
+#+title: Get started quickly with wckb's =kb=
+
+Prerequisite: [[file:install.org][install]] and optionally understand how =kb= [[file:modeling-knowledge.org][models knowledge]].
+
+* Initialize a new KB
+
+A KB needs a directory for its store 
+
+

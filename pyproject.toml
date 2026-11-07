@@ -9,8 +9,11 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
-    # DataLad datasets: sources, and the store's content dataset (git-annex must be on PATH too).
+    # DataLad datasets: sources, and the store's content dataset.
     "datalad>=1.0",
+    # The git-annex binary (PyPI wheels). DataLad needs >=10.20230126; the
+    # Debian 13 package (10.20250416) was found not sufficient.
+    "git-annex>=10.20250605",
     # Validates records against the JSON Schemas shipped in kb/schemas.
     "jsonschema>=4.23",
     # Nearest-neighbour search over embeddings (used when SQLite can load it; else plain Python).
@@ -26,6 +29,8 @@ kb = "kb.cli:main"
 # Transforms that need a Python library; command-line transforms need nothing.
 pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
+# Indico sites as DataLad datasets (the git-annex special remote).
+indico = ["git-annex-remote-indico @ git+https://github.com/brettviren/git-annex-remote-indico"]
 root = ["uproot>=5"]
 
 [build-system]
@@ -46,7 +51,7 @@ kb = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "wckb[pdf,pptx,root]",
+    "wckb[pdf,pptx,root,indico]",
 ]
 
 [tool.pytest.ini_options]

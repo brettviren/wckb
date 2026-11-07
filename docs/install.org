@@ -1,0 +1,48 @@
+#+title: Installing wckb's =kb= tool
+
+To get the full set of features, it is recommended to install =kb= from the wckb package with all optional dependencies and runtime support with:
+
+#+begin_example
+$ uv tool install \
+    --with-executables-from git-annex,git-annex-remote-indico \
+    'git+https://github.com/brettviren/wckb[pdf,pptx,root,indico]'
+#+end_example
+
+What the extras add:
+
+- =pdf=, =pptx=, =root=: transforms that need a Python library (PDF, slides, ROOT files).
+- =indico=: [[https://github.com/brettviren/git-annex-remote-indico][git-annex-remote-indico]], so Indico sites can be held as DataLad datasets. Leave it out if you don't use Indico.
+
+=git-annex= and =git-annex-remote-indico= are named explicitly so their commands are found in =$PATH=.  The latter is needed to use an Indico site as a source for knowledge material.
+
+Note, you need a new enough =git-annex=. DataLad needs at least 10.20230126, and =kb= asks for 10.20250605 or newer. The older version provided by Debian 13 is not sufficient.  If you have installed =git-annex= in another way assure the new version is found, eg using =which git-annex= and =git annex version=.
+
+#+begin_example
+$ kb --version
+kb, version 0.1.0
+#+end_example
+
+Note, while in early development, version will stay at 0.1.0.  Until releases begin to be made, updating to latest development is done with:
+
+#+begin_example
+$ uv tool upgrade wckb --reinstall
+#+end_example
+
+* Working on =kb= itself
+
+#+begin_example
+$ git clone https://github.com/brettviren/wckb
+$ cd wckb
+$ uv sync            # the dev group includes all the extras, indico too
+$ uv run pytest
+#+end_example
+
+=uv run= puts the environment's =git-annex= first on =PATH=, so tests and =uv run kb= use it.
+
+Or, install an editable version
+
+#+begin_example
+$ uv tool install  --force -e \
+    --with-executables-from git-annex,git-annex-remote-indico \
+    '.[pdf,pptx,root,indico]'
+#+end_example
