@@ -368,9 +368,12 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 
 
 @command(main, "add", no_args_is_help=True, cls=KindHelp)
-@click.argument("sources", nargs=-1, required=True)
+@click.argument("sources", nargs=-1)
 @click.option("--kind", default="document", type=click.Choice(["document", "dataset", "config", "snapshot", "software", "observation"]),
               show_default=True)
+@click.option("-n", "--note", "note_text", metavar="TEXT",
+              help="Add a brief text note instead of files (- reads it from stdin); title, summary, creator and date "
+                   "are filled in.")
 @item_options
 @click.option("--place", "mode", default="auto", show_default=True,
               type=click.Choice(["auto", "db", "cas", "content", "local", "datalad", "none"]),
@@ -389,7 +392,7 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.option("--no-guess", is_flag=True, help="Don't look for metadata in the files or at arXiv.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract, force, target, no_guess,
+def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, force, target, no_guess,
             json_out, via, **kw):
     """Add files or URLs as a new primary item (default kind: document).
 
@@ -400,6 +403,7 @@ def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract
     it found; --no-guess turns this off.
 
     \b
+      kb add --note "TPC noise rose after the 10-28 HV trip; check grounding."   # a brief note
       kb add https://arxiv.org/abs/2601.01234            # everything from arXiv; the PDF is added
       kb add slides.pdf --url https://indico.example/... --set doctype=presentation \\
          --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
@@ -411,6 +415,15 @@ def add_cmd(c, sources, kind, mode, cas_name, url, no_fetch, supersedes, extract
     fields = _fields(kw)
     if supersedes:
         fields["supersedes"] = [kb.get(supersedes).id]
+    if note_text is not None:
+        if sources:
+            raise KBError("give --note or files/URLs, not both")
+        if kind != "document":
+            raise KBError("a note is a document; drop --kind")
+        rec = authoring.add_note(kb, sys.stdin.read() if note_text == "-" else note_text, fields, via=via)
+        return _done(kb, rec, json_out)
+    if not sources:
+        raise KBError("nothing to add: give files or URLs, or --note TEXT")
     rec = authoring.add(kb, kind, list(sources), fields, mode=mode, cas_name=cas_name, url=url,
                         fetch=not no_fetch, force=force, via=via, target=target, guess=not no_guess)
     if extract:

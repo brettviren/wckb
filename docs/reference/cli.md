@@ -136,7 +136,7 @@ Options:
 ## kb add
 
 ```
-Usage: kb add [OPTIONS] SOURCES...
+Usage: kb add [OPTIONS] [SOURCES]...
 
   Add files or URLs as a new primary item (default kind: document).
 
@@ -145,6 +145,7 @@ Usage: kb add [OPTIONS] SOURCES...
   and more from arXiv; a PDF its document information and DOI; an image its EXIF. kb says what it
   found; --no-guess turns this off.
 
+    kb add --note "TPC noise rose after the 10-28 HV trip; check grounding."   # a brief note
     kb add https://arxiv.org/abs/2601.01234            # everything from arXiv; the PDF is added
     kb add slides.pdf --url https://indico.example/... --set doctype=presentation \
        --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
@@ -154,6 +155,8 @@ Usage: kb add [OPTIONS] SOURCES...
 Options:
   --kind [document|dataset|config|snapshot|software|observation]
                                   [default: document]
+  -n, --note TEXT                 Add a brief text note instead of files (- reads it from stdin);
+                                  title, summary, creator and date are filled in.
   --title TEXT                    Short title.
   --summary TEXT                  1-3 sentences for the next reader (an LLM); not the title again
                                   (at most 400 characters).

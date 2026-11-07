@@ -91,6 +91,13 @@ to be right; please fix the other place.
   `view` (presentation). Derived items are editable and go stale when
   their inputs change.
 
+**note**
+: A brief text a person jots down: a `document` of doctype `note` whose
+  text is its `note` rendition, made by `kb add --note TEXT`. kb fills in
+  the title (the first line), summary, creator (the user) and date. Not an
+  `observation`: it asserts nothing attributed, so use that for facts
+  someone stated. *Code:* `authoring.add_note`.
+
 **frozen**
 : Cannot change what it asserts. Frozen items are primary items, released
   or deprecated policies, the registered versions of assets, and the

@@ -41,7 +41,7 @@ def lint(kb: Store) -> list[Problem]:
             continue
         if not d.get("subject") and rec.kind != "person":
             out.append(_warn("subject", rec.id, "no subject; it will be hard to find", "add subject paths"))
-        if d.get("summary", "").strip() == d.get("title", "").strip():
+        if d.get("summary", "").strip() == d.get("title", "").strip() and d.get("doctype") != "note":   # a one-line note is its own summary
             out.append(_warn("summary", rec.id, "summary just repeats the title",
                              "write one to three sentences an LLM can read instead of the content"))
         if d.get("status") == "unverified" and d.get("created", {}).get("at", "9") < cutoff:
