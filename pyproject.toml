@@ -9,8 +9,11 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
-    # DataLad datasets: sources, and the store's content dataset (git-annex must be on PATH too).
+    # DataLad datasets: sources, and the store's content dataset.
     "datalad>=1.0",
+    # The git-annex binary, as a wheel; it must be first on PATH.  Releases from early 2023
+    # (e.g. Debian's 10.20230126) lack `registerurl --remote`, which git-indico uses.
+    "git-annex>=10.20250605",
     # Validates records against the JSON Schemas shipped in kb/schemas.
     "jsonschema>=4.23",
     # Nearest-neighbour search over embeddings (used when SQLite can load it; else plain Python).
@@ -27,6 +30,8 @@ kb = "kb.cli:main"
 pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
 root = ["uproot>=5"]
+# The git-indico command and Indico special remote, for `kb source add` of Indico URLs.
+indico = ["git-annex-remote-indico @ git+https://github.com/brettviren/git-annex-remote-indico"]
 
 [build-system]
 requires = ["setuptools>=77.0.3"]

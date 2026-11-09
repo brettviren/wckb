@@ -699,6 +699,27 @@ wheels = [
 ]
 
 [[package]]
+name = "git-annex"
+version = "10.20261026"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/22/19/9b42aef74c7125408ac02ad39c15c5c391b7f4c7602b0b23d7f5a3ecab6a/git_annex-10.20261026-py3-none-macosx_15_0_arm64.whl", hash = "sha256:b63cff3cec8f2cd3c302dce5a3d0e17980f416a62d0a331c2857797fd473bc7f", size = 40248604, upload-time = "2026-10-26T19:21:13.094Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/b6/fc64afd6aeace638d1c6c8789cb98355eb7bd2e94b743bc1903551997fc1/git_annex-10.20261026-py3-none-macosx_15_0_x86_64.whl", hash = "sha256:85906b73b9b3cff50c3545f3147d67feaa335c26e08de180d009e8fde88c4003", size = 18142736, upload-time = "2026-10-26T18:58:28.574Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/43/f2fda168bdeadb92e511d87f66f8a3caed01cf7261773cd6783f6e8b248a/git_annex-10.20261026-py3-none-manylinux_2_34_aarch64.whl", hash = "sha256:ee90ab0fe3374922cb935fab00079d3d248ff1b18a6a04afee8b8e27e04c5022", size = 26701196, upload-time = "2026-10-26T18:43:20.189Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/6c/1ebc1ddf775b4c8d03a1dc56f643c0207cc8f3dfb43a6192941345dd41f2/git_annex-10.20261026-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:88db2b37f1ea9deb8ca9106f1e4c4a0b1a4b7440cd12bdfdfca5c1b3cb5640af", size = 22365378, upload-time = "2026-10-26T18:44:37.649Z" },
+    { url = "https://files.pythonhosted.org/packages/31/8e/ae422a9eb2703a031c6e80ac6c0e68cce7727c0db5a04aa5148589b48839/git_annex-10.20261026-py3-none-win_amd64.whl", hash = "sha256:e8ac1a82243c47ac5b04b44ee27855bd1ddb8cca7ab7cac3f5e83606c599ca9c", size = 27535415, upload-time = "2026-10-26T18:45:34.405Z" },
+]
+
+[[package]]
+name = "git-annex-remote-indico"
+version = "0.1.0"
+source = { git = "https://github.com/brettviren/git-annex-remote-indico#62fefb13f3249fe6a4da505d5664e4ddd659991c" }
+dependencies = [
+    { name = "annexremote" },
+    { name = "click" },
+]
+
+[[package]]
 name = "giturlparse"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -730,7 +751,7 @@ name = "importlib-metadata"
 version = "10.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp" },
+    { name = "zipp", marker = "python_full_version < '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/f6/4eda8458eb00ec03e715c376c6b23b3def69687924c68d36d1c4003d3bc4/importlib_metadata-10.1.0.tar.gz", hash = "sha256:82b04047fa09792c1a8cfeddfe08bec79e4b13c29c8469b0d3949860f61017e8", size = 67761, upload-time = "2026-10-24T00:01:44.856Z" }
 wheels = [
@@ -1982,12 +2003,16 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "datalad" },
+    { name = "git-annex" },
     { name = "jsonschema" },
     { name = "sqlite-vec" },
     { name = "tomli-w" },
 ]
 
 [package.optional-dependencies]
+indico = [
+    { name = "git-annex-remote-indico" },
+]
 pdf = [
     { name = "pymupdf" },
 ]
@@ -2008,6 +2033,8 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "datalad", specifier = ">=1.0" },
+    { name = "git-annex", specifier = ">=10.20250605" },
+    { name = "git-annex-remote-indico", marker = "extra == 'indico'", git = "https://github.com/brettviren/git-annex-remote-indico" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.24" },
     { name = "python-pptx", marker = "extra == 'pptx'", specifier = ">=1.0" },
@@ -2015,7 +2042,7 @@ requires-dist = [
     { name = "tomli-w", specifier = ">=1.0" },
     { name = "uproot", marker = "extra == 'root'", specifier = ">=5" },
 ]
-provides-extras = ["pdf", "pptx", "root"]
+provides-extras = ["pdf", "pptx", "root", "indico"]
 
 [package.metadata.requires-dev]
 dev = [
