@@ -62,22 +62,117 @@ def _save(ws: Path, message: str, paths: list[str] | None = None) -> None:
     dl.save(dataset=str(ws), path=paths, message=message, result_renderer="disabled", on_failure="ignore")
 
 
-def start(kb: Store, path: Path, title: str, prompts: bool = True) -> tuple[Path, dict]:
-    """Make PATH an artifact workspace: a DataLad dataset (made if PATH is new or empty, adopted if it is
-    one), marked by .kb-artifact/workspace.json and described in the store as a datalad source."""
-    from . import datasets, sharing
-    datasets.need()
-    ws = Path(path).expanduser().absolute()
-    if (ws / journal.WS_DIR / journal.WS_FILE).is_file():
-        raise KBError(f"{ws} is an artifact workspace already ({journal.read_workspace(ws)['title']})")
-    if not (ws / ".git").exists():
-        if ws.exists() and any(ws.iterdir()):
-            raise KBError(f"{ws} is not empty and not a dataset: make it one (datalad create --force) or pick "
-                          "another directory")
-        sharing.create(ws)                                   # text in git, the rest annexed
-    elif datasets.dataset_root(ws) is None:
-        raise KBError(f"{ws} is a git repository but not a DataLad dataset (datalad create --force there)")
-    ws = ws.resolve()
+#: Files above this size are annexed (content fetched on demand); everything smaller is plain git, so a
+#: work area has no locked files unless it holds something big (``workspace.largefiles`` in the settings).
+LARGEFILES = "1MB"
+
+#: What a workspace's dataset ignores, so build products don't bloat it (``workspace.ignore`` adds more,
+#: ``--ignore`` more still). A pattern with a leading slash is anchored at the workspace root.
+BUILD_IGNORES = (
+    "*.o", "*.obj", "*.a", "*.lib", "*.so", "*.so.*", "*.dylib", "*.dll", "*.lo", "*.la", "*.exe",   # code
+    "__pycache__/", "*.pyc", "*.pyo", "*.egg-info/", ".venv/", "venv/", "node_modules/", ".ipynb_checkpoints/",
+    "build/", "_build/", "CMakeFiles/", "CMakeCache.txt", "cmake_install.cmake",
+    "/bin/", "/lib/", "/lib64/", "/include/", "/install/",                                            # an install prefix
+    "*.aux", "*.fls", "*.fdb_latexmk", "*.synctex.gz", "*.toc", "*.blg",                              # LaTeX leftovers
+)
+_IGNORE_HEADER = "# kb artifact start/adopt: build products and nested repositories (edit freely)"
+#: Directories not searched for nested repositories (build trees and environments).
+_SKIP_DIRS = {".git", ".datalad", journal.WS_DIR, "build", "_build", "CMakeFiles", "node_modules", "__pycache__",
+              ".venv", "venv"}
+REPOS = "repos.json"
+
+
+def _settings(kb: Store, largefiles: str | None, ignore: tuple[str, ...]) -> tuple[str, list[str]]:
+    mine = kb.setting("workspace", {}) or {}
+    extra = mine.get("ignore", [])
+    return (largefiles or mine.get("largefiles") or LARGEFILES,
+            list(dict.fromkeys([*BUILD_IGNORES, *([extra] if isinstance(extra, str) else extra), *ignore])))
+
+
+def configure(ws: Path, largefiles: str = LARGEFILES, ignore: tuple[str, ...] = BUILD_IGNORES) -> list[str]:
+    """Settings of the workspace's dataset, so annex gets in nobody's way: only files above LARGEFILES are
+    annexed and they are unlocked (writable files, not read-only links), the SHA256E backend, and IGNORE
+    patterns in .gitignore. Idempotent; what it changed is returned. Nothing is saved."""
+    done = []
+    attrs = ws / ".gitattributes"
+    lines = attrs.read_text().splitlines() if attrs.exists() else []
+    rule = f"* annex.largefiles=(largerthan={largefiles})"
+    mine = [ln for ln in lines if ln.startswith("* annex.largefiles=") and ln != rule]
+    custom = [ln for ln in mine if ln != "* annex.largefiles=((mimeencoding=binary)and(largerthan=0))"]
+    if custom:
+        done.append(f"kept your annex.largefiles rule in .gitattributes ({custom[-1]})")
+    else:
+        keep = [ln for ln in lines if ln not in mine and ln != rule and not ln.startswith("**/.git* annex.largefiles")]
+        new = [("* annex.backend=SHA256E" if ln.startswith("* annex.backend=") else ln) for ln in keep]
+        if not any(ln.startswith("* annex.backend=") for ln in new):
+            new.append("* annex.backend=SHA256E")
+        new += [rule, "**/.git* annex.largefiles=nothing"]           # last rule wins: dot files stay in git
+        if new != lines:
+            attrs.write_text("\n".join(new) + "\n")
+            done.append(f"annex only files above {largefiles}, with SHA256E (.gitattributes)")
+    r = subprocess.run(["git", "-C", str(ws), "config", "annex.addunlocked", "true"], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise KBError(f"git config in {ws}: {r.stderr.strip()}")
+    done.append("annexed files are unlocked: writable, not read-only links (annex.addunlocked)")
+    gi = ws / ".gitignore"
+    have = gi.read_text().splitlines() if gi.exists() else []
+    new = [p for p in ignore if p not in {ln.strip() for ln in have}]
+    if new:
+        with open(gi, "a") as f:
+            if have and have[-1].strip():
+                f.write("\n")
+            if _IGNORE_HEADER not in have:
+                f.write(_IGNORE_HEADER + "\n")
+            f.write("\n".join(new) + "\n")
+        done.append(f"ignore {len(new)} pattern(s) in .gitignore")
+    return done
+
+
+def find_repos(ws: Path) -> list[str]:
+    """Git repositories nested in the workspace (paths relative to it), not looking inside them or in build
+    trees: they have histories and remotes of their own, so the workspace dataset ignores them."""
+    import os
+    found = []
+    for dirpath, dirs, files in os.walk(ws):
+        here = Path(dirpath)
+        if here != ws and (".git" in dirs or ".git" in files):
+            found.append(here.relative_to(ws).as_posix())
+            dirs[:] = []
+            continue
+        dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS)
+    return found
+
+
+def repo_info(path: Path) -> dict:
+    """Where a nested repository comes from and what state it is in: remotes, branch, HEAD, uncommitted work."""
+    def g(*args):
+        r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    remotes = {n: g("remote", "get-url", n) for n in g("remote").split()}
+    return {"remotes": remotes, "branch": g("symbolic-ref", "--short", "-q", "HEAD") or None,
+            "head": g("rev-parse", "HEAD") or None, "dirty": bool(g("status", "--porcelain", "--untracked-files=no"))}
+
+
+def repos_snapshot(ws: Path, found: list[str] | None = None) -> dict[str, dict]:
+    """The nested repositories of the workspace and their state now. Those listed in
+    .kb-artifact/repos.json before are kept while they exist; FOUND adds others."""
+    f = ws / journal.WS_DIR / REPOS
+    known = list(json.loads(f.read_text())) if f.exists() else []
+    paths = sorted({*known, *(found or [])})
+    return {p: repo_info(ws / p) for p in paths if (ws / p / ".git").exists()}
+
+
+def _write_repos(ws: Path, found: list[str] | None = None) -> dict[str, dict]:
+    snap = repos_snapshot(ws, found)
+    f = ws / journal.WS_DIR / REPOS
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(snap, indent=2, sort_keys=True) + "\n")
+    return snap
+
+
+def _register(kb: Store, ws: Path, title: str, prompts: bool) -> dict:
+    """Describe the workspace's dataset as a source and mark it as an artifact workspace."""
+    from . import datasets
     src = datasets.describe(kb, [str(ws)], title=f"{title} (workspace)",
                             summary=f"The workspace where the artifact '{title}' is made: its sources, "
                                     "runs and outputs.")
@@ -92,7 +187,63 @@ def start(kb: Store, path: Path, title: str, prompts: bool = True) -> tuple[Path
             f.write(f"# kb's journal of this artifact's making: local, harvested by kb artifact finish\n{line}\n")
     _save(ws, f"kb: start the artifact workspace '{title}'")
     journal.append("start", kb, start=ws, workspace=data["id"])
-    return ws, data
+    return data
+
+
+def start(kb: Store, path: Path, title: str, prompts: bool = True, largefiles: str | None = None,
+          ignore: tuple[str, ...] = ()) -> tuple[Path, dict]:
+    """Make PATH an artifact workspace: a DataLad dataset (made if PATH is new or empty, configured by
+    ``configure``; used as it is if it is one), marked by .kb-artifact/workspace.json and described in the
+    store as a datalad source."""
+    from . import datasets, sharing
+    datasets.need()
+    ws = Path(path).expanduser().absolute()
+    if (ws / journal.WS_DIR / journal.WS_FILE).is_file():
+        raise KBError(f"{ws} is an artifact workspace already ({journal.read_workspace(ws)['title']})")
+    if not (ws / ".git").exists():
+        if ws.exists() and any(ws.iterdir()):
+            raise KBError(f"{ws} is not empty and not a dataset: kb artifact adopt {ws} makes it a workspace "
+                          "around what is there")
+        sharing.create(ws, text2git=False)
+        configure(ws, *_settings(kb, largefiles, ignore))
+    elif datasets.dataset_root(ws) is None:
+        raise KBError(f"{ws} is a git repository but not a DataLad dataset: kb artifact adopt {ws} makes it a "
+                      "workspace")
+    ws = ws.resolve()
+    return ws, _register(kb, ws, title, prompts)
+
+
+def adopt(kb: Store, path: Path, title: str | None = None, prompts: bool = True, largefiles: str | None = None,
+          ignore: tuple[str, ...] = ()) -> dict:
+    """Make the existing directory PATH an artifact workspace, around what is there (nothing is moved or
+    changed): a DataLad dataset is made (or an existing git repository or dataset used), its annex settings and
+    ignores are set (``configure``), the git repositories nested in it are ignored and their remotes and commits
+    noted (.kb-artifact/repos.json), and what is there is saved. Run again on a workspace, it refreshes those
+    settings and the notes on nested repositories.  Returns what was done."""
+    from . import datasets
+    datasets.need()
+    ws = Path(path).expanduser().absolute()
+    if not ws.is_dir():
+        raise KBError(f"{ws} is not a directory")
+    done = []
+    if datasets.dataset_root(ws) != ws.resolve():
+        import datalad.api as dl
+        dl.create(path=str(ws), force=True, result_renderer="disabled")
+        done.append(f"made {ws} a DataLad dataset (what is there is untouched)")
+    nested = find_repos(ws)
+    lf, patterns = _settings(kb, largefiles, ignore)
+    done += configure(ws, lf, tuple(patterns) + tuple(f"/{p}/" for p in nested))
+    snap = _write_repos(ws, nested)
+    for p, info in snap.items():
+        done.append(f"ignored the repository {p} (" + (next(iter(info["remotes"].values()), None) or "no remote")
+                    + (", uncommitted work" if info["dirty"] else "") + ")")
+    existing = (ws / journal.WS_DIR / journal.WS_FILE).is_file()
+    if existing:
+        _save(ws, "kb: refresh the workspace settings")
+        data = journal.read_workspace(ws)
+    else:
+        data = _register(kb, ws.resolve(), title or ws.name, prompts)
+    return {"workspace": ws, "data": data, "done": done, "repos": snap, "existing": existing}
 
 
 def _here(start: Path | None = None) -> Path:
@@ -236,16 +387,88 @@ def process(kb: Store, ws: Path) -> dict:
     for i, s in enumerate(steps, 1):
         s["id"] = f"s{i}"
     level = "recorded" if any(s["type"] in ("code", "llm") for s in steps) else "cited"
-    return {"level": level, "workspace": data["source"], "title": data["title"], "started": data["started"],
-            "steps": steps, "wrote": list(dict.fromkeys(wrote))}
+    out = {"level": level, "workspace": data["source"], "title": data["title"], "started": data["started"],
+           "steps": steps, "wrote": list(dict.fromkeys(wrote))}
+    repos = repos_snapshot(ws)
+    if repos:
+        out["repos"] = repos          # the repositories ignored in the workspace, and where they stood
+    return out
+
+
+#: Keys of a note's sidecar (see ``sidecar``).
+SIDECAR_STRINGS = ("title", "summary", "doctype", "date", "status", "access", "published_at")
+SIDECAR_LISTS = ("subject", "tags", "creators", "inputs", "source")
+SIDECAR_OTHER = ("build", "identifiers")
+
+
+def sidecar_path(output: Path, ws: Path) -> Path | None:
+    """The sidecar describing OUTPUT: NAME.note.toml beside it (NAME its file name without the suffix),
+    else note.toml beside it, else note.toml at the workspace root."""
+    for p in (output.with_name(output.stem + ".note.toml"), output.parent / "note.toml", ws / "note.toml"):
+        if p.is_file():
+            return p
+    return None
+
+
+def published(url: str) -> dict:
+    """The identifiers of a page published at URL: the URL, and the ID of a claude.ai artifact."""
+    import re
+    ids = {"url": url}
+    m = re.match(r"https://claude\.ai/(?:code/)?artifact/([\w-]+)", url)
+    if m:
+        ids["claude-artifact"] = m.group(1)
+    return ids
+
+
+def read_sidecar(path: Path) -> tuple[dict, list[str], dict]:
+    """A note's sidecar, a TOML file that says what the note is whatever its source format (Markdown,
+    org, LaTeX, Quarto, HTML): item fields (title, summary, doctype, date, status, access, subject, tags,
+    creators, identifiers, published_at), ``inputs`` (item IDs it presents), and what only describes
+    how it is made (``source``: its files, ``build``: its command). Returns (fields, inputs, how)."""
+    import tomllib
+    try:
+        raw = tomllib.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise KBError(f"{path}: {e}")
+    known = SIDECAR_STRINGS + SIDECAR_LISTS + SIDECAR_OTHER
+    unknown = sorted(set(raw) - set(known))
+    if unknown:
+        raise KBError(f"{path}: unknown key(s) {', '.join(unknown)}; the sidecar has {', '.join(known)}")
+    import datetime
+    if isinstance(raw.get("date"), (datetime.date, datetime.datetime)):
+        raw["date"] = raw["date"].isoformat()[:10]     # TOML reads an unquoted 2026-11-09 as a date
+    for k in SIDECAR_STRINGS + ("build",):
+        if k in raw and not isinstance(raw[k], str):
+            raise KBError(f"{path}: {k} must be a string")
+    fields: dict = {k: raw[k] for k in ("title", "summary", "doctype", "date", "status", "access") if k in raw}
+    for k in ("subject", "tags", "creators", "inputs", "source"):
+        if k in raw:
+            v = raw[k]
+            raw[k] = [v] if isinstance(v, str) else list(v)
+            if not all(isinstance(x, str) for x in raw[k]):
+                raise KBError(f"{path}: {k} must be a string or a list of strings")
+    for k in ("subject", "tags", "creators"):
+        if k in raw:
+            fields[k] = raw[k]
+    ids = dict(raw.get("identifiers", {}))
+    if not all(isinstance(v, str) for v in ids.values()):
+        raise KBError(f"{path}: identifiers must map names to strings")
+    if "published_at" in raw:
+        ids = {**published(raw["published_at"]), **ids}
+    if ids:
+        fields["identifiers"] = ids
+    how = {k: raw[k] for k in ("source", "build") if k in raw}
+    return fields, raw.get("inputs", []), how
 
 
 def finish(kb: Store, output: Path, fields: dict, drop: list[str] = (), add: list[str] = (),
-           with_session: bool = False, start: Path | None = None) -> dict:
+           with_session: bool = False, start: Path | None = None, published_at: str | None = None) -> dict:
     """Harvest the workspace into the store: OUTPUT (a file in the workspace: the PDF, the demo's page)
     becomes an artifact document whose inputs are what was read here (less DROP, plus ADD, plus what was
     read in the same sessions elsewhere WITH_SESSION), with its process record; prompts given here become
-    prompt documents, part of it.  A workspace finished before gives a new version (it supersedes)."""
+    prompt documents, part of it.  A workspace finished before gives a new version (it supersedes).
+    The note's sidecar (``read_sidecar``) gives defaults that FIELDS override; PUBLISHED_AT (a URL, such as a
+    claude.ai artifact's) is recorded as an identifier."""
     from . import authoring
     from .edit import add_rendition
     ws = _here(start or Path(output).parent)
@@ -256,12 +479,22 @@ def finish(kb: Store, output: Path, fields: dict, drop: list[str] = (), add: lis
         raise KBError(f"no such file: {out}")
     data = journal.read_workspace(ws)
     began = journal.now()
+    side = sidecar_path(out, ws)
+    side_fields, side_inputs, how = read_sidecar(side) if side else ({}, [], {})
+    fields = {**side_fields, **fields}
+    if "identifiers" in side_fields or "identifiers" in fields:
+        fields["identifiers"] = {**side_fields.get("identifiers", {}), **fields.get("identifiers", {})}
+    if published_at:
+        fields["identifiers"] = {**fields.get("identifiers", {}), **published(published_at)}
     inputs = [c["id"] for c in candidates(kb, ws) if c["current"] and c["id"] not in drop
               and (c["where"] == "here" or with_session)]
-    inputs += [kb.get(a).id for a in add if kb.get(a).id not in inputs]
+    inputs += [kb.get(a).id for a in [*add, *side_inputs] if kb.get(a).id not in inputs]
+    if (ws / journal.WS_DIR / REPOS).exists():
+        _write_repos(ws)                  # where the ignored repositories stand now
     _save(ws, f"kb: finish '{data['title']}'")
     rec_process = process(kb, ws)
-    fields = dict(fields)
+    if side:
+        rec_process["note"] = {"sidecar": side.relative_to(ws).as_posix(), **how}
     fields.setdefault("title", data["title"])
     fields.setdefault("doctype", "technote")
     fields.setdefault("provenance", rec_process["level"])

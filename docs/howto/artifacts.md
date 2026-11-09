@@ -64,6 +64,102 @@ prompts and edits in workspaces only. Select them in an existing store with
 `kb policy use kb-artifact kb-artifact-prompt-hook kb-artifact-edit-hook`
 and `kb policy enact`.
 
+## Notes you already have: adopt a work area
+
+Notes grow next to the work they summarize: scripts, run output, builds,
+git clones. They stay there. `kb artifact adopt` makes the directory of one
+topic a workspace, around what is there; nothing is moved or changed:
+
+```
+kb artifact adopt ~/dune/xero/topics/noise --title "Noise in the xenon runs"
+git -C ~/dune/xero/topics/noise status --ignored      # check what is ignored
+```
+
+Make each topic's directory the workspace, not the whole work area: it is the
+unit you publish, and a work area of terabytes stays out of it. kb:
+
+- makes the directory a DataLad dataset (or uses the git repository or
+  dataset it is);
+- **ignores git repositories nested in it** (clones with their own history
+  and remotes: not subdatasets, which would have to be clean for every
+  `kb artifact run`), and notes where each came from and which commit it was
+  at in `.kb-artifact/repos.json`; `finish` refreshes that and puts it in
+  the artifact's process record;
+- **ignores build products**: `*.o *.obj *.a *.lib *.so *.so.* *.dylib *.dll
+  *.exe`, Python caches and environments, `build/ _build/ CMakeFiles/`, an
+  install prefix at the top (`/bin /lib /lib64 /include /install`), LaTeX
+  leftovers (`*.aux *.fls *.toc ...`). A source directory named `lib` deeper
+  down is kept. Add to the list with `--ignore PATTERN`, or for every
+  workspace in a store with
+  `kb config set workspace.ignore '["*.root", "scratch/"]'`;
+- saves what is there. It does not look into your own git ignore rules
+  (`~/.config/git/ignore`): files they match are skipped without a word, so
+  check `git status --ignored` for what you expected.
+
+Run it again on a workspace to refresh these settings and pick up new
+clones. `kb artifact start` makes a new workspace with the same settings.
+
+### Annexed files that stay writable
+
+git-annex normally locks what it annexes: a read-only link to an object. A
+job that writes to such a file fails. A workspace is set up to avoid that:
+
+- only files **above 1MB** are annexed (`--largefiles SIZE`, or
+  `kb config set workspace.largefiles 5MB`); scripts, notes, small figures
+  and PDFs are plain git, so they are never locked;
+- what is annexed is **unlocked** (`annex.addunlocked`): an ordinary
+  writable file. Cost: a second copy of annexed content, only for what is
+  large;
+- the hash backend is SHA256E, so kb can use the file's digest.
+
+`git config` does not travel with a clone: `kb doctor` (`workspace-annex`)
+sets `annex.addunlocked` in a workspace clone that lacks it. Files annexed
+earlier and locked: `git annex unlock PATH`. `kb artifact run` saves your
+work before it runs, because `datalad run` needs a clean tree.
+
+## Describe a note: the sidecar
+
+Notes are Markdown, org, LaTeX, Quarto (`.qmd`, kept as Markdown) or HTML;
+kb converts none. What every note has is a small TOML file beside it,
+`note.toml` (or `NAME.note.toml` for a directory with several notes):
+
+```toml
+title = "Noise in the xenon runs"
+summary = "Coherent noise fell 20% after the grounding change (runs 1200-1300)."
+subject = "detector/tpc/noise"
+creators = ["A. Person"]
+date = 2026-11-09
+doctype = "technote"           # technote, demo or notebook
+tags = ["noise"]
+inputs = ["obs-…", "dat-…"]    # items it presents, as if read in the workspace
+source = ["note.org", "figs/make.py"]    # for the record
+build = "make note.pdf"                  # for the record
+```
+
+`kb artifact finish note.pdf` reads it; options on the command line
+override it. The deliverable is a PDF, or an HTML page that works as a unit
+(scripts and styles inline, or beside it). `source` and `build` go in the
+process record, so the next reader knows how to remake it.
+
+## Claude artifacts (claude.ai/artifact)
+
+A page published from a Claude session is private to you, can change under
+the same URL, and can go away. Ingest a copy, and keep the URL:
+
+1. In a Claude session (the `Artifact` tool reads your own artifacts): list
+   its files (`list` with scope `files`). A single page is read with
+   `read` and saved as a local file; a multi-file one with `read` of its
+   `paths` and an `out_dir`.
+2. Put the files in a workspace (`kb artifact start ~/work/NAME --title ...`).
+3. `kb artifact finish index.html --doctype demo --published-at
+   https://claude.ai/artifact/ID --summary "..."`. The URL and the
+   artifact's ID are kept as identifiers.
+4. When it is republished, read it again and finish again: the new version
+   supersedes the old.
+
+There is no `kb` command that fetches a claude.ai page by itself yet: it
+needs a login (decisions/0005, question AR9).
+
 ## Add an artifact
 
 Say what it presents with `--derived-from`, one per item:

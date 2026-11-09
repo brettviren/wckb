@@ -193,7 +193,7 @@ item_grp = group("item", "Items: change, correct, withdraw, link, edit, inspect 
 rendition_grp = group("rendition", "Renditions of an item: add, mirror, extract text, get a file, verify.",
                       order=["path", "add", "extract", "summary", "transforms", "locate", "verify"])
 artifact_grp = group("artifact", "Artifacts: technotes, demos and notebooks made here to present knowledge.",
-                     order=["list", "start", "status", "run", "inputs", "finish", "steps"])
+                     order=["list", "start", "adopt", "status", "run", "inputs", "finish", "steps"])
 asset_grp = group("asset", "Assets: abstract files and file sets, their versions, and the sources that supply them.")
 source_grp = group("source", "Data sources: the kinds kb knows, and the concrete sources (DataLad datasets ...) items use.",
                    order=["list", "show", "add", "share", "clone", "link", "types"])
@@ -599,9 +599,19 @@ def artifact_list_cmd(c, doctypes, stale_only, include_old, json_out):
 @click.argument("path", type=click.Path(file_okay=False, path_type=Path))
 @click.option("--title", required=True, help="What the artifact is to be.")
 @click.option("--no-prompts", is_flag=True, help="Don't keep the prompts given to an LLM here.")
+@click.option("--largefiles", metavar="SIZE", help="Annex only files above SIZE (default 1MB, or the setting "
+                                                    "workspace.largefiles); smaller files are plain git.")
+@click.option("--ignore", multiple=True, metavar="PATTERN", help="Also ignore this .gitignore pattern (repeatable).")
 @pass_ctx
-def artifact_start_cmd(c, path, title, no_prompts):
-    """Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is made.
+def artifact_start_cmd(c, path, title, no_prompts, largefiles, ignore):
+    """Make PATH an artifact workspace: a DataLad dataset (made if PATH is new, used if it is one) where an
+    artifact is made.
+
+    A new dataset is set up so annex stays out of the way: only files
+    above 1MB are annexed, they are unlocked (writable, not read-only
+    links), and build products (*.o *.so *.a, build/, /bin /lib /include,
+    ...) are ignored. To make a directory that already holds work a
+    workspace: kb artifact adopt.
 
     Work there as usual. kb notes, without being asked, what it gives you
     to read there (the artifact's inputs), what you run with kb artifact
@@ -614,9 +624,48 @@ def artifact_start_cmd(c, path, title, no_prompts):
       cd ~/work/noise-note
     """
     from .artifacts import start
-    ws, data = start(c.kb, path, title, prompts=not no_prompts)
+    ws, data = start(c.kb, path, title, prompts=not no_prompts, largefiles=largefiles, ignore=ignore)
     click.echo(str(ws))
     ui.info(f"artifact workspace {data['id']} ({data['title']}); its dataset is source {data['source']}")
+
+
+@command(artifact_grp, "adopt", no_args_is_help=True)
+@click.argument("path", type=click.Path(file_okay=False, exists=True, path_type=Path))
+@click.option("--title", help="What the artifact is to be (default: the directory's name).")
+@click.option("--no-prompts", is_flag=True, help="Don't keep the prompts given to an LLM here.")
+@click.option("--largefiles", metavar="SIZE", help="Annex only files above SIZE (default 1MB, or the setting "
+                                                    "workspace.largefiles); smaller files are plain git.")
+@click.option("--ignore", multiple=True, metavar="PATTERN", help="Also ignore this .gitignore pattern (repeatable).")
+@pass_ctx
+def artifact_adopt_cmd(c, path, title, no_prompts, largefiles, ignore):
+    """Make the existing directory PATH an artifact workspace, around the work that is there.
+
+    Nothing is moved or changed. kb makes the directory a DataLad dataset
+    (or uses the git repository or dataset it is) and sets it up so annex
+    stays out of the way: only files above 1MB are annexed, they are
+    unlocked (writable, not read-only links), and build products (*.o
+    *.so *.a, build/, /bin /lib /include /install, LaTeX leftovers ...) are
+    ignored. Git repositories nested in it (clones with their own history
+    and remotes) are ignored too, and their remotes and commits noted
+    (.kb-artifact/repos.json; finish keeps the note current). What is
+    there is then saved. Add patterns with --ignore, or for all
+    workspaces: kb config set workspace.ignore '["*.root"]'.
+
+    Run again on a workspace, it refreshes the settings and picks up new
+    clones. Your own git ignore rules (~/.config/git/ignore) still
+    apply: kb says nothing of the files they hide, so check
+    git status --ignored for files you expected.
+
+    \b
+      kb artifact adopt ~/dune/xero/topics/noise --title "Noise in the xenon runs"
+      git -C ~/dune/xero/topics/noise status --ignored
+    """
+    from .artifacts import adopt
+    r = adopt(c.kb, path, title, prompts=not no_prompts, largefiles=largefiles, ignore=ignore)
+    click.echo(str(r["workspace"]))
+    for line in r["done"]:
+        ui.info(line)
+    ui.info(f"artifact workspace {r['data']['id']} ({r['data']['title']}); its dataset is source {r['data']['source']}")
 
 
 @command(artifact_grp, "status")
@@ -680,13 +729,16 @@ def artifact_inputs_cmd(c, json_out):
 @command(artifact_grp, "finish", no_args_is_help=True)
 @click.argument("output", type=click.Path(dir_okay=False, exists=True, path_type=Path))
 @item_options
-@click.option("--doctype", type=click.Choice(["technote", "demo", "notebook"]), default="technote", show_default=True)
+@click.option("--doctype", type=click.Choice(["technote", "demo", "notebook"]),
+              help="Default: the sidecar's, else technote.")
+@click.option("--published-at", metavar="URL", help="Where it is published (a claude.ai artifact's URL, say): "
+                                                    "kept as an identifier.")
 @click.option("--drop", multiple=True, metavar="ID", help="Not an input after all (repeatable).")
 @click.option("--input", "add", multiple=True, metavar="ID", help="An input kb didn't see read (repeatable).")
 @click.option("--with-session", is_flag=True, help="Also what was read elsewhere in the same sessions.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def artifact_finish_cmd(c, output, doctype, drop, add, with_session, json_out, via, **kw):
+def artifact_finish_cmd(c, output, doctype, published_at, drop, add, with_session, json_out, via, **kw):
     """Harvest the workspace: OUTPUT (its PDF, or its demo's page) becomes an artifact document.
 
     Its inputs are the items read in the workspace (kb artifact inputs;
@@ -697,14 +749,21 @@ def artifact_finish_cmd(c, output, doctype, drop, add, with_session, json_out, v
     here become prompt documents, part of it. Finishing again makes a new
     version that supersedes the last.
 
+    A note's sidecar, note.toml (or NAME.note.toml beside OUTPUT), gives
+    defaults for the fields (title, summary, subject, creators, date,
+    doctype, tags, identifiers, published_at), the inputs it presents
+    (inputs = ["obs-…"]) and, for the record, its source files and build
+    command. Options override it.
+
     \b
       kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-11-02 --subject ...
       kb artifact finish site/index.html --doctype demo --drop obs-… --summary ...
     """
     from .artifacts import finish
     fields = _fields(kw)
-    fields["doctype"] = doctype
-    r = finish(c.kb, output, fields, list(drop), list(add), with_session)
+    if doctype:
+        fields["doctype"] = doctype
+    r = finish(c.kb, output, fields, list(drop), list(add), with_session, published_at=published_at)
     if json_out:
         return ui.emit_json(r)
     click.echo(r["artifact"])

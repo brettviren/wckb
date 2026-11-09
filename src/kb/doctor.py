@@ -389,6 +389,35 @@ def _gitattributes(kb):
     return []
 
 
+@remedy("workspace-annex", "Artifact workspaces whose annexed files would be locked (read-only links)", quick=False)
+def _workspace_annex(kb):
+    from . import journal
+    from .datasets import locate
+    out = []
+    for rec in _datalad_sources(kb):
+        root = locate(kb, rec)
+        if root is None or not (root / journal.WS_DIR / journal.WS_FILE).is_file():
+            continue
+        def conf(key):
+            return subprocess.run(["git", "-C", str(root), "config", "--get", key], capture_output=True,
+                                  text=True).stdout.strip()
+        if conf("annex.uuid") and conf("annex.addunlocked") != "true":
+            out.append(Finding("workspace-annex", f"the workspace {root} is not set to unlock what it annexes, so "
+                               "files it annexes are read-only links that a job writing to them fails on",
+                               "set annex.addunlocked (kb artifact adopt does this and more); files already "
+                               "annexed stay locked until git annex unlock", "auto", rec.id, {"root": str(root)}))
+    return out
+
+
+@_workspace_annex.fixer
+def _unlock_workspace(kb, f):
+    r = subprocess.run(["git", "-C", f.data["root"], "config", "annex.addunlocked", "true"], capture_output=True,
+                       text=True)
+    if r.returncode != 0:
+        raise KBError(f"git config in {f.data['root']}: {r.stderr.strip()}")
+    return f"annexed files in {f.data['root']} are now added unlocked"
+
+
 @remedy("clones", "DataLad datasets and git repositories used here but not cloned on this machine", quick=False)
 def _clones(kb):
     from .datasets import REPO_TYPES, available, locate

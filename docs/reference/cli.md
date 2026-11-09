@@ -967,8 +967,9 @@ Options:
 Commands:
   list    The store's artifacts: what each is, how much of its making is recorded, its inputs, and
           whether it is stale (an input changed since it was made).
-  start   Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is
-          made.
+  start   Make PATH an artifact workspace: a DataLad dataset (made if PATH is new, used if it is
+          one) where an artifact is made.
+  adopt   Make the existing directory PATH an artifact workspace, around the work that is there.
   status  The artifact workspace here (from the working directory), and what its journal holds so
           far.
   run     Run COMMAND in the artifact workspace under datalad run, recording what it read and made.
@@ -1008,7 +1009,13 @@ Options:
 ```
 Usage: kb artifact start [OPTIONS] PATH
 
-  Make PATH an artifact workspace: a DataLad dataset (made, or adopted) where an artifact is made.
+  Make PATH an artifact workspace: a DataLad dataset (made if PATH is new, used if it is one) where
+  an artifact is made.
+
+  A new dataset is set up so annex stays out of the way: only files above 1MB are annexed, they are
+  unlocked (writable, not read-only links), and build products (*.o *.so *.a, build/, /bin /lib
+  /include, ...) are ignored. To make a directory that already holds work a workspace: kb artifact
+  adopt.
 
   Work there as usual. kb notes, without being asked, what it gives you to read there (the
   artifact's inputs), what you run with kb artifact run, and (with kb's hooks) the prompts and edits
@@ -1019,9 +1026,43 @@ Usage: kb artifact start [OPTIONS] PATH
     cd ~/work/noise-note
 
 Options:
-  --title TEXT  What the artifact is to be.  [required]
-  --no-prompts  Don't keep the prompts given to an LLM here.
-  -h, --help    Show this message and exit.
+  --title TEXT       What the artifact is to be.  [required]
+  --no-prompts       Don't keep the prompts given to an LLM here.
+  --largefiles SIZE  Annex only files above SIZE (default 1MB, or the setting workspace.largefiles);
+                     smaller files are plain git.
+  --ignore PATTERN   Also ignore this .gitignore pattern (repeatable).
+  -h, --help         Show this message and exit.
+```
+
+## kb artifact adopt
+
+```
+Usage: kb artifact adopt [OPTIONS] PATH
+
+  Make the existing directory PATH an artifact workspace, around the work that is there.
+
+  Nothing is moved or changed. kb makes the directory a DataLad dataset (or uses the git repository
+  or dataset it is) and sets it up so annex stays out of the way: only files above 1MB are annexed,
+  they are unlocked (writable, not read-only links), and build products (*.o *.so *.a, build/, /bin
+  /lib /include /install, LaTeX leftovers ...) are ignored. Git repositories nested in it (clones
+  with their own history and remotes) are ignored too, and their remotes and commits noted (.kb-
+  artifact/repos.json; finish keeps the note current). What is there is then saved. Add patterns
+  with --ignore, or for all workspaces: kb config set workspace.ignore '["*.root"]'.
+
+  Run again on a workspace, it refreshes the settings and picks up new clones. Your own git ignore
+  rules (~/.config/git/ignore) still apply: kb says nothing of the files they hide, so check git
+  status --ignored for files you expected.
+
+    kb artifact adopt ~/dune/xero/topics/noise --title "Noise in the xenon runs"
+    git -C ~/dune/xero/topics/noise status --ignored
+
+Options:
+  --title TEXT       What the artifact is to be (default: the directory's name).
+  --no-prompts       Don't keep the prompts given to an LLM here.
+  --largefiles SIZE  Annex only files above SIZE (default 1MB, or the setting workspace.largefiles);
+                     smaller files are plain git.
+  --ignore PATTERN   Also ignore this .gitignore pattern (repeatable).
+  -h, --help         Show this message and exit.
 ```
 
 ## kb artifact status
@@ -1081,6 +1122,11 @@ Usage: kb artifact finish [OPTIONS] OUTPUT
   'recorded' if it has runs or LLM steps, else 'cited'. Prompts given here become prompt documents,
   part of it. Finishing again makes a new version that supersedes the last.
 
+  A note's sidecar, note.toml (or NAME.note.toml beside OUTPUT), gives defaults for the fields
+  (title, summary, subject, creators, date, doctype, tags, identifiers, published_at), the inputs it
+  presents (inputs = ["obs-…"]) and, for the record, its source files and build command. Options
+  override it.
+
     kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-11-02 --subject ...
     kb artifact finish site/index.html --doctype demo --drop obs-… --summary ...
 
@@ -1117,7 +1163,9 @@ Options:
   --set TEXT                      Any field: key=value (JSON values parsed; dotted keys nest).
   --via TEXT                      Tool or session making the item (e.g. claude-code).
   --doctype [technote|demo|notebook]
-                                  [default: technote]
+                                  Default: the sidecar's, else technote.
+  --published-at URL              Where it is published (a claude.ai artifact's URL, say): kept as
+                                  an identifier.
   --drop ID                       Not an input after all (repeatable).
   --input ID                      An input kb didn't see read (repeatable).
   --with-session                  Also what was read elsewhere in the same sessions.
