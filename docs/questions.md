@@ -556,7 +556,39 @@ Status:
   (per store, per subject, per person; a web page, a slide, a list). Which
   first, and where is it published for the group?
 
+**AR7b. Plain-git workspaces.** *(open)*
+- A workspace is a DataLad dataset. For a topic that holds nothing large,
+  plain git (kb already has `git` sources) would do, with no annex at all.
+  `kb artifact run` would then record a run without `datalad run`. Worth it,
+  or is "annex only above 1MB, unlocked" enough?
+
+**AR8. Finding the notes in a work area; inputs that are files.** *(open)*
+- `kb artifact scan PATH...`: find candidate notes (`*.md`, `*.org`,
+  `*.tex`, `*.qmd`, `index.html`, a `note.toml`) and propose adopting them in
+  bulk. Not built; `adopt` is per directory.
+- A note regenerated from `results/fit.csv` in a work area has no kb item to
+  go stale. Either pin file digests as inputs (a new kind of input) or
+  capture the data as items. Today: the second.
+
+**AR9. Claude artifacts as a source.** *(open)*
+- Ingest through a Claude session works from the `Artifact` tool's `read`
+  (decisions/0005 §5). A command that fetches by itself
+  (`kb artifact fetch URL`), or a `git-annex-remote-claude`, needs a way to
+  read claude.ai that doesn't need a browser login. Test whether a link
+  shared with others serves its page to `curl`. Until then, it takes an LLM
+  session. Also open: noticing that the published version changed since it
+  was ingested.
+
 ## Decided
+
+**AR7. Topical notes: in place, indexed, annex out of the way.** *(decided 2026-11-09; decisions/0005)*
+- Centralize the index (artifact items), not the files. Only the note's
+  directory is a workspace; clones are ignored and noted, builds ignored.
+- Workspaces annex only files above `workspace.largefiles` (1MB), unlocked,
+  SHA256E; `kb artifact adopt` converts an existing directory.
+- A `note.toml` sidecar describes a note of any source format; no format is
+  the default; `.qmd` is recognized as Markdown.
+- Claude artifacts are ingested with their URL kept.
 
 **AR1–AR5. Artifacts.** *(decided 2026-11-01; decisions/0004)*
 - AR1: an artifact is a document (doctypes `technote`, `demo`, `notebook`).

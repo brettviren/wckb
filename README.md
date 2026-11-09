@@ -1,6 +1,29 @@
 # wckb: `kb`, a shared knowledge base for people and their LLMs
 
-`kb` manages knowledge stores: SQLite files of small, schema-checked JSON items
+This package provides the `kb` command to manage "knowledge".
+
+## Modeling knowledge 
+
+Knowledge is modeled as a collection of knowledge items.  Each item is an
+instance of a well defined type or "kind" of knowledge.  That is, an item is a
+data object governed by a schema.  All kinds of knowledge items hold their kind
+version of the associated schema, a unique instance identifier in addition to
+type-specific attribute sets as dictated by the schema.
+
+The different kinds of knowledge are distinguished based on several aspects.
+Each aspect defines a group of attributes.  The groups include identity,
+description, provenance, meaning, dating, relations and content.  Common
+attributes across all kinds provide: the schema kind and its version, a unique
+identifier, a short title, longer summary, the timestamp marking the creation of
+the item, and an access level.  Access is one of public, collaboration, group,
+private, from most to least open.  More information on the schemas is in docs/schemas.md.
+
+One key aspect of knowledge is its content as provided by the rendition attribute.  A rendition is itself an object that describes some material.  The material for a knowledge is typically a file or URL.  Material has a "source".
+
+
+
+
+ manages knowledge stores: SQLite files of small, schema-checked JSON items
 that a group, and the Claude sessions each member runs, read from and write
 to.
 
@@ -52,7 +75,7 @@ kb context detector/tpc              # what the KB knows, compactly
   store; 0002: assets, versions and sources).
 - [docs/rendering.md](docs/rendering.md): rendering for review, now and
   planned (TUI, web).
-- [docs/howto/](docs/howto/): task guides. Start with
+- [docs/howto/](docs/howto/index.md): task guides (the index lists each). Start with
   [getting-started](docs/howto/getting-started.md).
 - [docs/reference/schema.md](docs/reference/schema.md): every item field
   (generated).

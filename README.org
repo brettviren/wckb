@@ -1,0 +1,85 @@
+#+title: wckb: =kb=, a shared knowledge base for people and their LLMs
+:PROPERTIES:
+:CUSTOM_ID: wckb-kb-a-shared-knowledge-base-for-people-and-their-llms
+:END:
+
+This package provides the =kb= command to manage "knowledge".
+
+See:
+
+- [[file:docs/modeling-knowledge.org][Modeling knowledge]]
+- [[file:docs/install.org][Installation]]
+- [[file:docs/quick-start.org][Quick start guide]]
+
+
+* Original README
+
+
+- Items cover observations ("run 1234 was noisy"), documents (papers,
+  slides), datasets, configurations, conditions snapshots, software,
+  topic pages (synthesis), views (built HTML/PDF), policies and
+  knowledge sets.
+- Small content is held in the store. Large content lives in a content
+  store (EOS, NFS), at a URL (Indico, arXiv) or, experimentally, in a
+  DataLad dataset, all behind one data-source interface. Every rendition
+  carries a SHA-256.
+- Sources are append-only, enforced by the database. Corrections
+  supersede. Every change and transfer is an event (=kb log=), and
+  =kb item stale= shows what needs revising or rebuilding.
+- Stores at every scope (project, home, group) are linked as =up=,
+  =down=, =peer= or =twin= neighbors. LLMs read across them. Knowledge
+  moves as knowledge sets with =kb push= and =kb pull=: applied
+  atomically, or as *bundles* reviewed in the receiver's inbox by people
+  and LLMs, or as pull requests in an exchange repository.
+- *Assets* stand for files and file sets independently of where they
+  live. Versions are identified by content, sources (directory trees,
+  URLs, the store; DataLad, Indico and DocDB planned) are bound with
+  their own versioning, and resolution yields one verified file set.
+- Items, sets and bundles render for people (=kb show=,
+  =kb bundle show=, =kb inbox show=): names, dates, links, excerpts and
+  trees, with no hashes.
+- Policy (CLAUDE.md instructions, skills and hooks) is named, versioned
+  and enacted by =kb policy=. Autonomy (push, pull, accept, merge ...)
+  is granted by the human.
+- Forges (GitHub, Gitea, Forgejo), with tokens from =pass=-style
+  commands.
+
+#+begin_example
+uv tool install git+<this repo>      # or: uv tool install --editable .
+kb init ~/kb --scope home            # your personal store
+cd ~/work/proj && kb init kb --scope project --up ~/kb   # a project store beside your code
+kb new observation --title "Noisy run 1234" --summary "..." --subject detector/tpc/noise \
+   --runs 1234 --by "A. Colleague" --how "verbal, collab meeting" --text "..."
+kb context detector/tpc              # what the KB knows, compactly
+#+end_example
+
+** Documentation
+:PROPERTIES:
+:CUSTOM_ID: documentation
+:END:
+- [[file:docs/glossary.md]]: the terms kb uses (store, item, rendition,
+  asset, knowledge set, bundle ...) and their names in the code.
+- [[file:docs/design.md]]: the design and the reasons for it.
+- [[file:docs/plan.md]]: implementation plan and phases.
+- [[file:docs/questions.md]]: open questions, with today's defaults.
+- [[file:docs/decisions/]]: decision records (0001: the SQLite store;
+  0002: assets, versions and sources).
+- [[file:docs/rendering.md]]: rendering for review, now and planned
+  (TUI, web).
+- [[file:docs/howto/index.md][docs/howto/]]: task guides (the index lists each). Start with
+  [[file:docs/howto/getting-started.md][getting-started]].
+- [[file:docs/reference/schema.md]]: every item field (generated).
+- [[file:docs/reference/cli.md]]: every command (generated).
+
+** Development
+:PROPERTIES:
+:CUSTOM_ID: development
+:END:
+#+begin_example
+uv sync                # development environment (includes the pptx and root extras)
+uv run pytest          # tests
+uv run kb --help
+#+end_example
+
+Optional extras: =pdf= (PyMuPDF), =pptx= (python-pptx), =root= (uproot).
+=pdftotext= and =pandoc= are used when they are on =PATH=.

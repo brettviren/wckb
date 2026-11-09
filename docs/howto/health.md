@@ -50,11 +50,12 @@ What `kb doctor` knows today (`kb doctor --list` is authoritative):
 | `embeddings` | indexed text without embeddings for semantic search | `kb store embed` (ask) |
 | `schema-version` | items written by an older kb | `kb store migrate` (ask) |
 | `dangling` | references to items not in this store | `kb pull --dangling` (ask) |
+| `workspace-annex` | an artifact workspace not set to unlock what it annexes, so annexed files are read-only links | set `annex.addunlocked` (auto) |
 | `clones` | DataLad datasets used here but not cloned on this machine | `kb source clone` (ask) |
 | `local-only` | content only on this machine while a content store is mounted | `kb rendition locate` (ask) |
 | `check` | errors from the consistency scan | advice; details from `kb check` |
 
-The last five (and `check`) are *full* diagnoses: `kb doctor` runs them,
+The last five (and `check`, and `workspace-annex`) are *full* diagnoses: `kb doctor` runs them,
 `kb status` doesn't.
 
 ## LLMs and the doctor

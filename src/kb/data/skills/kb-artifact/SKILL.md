@@ -22,6 +22,14 @@ The workspace is a DataLad dataset. Work in it: sources (`.tex`, `.py`,
 nothing to switch. If you work on something else in between, that is fine:
 kb notes where everything happened, and you sort it out at the end.
 
+A directory that already holds the work (scripts, results, clones, an
+existing note) is adopted, not started over: `kb artifact adopt DIR`. It
+changes nothing there; it ignores nested git clones and build products
+(`*.o *.so *.a build/ /bin /lib /include`) so they don't bloat the dataset,
+and annexes only files above 1MB, unlocked, so no file is read-only. Do not
+`git annex add` or lock things by hand. Check `git status --ignored` if a
+file you expected isn't there (the user's own git ignore rules apply).
+
 ## 2. Read the knowledge through kb, there
 
 Get what the artifact presents with `kb` commands run **in the workspace**:
@@ -44,6 +52,14 @@ Edit files as usual (kb's hooks note an LLM's prompts and edits here). File
 what you establish along the way (a fit result, a number read off a figure)
 as observations with kb-capture, citing what they came from.
 
+Describe the note in `note.toml` beside it, whatever its format (Markdown,
+org, LaTeX, `.qmd`, HTML): `title`, `summary` (one to three sentences for
+the next LLM), `subject`, `creators`, `date`, `doctype`, `tags`, `inputs`
+(item IDs it presents), `source` (its files) and `build` (its command).
+`kb artifact finish` reads it. Use the format already in the directory; if
+there is none, ask which. The deliverable is a PDF, or an HTML page that
+works as a unit.
+
 ## 4. Finish it
 
 ```
@@ -60,6 +76,16 @@ kb artifact finish note.pdf --summary "..." --creators "A. Person" --date 2026-1
 - Then write a short summary of the artifact (what it shows, its key numbers)
   and register it: `kb rendition summary ID summary.md`.
 - Check the record: `kb artifact steps ID`, `kb item links ID`, `kb check`.
+
+### An artifact published on claude.ai
+
+To keep a claude.ai artifact (a page you or the user published), ingest a
+copy: list its files with the `Artifact` tool (`action: list`, `scope:
+files`), read a single page with `action: read` (it is saved as a local
+file), or a multi-file one with `read` of its `paths` and an `out_dir`.
+Put the files in a workspace and
+`kb artifact finish index.html --doctype demo --published-at URL --summary "..."`.
+Read and finish again when it is republished: a new version supersedes the old.
 
 ## 5. Later
 

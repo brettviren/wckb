@@ -250,3 +250,42 @@ def test_no_guess(kb, tmp_path):
     pdf = _pdf(tmp_path / "talk.pdf", title="Found title")
     rec = authoring.add(kb, "document", [str(pdf)], dict(DOC), guess=False)
     assert rec.data["title"] == "T" and rec.data["doctype"] == "other"
+
+
+# -- kb add --note -------------------------------------------------------------------------
+
+def test_add_note_needs_only_the_text(kb, root):
+    r = CliRunner().invoke(main, ["-C", str(root), "add", "--note", "TPC noise rose after the HV trip.\nCheck grounding."],
+                           catch_exceptions=False)
+    assert r.exit_code == 0, r.output
+    rec = Store.open(root).get(r.output.split()[0])
+    d = rec.data
+    assert (d["kind"], d["doctype"]) == ("document", "note")
+    assert d["title"] == "TPC noise rose after the HV trip."
+    assert d["summary"] == "TPC noise rose after the HV trip. Check grounding."
+    assert d["creators"] == [kb.cfg.user]
+    assert "Check grounding." in rec.text("note")
+
+
+def test_add_note_from_stdin_and_given_fields_win(kb, root):
+    r = CliRunner().invoke(main, ["-C", str(root), "add", "-n", "-", "--title", "Mine", "--subject", "detector/tpc",
+                                  "--tag", "todo"], input="body of the note\n", catch_exceptions=False)
+    assert r.exit_code == 0, r.output
+    d = Store.open(root).get(r.output.split()[0]).data
+    assert (d["title"], d["subject"], d["tags"]) == ("Mine", ["detector/tpc"], ["todo"])
+
+
+def test_add_note_clips_long_text_and_refuses_misuse(kb, root):
+    d = authoring.add_note(kb, "x" * 600, {}).data
+    assert len(d["summary"]) <= 400 and len(d["title"]) <= 80
+    for args, said in ((["--note", " "], "empty"), (["--note", "a", "f.txt"], "not both"),
+                       (["--note", "a", "--kind", "dataset"], "drop --kind")):
+        r = CliRunner().invoke(main, ["-C", str(root), "add", *args])
+        assert r.exit_code != 0 and said in r.output
+
+
+def test_a_one_line_note_is_not_linted_for_its_summary(kb):
+    from kb import lint
+    rec = authoring.add_note(kb, "One line.", {})
+    assert rec.data["summary"] == rec.data["title"]
+    assert not [p for p in lint.lint(kb) if p.code == "summary" and p.where == rec.id]

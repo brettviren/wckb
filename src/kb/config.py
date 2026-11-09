@@ -187,15 +187,16 @@ def find_root(start: Path | None = None, root: Path | None = None) -> Path:
 def toml_text(data: dict, about: str = "") -> str:
     """DATA as TOML, in the form of a config file (TOML has no null: such keys are left out)."""
     import tomli_w
-
-    def clean(v):
-        if isinstance(v, dict):
-            return {k: clean(x) for k, x in v.items() if x is not None}
-        if isinstance(v, list):
-            return [clean(x) for x in v if x is not None]
-        return v
     head = f"# {about}\n" if about else ""
-    return head + tomli_w.dumps(clean(data))
+    return head + tomli_w.dumps(_clean(data))
+
+
+def _clean(v):
+    if isinstance(v, dict):
+        return {k: _clean(x) for k, x in v.items() if x is not None}
+    if isinstance(v, list):
+        return [_clean(x) for x in v if x is not None]
+    return v
 
 
 def _merge(base: dict, over: dict) -> dict:
@@ -359,20 +360,111 @@ def load(root: Path | None = None) -> Config:
         kb.close()
 
 
-def from_settings(root: Path, settings: dict, keep: "Config | None" = None) -> Config:
-    """Merge a store's settings with the user's and this machine's configuration."""
-    raw = dict(settings)
-    raw = _merge(raw, cascade())
-    raw = _merge(raw, _read(root / ".kb" / "local.toml"))
-
+def env_layers() -> list[tuple[str, dict]]:
+    """Settings given by ``KB_*`` environment variables, each labelled with its variable."""
     env = os.environ
+    out = []
     if "KB_USER" in env:
-        raw["user"] = env["KB_USER"]
+        out.append(("$KB_USER", {"user": env["KB_USER"]}))
     if "KB_PUBLISH_PATH" in env:
-        raw.setdefault("views", {})["publish_path"] = env["KB_PUBLISH_PATH"]
+        out.append(("$KB_PUBLISH_PATH", {"views": {"publish_path": env["KB_PUBLISH_PATH"]}}))
     for key in ("url", "model", "identity"):
         if f"KB_EMBED_{key.upper()}" in env:
-            raw.setdefault("embed", {})[key] = env[f"KB_EMBED_{key.upper()}"]
+            out.append((f"$KB_EMBED_{key.upper()}", {"embed": {key: env[f"KB_EMBED_{key.upper()}"]}}))
+    return out
+
+
+def layers(root: Path, settings: dict) -> list[tuple[str, dict]]:
+    """Where a store's configuration comes from, in the order applied (the last wins), each as
+    (label, settings): the store's database, the config files, ``.kb/local.toml``, the environment."""
+    local = root / ".kb" / "local.toml"
+    out = [(str(root / DB_NAME), dict(settings))]
+    for f in config_files():
+        log.debug("config file %s", f)
+        out.append((str(f), _read_config(f)))
+    out.append((str(local), _read(local)))
+    return out + env_layers()
+
+
+def merged(root: Path, settings: dict) -> dict:
+    raw: dict = {}
+    for _, data in layers(root, settings):
+        raw = _merge(raw, data)
+    return raw
+
+
+def blame(root: Path, settings: dict) -> tuple[dict, dict[tuple, str]]:
+    """The configuration of the store at *root* and, for each of its values (a key path as a tuple),
+    the label of the layer that set it."""
+    raw: dict = {}
+    source: dict[tuple, str] = {}
+
+    def settle(path: tuple, label: str):
+        for p in [p for p in source if p[:len(path)] == path or path[:len(p)] == p]:
+            del source[p]       # replaced by a value of a different shape
+        source[path] = label
+
+    def leaves(data: dict, label: str, prefix: tuple = ()):
+        for k, v in data.items():
+            if isinstance(v, dict) and v:
+                leaves(v, label, prefix + (k,))
+            elif v is not None:
+                settle(prefix + (k,), label)
+
+    for label, data in layers(root, settings):
+        raw = _merge(raw, data)
+        leaves(data, label)
+    return raw, source
+
+
+def blame_text(raw: dict, source: dict[tuple, str], about: str = "") -> str:
+    """RAW as TOML like :func:`toml_text`, each line ending in a comment that names where its value
+    came from (a table header: where its values came from)."""
+    import tomli_w
+
+    def qkey(k: str) -> str:
+        return tomli_w.dumps({k: 0}).split(" = ")[0]
+
+    def nested(path: tuple, v) -> dict:
+        for k in reversed(path):
+            v = {k: v}
+        return v
+
+    def under(path: tuple) -> list[str]:
+        return list(dict.fromkeys(l for p, l in source.items() if p[:len(path)] == path))
+
+    out = [f"# {about}"] if about else []
+
+    def note(text: str, labels: list[str]) -> list[str]:
+        tail = f"  # {', '.join(labels)}" if labels else ""
+        return [line + tail for line in text.rstrip("\n").split("\n")]
+
+    def table(data: dict, path: tuple):
+        plain = {k: v for k, v in data.items() if not isinstance(v, dict) and not _array_of_tables(v)}
+        if path and (plain or not data):
+            out.append("")
+            out.extend(note(f"[{'.'.join(qkey(k) for k in path)}]", under(path) if plain else []))
+        for k, v in plain.items():
+            out.extend(note(tomli_w.dumps({k: v}), under(path + (k,))))
+        for k, v in data.items():       # before any sub-table, or its header would take them in
+            if _array_of_tables(v):
+                out.append("")
+                out.extend(note(tomli_w.dumps(nested(path + (k,), v)), under(path + (k,))))
+        for k, v in data.items():
+            if isinstance(v, dict):
+                table(v, path + (k,))
+
+    table(_clean(raw), ())
+    return "\n".join(out) + "\n"
+
+
+def _array_of_tables(v) -> bool:
+    return isinstance(v, list) and bool(v) and all(isinstance(x, dict) for x in v)
+
+
+def from_settings(root: Path, settings: dict, keep: "Config | None" = None) -> Config:
+    """Merge a store's settings with the user's and this machine's configuration."""
+    raw = merged(root, settings)
 
     kbsec = raw.get("kb", {})
     access = kbsec.get("access", "group")

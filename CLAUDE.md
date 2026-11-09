@@ -67,6 +67,8 @@ in scope.
 - When user testing turns up a problem kb could detect or repair, add a
   remedy to `doctor.py` (diagnosis, and a fix if one is safe) with a test,
   and list it in `docs/howto/health.md`.
+- A new how-to in `docs/howto/` gets a row (link and one-line description) in
+  `docs/howto/index.md`; a test checks that every how-to is listed.
 - `uv sync`, `uv run pytest`, `uv run kb`.
 - Tests use real temporary stores (and git repositories where git is
   involved; see `tests/conftest.py`). Don't mock internals. Fakes are fine at external

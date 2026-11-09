@@ -139,3 +139,40 @@ def test_logging(root, tmp_path):
     assert r.stderr.count("reindexed") == 1 and "INFO" in r.stderr
     r = kb("-C", str(root), "store", "reindex")
     assert r.stderr.startswith("reindexed") and r.stdout == ""
+
+
+def test_config_show_blame_names_the_source_of_each_line(root, tmp_path, monkeypatch):
+    import tomllib
+    user = user_config('user = "per-user"\n[views]\npublish_url = "https://user.example"\n[extra]\nlist = [1, 2]\n')
+    (root.parent / "kb.toml").write_text('[views]\npublish_url = "https://parent.example"\n')
+    (root / ".kb").mkdir(exist_ok=True)
+    (root / ".kb" / "local.toml").write_text('[limits]\nmax_inline_bytes = 99\n')
+    monkeypatch.delenv("KB_USER")
+    monkeypatch.setenv("KB_PUBLISH_PATH", "/www")
+    monkeypatch.chdir(root)
+    out = kb("-C", str(root), "config", "show", "--blame").output
+    by_line = {l.split("  # ")[0].strip(): l.split("  # ")[1] for l in out.splitlines() if "  # " in l}
+    assert by_line['name = "test"'] == str(root / "kb.sqlite")
+    assert by_line['user = "per-user"'] == str(user)
+    assert by_line['publish_url = "https://parent.example"'] == str(root.parent / "kb.toml")   # nearer than the user's
+    assert by_line["max_inline_bytes = 99"] == str(root / ".kb" / "local.toml")
+    assert by_line['publish_path = "/www"'] == "$KB_PUBLISH_PATH"
+    assert by_line["1,"] == str(user) and by_line["]"] == str(user)               # each line of a list
+    assert "[views]  # " in out and str(root.parent / "kb.toml") in out.split("[views]")[1].split("\n")[0]
+    shown = tomllib.loads(out)                                                    # still TOML, as in effect
+    assert shown["limits"]["max_inline_bytes"] == 99 and shown["views"]["publish_url"] == "https://parent.example"
+    assert "--json" in kb("-C", str(root), "config", "show", "--blame", "--json").output
+
+
+def test_blame_text_is_valid_toml_for_any_shape(monkeypatch, tmp_path):
+    import tomllib
+    monkeypatch.setattr(config, "layers", lambda root, settings: [
+        ("L1", {"a": {"b": 1}, "neighbors": {"my.store": {"path": "/p"}}, "c": [{"x": 1}], "top": 1}),
+        ("L2", {"a": 5, "neighbors": {"my.store": {"relation": "up"}}}),
+        ("L3", {"a": {"z": 1}})])
+    raw, source = config.blame(tmp_path, {})
+    text = config.blame_text(raw, source)
+    assert tomllib.loads(text) == raw == {"a": {"z": 1}, "c": [{"x": 1}], "top": 1,
+                                          "neighbors": {"my.store": {"path": "/p", "relation": "up"}}}
+    assert "z = 1  # L3" in text and "[neighbors.\"my.store\"]  # L1, L2" in text and "relation = \"up\"  # L2" in text
+    assert "b = 1" not in text          # a later layer replaced it with a scalar, then a table

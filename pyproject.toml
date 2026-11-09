@@ -11,8 +11,8 @@ dependencies = [
     "click>=8.1",
     # DataLad datasets: sources, and the store's content dataset.
     "datalad>=1.0",
-    # The git-annex binary, as a wheel; it must be first on PATH.  Releases from early 2023
-    # (e.g. Debian's 10.20230126) lack `registerurl --remote`, which git-indico uses.
+    # The git-annex binary (PyPI wheels). DataLad needs >=10.20230126; the
+    # Debian 13 package (10.20250416) was found not sufficient.
     "git-annex>=10.20250605",
     # Validates records against the JSON Schemas shipped in kb/schemas.
     "jsonschema>=4.23",
@@ -26,11 +26,9 @@ dependencies = [
 kb = "kb.cli:main"
 
 [project.optional-dependencies]
-# Transforms that need a Python library; command-line transforms need nothing.
 pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
 root = ["uproot>=5"]
-# The git-indico command and Indico special remote, for `kb source add` of Indico URLs.
 indico = ["git-annex-remote-indico @ git+https://github.com/brettviren/git-annex-remote-indico"]
 
 [build-system]
@@ -51,7 +49,7 @@ kb = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "wckb[pdf,pptx,root]",
+    "wckb[pdf,pptx,root,indico]",
 ]
 
 [tool.pytest.ini_options]

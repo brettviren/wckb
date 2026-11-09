@@ -9,7 +9,7 @@ Related documents:
 
 - [glossary.md](glossary.md): the terms used here, and their names in the code;
 - [plan.md](plan.md): the implementation plan;
-- [howto/](howto/): task guides;
+- [howto/](howto/index.md): task guides;
 - [questions.md](questions.md): open questions;
 - [decisions/](decisions/): decisions, including
   [0001](decisions/0001-knowledge-store.md), the choice of a SQLite store,
@@ -370,7 +370,9 @@ topic when they change, and is remade (a new version supersedes it) or
 re-pinned (`kb item stamp`). Every item's inputs are pinned at creation. An
 HTML artifact lives in a source and opens there. Co-authors are recorded
 on every write, and an LLM's `summary` of any document is a rendition,
-indexed and going stale with what it summarizes. See decisions/0004.
+indexed and going stale with what it summarizes. Notes stay in the work areas
+that make them (`kb artifact adopt`); the store indexes them. See
+decisions/0004 and 0005.
 
 **Staleness and the world.** `kb item stale` lists derived renditions whose
 source changed, topics with changed or superseded inputs, and views whose

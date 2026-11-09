@@ -65,7 +65,7 @@
   {
     "name": "kb-artifact",
     "type": "skill",
-    "version": 1,
+    "version": 2,
     "file": "skills/kb-artifact/SKILL.md",
     "title": "kb-artifact",
     "description": "Make an artifact (technote, demo, notebook) from KB knowledge, recorded for tracing and remaking."

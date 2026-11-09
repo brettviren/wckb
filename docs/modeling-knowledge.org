@@ -1,0 +1,81 @@
+#+title: Modeling knowledge
+:PROPERTIES:
+:CUSTOM_ID: modeling-knowledge
+:END:
+
+Knowledge in wckb is modeled as a collection of /knowledge items/ which can be
+collected into /knowledge sets/ (ksets) and stored in a /knowledge base/ (KB).  A
+knowledge base is its store while the =kb= command provides tools to operate on a
+KB.
+
+* Knowledge items
+
+Each *item* is an instance of a well defined type or *kind* of knowledge.  That is,
+an item is a data object governed by a *schema*.  All knowledge items
+identify their schema kind and its version and a unique identifier.
+
+The different kinds of knowledge are distinguished based on several *aspects*.
+Each aspect defines a *group of attributes*.  The groups include *identity*,
+*description*, *provenance*, *meaning*, *dating*, *relations* and *content*.  In addition to
+the identifiers mentioned above, all kinds a short *title*, a longer *summary*, a
+*created* timestamp, and an *access* level.  Access is one of *public*, *collaboration*,
+*group* or *private*, from most to least open.  More information is available 
+in [[file:schemas.md][a short guide to KB schemas]].
+
+The *content* aspect provides a *rendition* object.  It represents one representation of a knowledge item's *material*.  Material is typically a file or URL and metadata about it and in particular a *location* which describes how the material may be accessed.
+
+The different kinds fall into three groups by how they change over time: *primary* knowledge is append only, *derived* may be modified with timestamps recording changes and *registry* of externally maintained entities with representation in the knowledge base.
+
+The schema is "rich" (complex) yet overly simplistic to fully model "knowledge".  The full complexity is mostly exposed to an LLM agent while =kb= tries to also provide simpler interfaces for human users.
+
+* Knowledge sets
+
+A knowledge set or *kset* is simply a particular *primary* knowledge item that references other knowledge items.  A kset can serve as a unit of *knowledge transfer* between *knowledge bases*.
+
+* Knowledge base
+
+A *knowledge base* or *KB* is a store of knowledge items and indices on those items
+to enable various types of query.  A KB is the store while =kb= provides the
+primary tool to operate on a KB.  A KB is implemented as a relational database
+(RDBMS, sqlite3 by default) with table schema defined by the knowledge item
+schema.  A user may read, write or search the database via the =kb= command.
+Search may utilize the RDBMS native /full text search/ feature and an optional
+text embedding and vector similarity "semantic search" is supported by =kb=.
+
+* Knowledge transfer
+
+Pairs of KB instances can be related with a policy defining a /knowledge transfer/ policy.  Knowledge transfer is the process of exporting a *kset* from one KB to a file and using that file to import the kset to another KB.
+
+
+* Knowledge base graph
+
+As more KB pairs are formed, a /knowledge base graph/ emerges.  Knowledge may flow through the graph automatically based on the pair-level transfer policy on each edge or through explicit transfer actions by the user.  The shape of this graph depends on its users.  Some possible patterns include:
+
+- project :: the user keeps one KB for the context of a given "project".  It
+  receives knowledge related to the project and may be used to develop the
+  project.  Most simply, each KB may be an island but the user may decide to
+  transfer knowledge to other KBs.
+
+- home :: the user keeps a KB with a effectively a =$HOME= directory context.
+  This may be a monolith used for all work by the user or the user may pair this
+  KB with a KB covering one or more projects.
+
+- pub :: the user defines one KB to receive knowledge that is to be published to
+  one or more other KBs.  The scope of publishing is defined by the user.
+
+- sub :: the user identifies a KB from which to accept knowledge.  Knowledge
+  from a subscribed KB may pulled with or without selection criteria.
+
+- group :: knowledge can be centralized across many users in to a group KB.
+  This pattern is essentially a scaling up of the "home" pattern where multiple
+  "project" KBs are replaced by multiple pub and sub KB pairing.
+
+* Caveats
+
+Regardless of the arbitrary complexity of possible knowledge base graphs, the =kb=
+tool operates on exactly one KB for any given command.  Knowledge flow through
+the KB graph is done by the knowledge transfer process.  Thus, it is the
+management of the intermediate kset file at production, distribution and
+consumption that determines policy.  Many of the complex issues of security,
+trust, veracity, reputation are currently out of scope for =kb= per se.  Default
+knowledge transfer policy at the pair level provides automation but =kb= provides no means to enforce any global policy.  The challenges of defining and enforcing any such policy exactly mirrors those involved with old fashioned human knowledge transfer.

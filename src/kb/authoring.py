@@ -319,6 +319,28 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
         return rec
 
 
+NOTE_TITLE_CHARS = 80
+NOTE_SUMMARY_CHARS = 400
+
+
+def _clip(text: str, n: int) -> str:
+    return text if len(text) <= n else text[:n - 1].rstrip() + "…"
+
+
+def add_note(kb: Store, text: str, fields: dict, via: str | None = None) -> Item:
+    """A brief text note: a document of doctype ``note``, creator the user, dated today, its text the
+    ``note`` rendition.  Title and summary default to the note's first line and its text (clipped);
+    FIELDS always win."""
+    text = text.strip()
+    if not text:
+        raise KBError("the note is empty")
+    first = text.splitlines()[0].strip()
+    base = {"doctype": "note", "creators": [kb.cfg.user], "date": now()[:10],
+            "title": _clip(first, NOTE_TITLE_CHARS),
+            "summary": _clip(" ".join(text.split()), NOTE_SUMMARY_CHARS)}
+    return new(kb, "document", deep_merge(base, fields), text, via=via)
+
+
 def _warn(message: str) -> None:
     import logging
     from .logs import tell

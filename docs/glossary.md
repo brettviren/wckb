@@ -91,6 +91,13 @@ to be right; please fix the other place.
   `view` (presentation). Derived items are editable and go stale when
   their inputs change.
 
+**note**
+: A brief text a person jots down: a `document` of doctype `note` whose
+  text is its `note` rendition, made by `kb add --note TEXT`. kb fills in
+  the title (the first line), summary, creator (the user) and date. Not an
+  `observation`: it asserts nothing attributed, so use that for facts
+  someone stated. *Code:* `authoring.add_note`.
+
 **frozen**
 : Cannot change what it asserts. Frozen items are primary items, released
   or deprecated policies, the registered versions of assets, and the
@@ -269,7 +276,20 @@ to be right; please fix the other place.
   switching). kb notes in its journal what it served there, what ran there
   (`kb artifact run`), and (by hooks) an LLM's prompts and edits;
   `kb artifact finish` harvests it into an artifact document with a
-  process record. *Code:* `kb.journal`, `kb.artifacts.start|run|finish`.
+  process record. `kb artifact adopt` makes an existing directory one,
+  around what is there: only files above `workspace.largefiles` are
+  annexed, unlocked; build products and nested git repositories are
+  ignored (the repositories' remotes and commits noted in
+  `.kb-artifact/repos.json`). *Code:* `kb.journal`,
+  `kb.artifacts.start|adopt|configure|run|finish`; decisions/0005.
+
+**note sidecar**
+: A TOML file, `note.toml` (or `NAME.note.toml`) beside a note, that says
+  what it is whatever its source format: title, summary, subject,
+  creators, date, doctype, tags, identifiers, `published_at`, the items it
+  presents (`inputs`), and, for the record, its `source` files and `build`
+  command. `kb artifact finish` reads it; options override it. *Code:*
+  `artifacts.read_sidecar`.
 
 **journal**
 : A log of what happened while artifacts were made: a workspace's

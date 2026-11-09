@@ -2,31 +2,24 @@
 
 ## Install
 
+See [installing wckb](install.md).
+
+## Basics of `kb` command 
+
+The `kb` command is the entry point for a rich command tree.  Simply run the
+command with no arguments to see the first level of help.  The top-level `kb`
+command accepts top-level options and then a sub-command is given.  Each
+sub-command may have its own options and potentially sub-sub-commands.  All
+commands in the tree should accept `-h/--help` option and most, but not all,
+will print the help if not given any argument.  These all print some help.
+
 ```
-uv tool install git+https://<host>/<group>/wckb.git   # or, from a checkout: uv tool install --editable .
-kb --version
+$ kb
+$ kb init -h
+$ kb add
 ```
 
-Optional features need extras:
-
-```
-uv tool install 'wckb[pdf,pptx,root] @ git+https://...'
-```
-
-| extra | adds |
-|---|---|
-| `pdf` | PyMuPDF |
-| `pptx` | slide extraction |
-| `root` | ROOT file summaries |
-
-DataLad and sqlite-vec come with kb. DataLad also needs git-annex on PATH
-(`apt install git-annex`; see [datalad](datalad.md)). `kb` also uses
-`pdftotext` (poppler), `pandoc` and, for OCR, `tesseract`
-(`apt install tesseract-ocr`) when they're installed.
-
-## How the commands are organized
-
-`kb --help` lists two kinds of command:
+Some top-level sub-commands are categorized as: 
 
 - **Everyday verbs**, at the top: `kb init`, `kb status`, `kb add`,
   `kb new`, `kb show`, `kb open`, `kb ls`, `kb search`, `kb context`, `kb log`,
@@ -50,9 +43,10 @@ command has `--help`. The full reference is
 A store is one SQLite file, `kb.sqlite`, in a directory. Next to it, `.kb/`
 holds this machine's settings (`local.toml`), a cache and a build area.
 
-- **Settings live in the store.** Manage them with `kb config show`,
-  `kb config get` and `kb config set`. `kb config show` prints TOML that
-  could serve as a config file (`--json` for JSON).
+- **Settings begin in the store.** Manage them with `kb config show`,
+  `kb config get` and `kb config set`. User and directory config files augment those settings. `kb config show` prints TOML that
+  could serve as an exaustive config file (`--json` for JSON). `kb config show --blame` shows what is in
+  effect and which file set each line ([contexts](contexts.md)).
 - **The database enforces append-only.** You never edit it directly; every
   change goes through `kb`.
 - **Each command uses its store context's store.** In a git working tree
