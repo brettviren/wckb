@@ -193,7 +193,11 @@ class Monolith(Transform):
     Relative references resolve against BASE (the page's URL) when there is one, else against the file.
     The copy is cut off from the network (-I), so it shows what was kept, and carries no time of
     making (-M), so making it twice gives the same file when what the page loads is unchanged.
-    What can't be fetched is left out (-e) and said in the options."""
+    What can't be fetched is left out (-e) and said in the options.
+
+    Fonts are dropped (-F) unless the setting page.fonts is true: a web font family comes as dozens of
+    files, one per weight and character range, all inlined though the page uses few (93% of one 1.1 MB
+    page); the text shows in the viewer's own fonts instead."""
 
     def available(self):
         return shutil.which("monolith") is not None
@@ -206,8 +210,13 @@ class Monolith(Transform):
                 "-t", str(self.config.get("timeout", 60))]
         if base:
             argv += ["-b", base]
+        fonts = bool(self.config.get("fonts", False))
+        if not fonts:
+            argv.append("-F")
         out = _run(argv, timeout=int(self.config.get("timeout", 60)) * 20)
         options = {"base": base} if base and not base.startswith("file:") else {}    # no local paths
+        if not fonts:
+            options["fonts"] = "dropped"
         # monolith names each resource it reads on stderr, with "(why)" after those it could not get
         missed = [m.group(0) for m in map(_MISSED.match, out.stderr.splitlines()) if m]
         if missed:

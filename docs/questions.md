@@ -617,11 +617,15 @@ Status:
   (`kb.readability`, standard library only).
 - Web pages also get a self-contained copy, the rendition `page`, made by
   monolith when it is installed (2026-11-10): what the page loads inlined
-  as data URLs, cut off from the network. The original stays as served,
+  as data URLs, cut off from the network, fonts left out unless
+  `page.fonts` is true. The original stays as served,
   so `kb rendition verify` still works. Open: pages built by JavaScript
   (monolith does not run it; single-file-cli with headless Chromium
   would), pages behind a login (monolith takes a cookie file), WARC for
-  an archival record, and `--url` for each of several files.
+  an archival record, and `--url` for each of several files. Open: sharing
+  what pages load (a font, a script library) instead of inlining it in
+  each, e.g. a page kept as a skeleton plus blobs by sha256 and rebuilt
+  when opened; git-annex deduplicates only whole files.
 - Dates are qualified (`dates`: created, published, modified, accessed,
   captured) and correctable; `date` means published and is given only
   when known.

@@ -141,6 +141,14 @@ kb open doc-3vq8r2m1kd                      # opens #page (a page in a source's 
 kb rendition extract doc-3vq8r2m1kd --transform monolith    # make #page later (--force: again)
 ```
 
+Fonts are left out, and the text shows in the viewer's own fonts. A web
+font family comes as dozens of files, one per weight and character range,
+and inlining them all made one 1.1 MB page 93% fonts. To keep them:
+
+```
+kb config set page.fonts true
+```
+
 Relative references resolve against the page's URL, or for a local file,
 against where the file is. What monolith could not get is listed in the
 rendition's `transform.options.missing`. `--no-page` skips the copy. The

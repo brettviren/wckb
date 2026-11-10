@@ -137,6 +137,7 @@ def test_page_of_local_file(kb, tmp_path):
     assert page["derived_from"] == "original" and page["transform"]["name"] == "monolith"
     options = page["transform"]["options"]
     assert "base" not in options and len(options["missing"]) == 1 and "gone.png" in options["missing"][0]
+    assert options["fonts"] == "dropped"
     html = kb.get(rec.id).text("page")
     assert "data:text/css" in html and "color:red" in html
     # a page does not count as text extracted: the page is still extracted for search, once
@@ -195,3 +196,22 @@ def test_add_url_keeps_page(root, tmp_path):
         assert not Store.open(root).get(r.stdout.split()[0]).has_rendition("page")
     finally:
         server.shutdown()
+
+
+@needs_monolith
+def test_page_fonts_dropped_unless_asked(kb, tmp_path):
+    (tmp_path / "f.woff2").write_bytes(b"wOF2" + b"\0" * 64)
+    (tmp_path / "s.css").write_text('@font-face{font-family:X;src:url(f.woff2) format("woff2")}body{font-family:X}')
+    f = tmp_path / "page.html"
+    f.write_text('<html><head><link rel="stylesheet" href="s.css"></head><body><p>Fonts.</p></body></html>')
+    base = {"original": f.resolve().as_uri()}
+    rec = authoring.add(kb, "document", [str(f)], DOC)
+    transforms.page_missing(kb, rec, base)
+    html = kb.get(rec.id).text("page")
+    assert "data:text/css" in html and "data:font" not in html and "f.woff2" not in html
+
+    kb.set_setting("page", {"fonts": True})
+    rec2 = authoring.add(kb, "document", [str(f)], {**DOC, "title": "Doc 2"})
+    (page,), _ = transforms.page_missing(kb, rec2, base)
+    assert "fonts" not in page["transform"].get("options", {})
+    assert "font/woff2" in kb.get(rec2.id).text("page")
