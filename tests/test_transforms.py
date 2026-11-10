@@ -58,6 +58,17 @@ def test_pandoc_html(kb, tmp_path):
     assert "# Title" in kb.get(rec.id).text("text")
 
 
+@pytest.mark.skipif(not shutil.which("pandoc"), reason="needs pandoc")
+def test_pandoc_html_no_div_tags(kb, tmp_path):
+    f = tmp_path / "page.html"
+    f.write_text('<div class="wrap"><h1>Title</h1><div class="prose"><p>Some <span class="x">'
+                 'spanned</span> text.</p></div></div>')
+    rec = authoring.add(kb, "document", [str(f)], DOC)
+    transforms.extract(kb, rec)
+    text = kb.get(rec.id).text("text")
+    assert "Some spanned text." in text and "<div" not in text and "<span" not in text
+
+
 def test_pptx(kb, tmp_path):
     pptx = pytest.importorskip("pptx")
     prs = pptx.Presentation()

@@ -166,9 +166,14 @@ class Pandoc(Transform):
             src = dst.with_name(dst.stem + ".main.html")
             src.write_text(f"<html><body>{content}</body></html>", encoding="utf-8")
             info = {"options": {"readability": how}}
-        # no raw HTML in the output: it is for reading and searching
-        _run(["pandoc", "-f", _PANDOC_FROM[media_type], "-t", "gfm-raw_html", "--wrap=none", str(src),
-              "-o", str(dst)])
+        # no raw HTML in the output: it is for reading and searching.  "-raw_html" on the writer is
+        # not enough: the HTML/EPUB readers keep <div> as a native Div, which the gfm writer still
+        # prints as a raw tag, so divs are read as plain blocks instead.  Spans are already dropped
+        # by the writer, and "-native_spans" would split paragraphs at each span (pandoc 2.17).
+        reader = _PANDOC_FROM[media_type]
+        if reader in ("html", "epub"):
+            reader += "-native_divs"
+        _run(["pandoc", "-f", reader, "-t", "gfm-raw_html", "--wrap=none", str(src), "-o", str(dst)])
         return info
 
 
