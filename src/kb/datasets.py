@@ -618,6 +618,16 @@ def tracked(root: Path, relpath: str) -> TreeFile | None:
     return hit[0] if hit else None
 
 
+def ignored(root: Path, relpath: str) -> str | None:
+    """The git ignore rule that keeps RELPATH out of the repository at ROOT ("FILE:LINE:PATTERN"), if one
+    does (a tracked file is never ignored)."""
+    out = _git(root, "check-ignore", "-v", "--", relpath, check=False)
+    if out.returncode != 0 or not out.stdout.strip():
+        return None
+    rule = out.stdout.split("\t", 1)[0]
+    return None if rule.rsplit(":", 1)[-1].startswith("!") else rule       # "-v" also names a re-including "!"
+
+
 def tags(root: Path, refresh: bool = False) -> list[str]:
     if refresh and _git(root, "remote", check=False).stdout.strip():
         _git(root, "fetch", "--all", "--tags", "--quiet", check=False)

@@ -291,6 +291,7 @@ def content_dataset(kb, create: bool = False, path: Path | None = None, shared: 
     if not (where / ".git").exists():
         from .sharing import create as make
         make(where, group, shared=shared, text2git=False)
+        _unignore(where)
     elif shared:
         from .sharing import share
         share(where, group)
@@ -318,12 +319,32 @@ def put_content(kb, src: Path, filename: str, sha: str) -> dict:
     """Copy SRC into the content dataset (made if needed) by its sha256, save it; its datalad location."""
     from .sources import TYPES
     rec, root = content_dataset(kb, create=True)
+    _unignore(root)
     rel = f"sha256/{sha[:2]}/{sha}/{filename}"
     dest = root / rel
     if not os.path.lexists(dest):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
     return TYPES["datalad"].put(kb, rec, root, rel, f"Add {filename} ({sha[:12]}) (kb)")
+
+
+#: The content dataset's .gitignore: everything kb puts there is kept, whatever a person's own ignore
+#: rules say (a global "*.html" in ~/.config/git/ignore made datalad save skip web pages silently).
+UNIGNORE = "# kb keeps everything it puts here: no ignore rules from elsewhere apply\n!*\n"
+
+
+def _unignore(root: Path) -> None:
+    """Give the content dataset at ROOT its .gitignore (UNIGNORE), saved, if it lacks it."""
+    f = root / ".gitignore"
+    if f.is_file() and "!*" in f.read_text().splitlines():
+        return
+    import datalad.api as dl
+    f.write_text(UNIGNORE)
+    res = dl.save(dataset=str(root), path=[str(f)], message="Keep everything kb puts here (kb)",
+                  result_renderer="disabled", on_failure="ignore", return_type="list")
+    bad = [r for r in res if r.get("status") in ("error", "impossible")]
+    if bad:
+        raise KBError(f"datalad save .gitignore in {root}: {bad[0].get('message')}")
 
 
 def _datalad_location(kb, src: Path, required: bool) -> dict | None:

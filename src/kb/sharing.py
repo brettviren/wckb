@@ -91,14 +91,19 @@ def group_of(path: Path, group: str | None = None) -> tuple[str, int]:
             g = grp.getgrnam(group)
         except KeyError as exc:
             raise KBError(f"no group {group!r}") from exc
+        name, gid = g.gr_name, g.gr_gid
     else:
         where = Path(path)
         while not where.exists():
             where = where.parent
-        g = grp.getgrgid(where.stat().st_gid)
-    if g.gr_gid not in os.getgroups() and g.gr_gid != os.getgid():
-        raise KBError(f"you are not in the group {g.gr_name}: give --group, or ask to be added (then log in again)")
-    return g.gr_name, g.gr_gid
+        gid = where.stat().st_gid
+        try:
+            name = grp.getgrgid(gid).gr_name
+        except KeyError:          # a group the group database doesn't name (a container, a sandbox, NFS)
+            name = str(gid)
+    if gid not in os.getgroups() and gid != os.getgid():
+        raise KBError(f"you are not in the group {name}: give --group, or ask to be added (then log in again)")
+    return name, gid
 
 
 def trust(path: Path) -> list[str]:
@@ -229,7 +234,7 @@ def clone(source: Path, dest: Path) -> list[str]:
     value = shared_config(source)
     if not value:
         raise KBError(f"{source} is not shared; its owner can share it: kb source share {source}")
-    group_of(source, grp.getgrgid(source.stat().st_gid).gr_name)
+    group_of(source)              # you must be in the group of the dataset
     if dest.exists() and any(dest.iterdir()):
         raise KBError(f"{dest} exists and is not empty")
     import datalad.api as dl

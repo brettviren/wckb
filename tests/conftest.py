@@ -1,3 +1,4 @@
+import os
 import subprocess
 from pathlib import Path
 
@@ -6,6 +7,17 @@ import pytest
 from kb import authoring
 from kb.items import Store
 from kb.scaffold import init
+
+
+def pytest_configure(config):
+    """Test stores outside the home directory: kb finds a store by looking up the tree (for kb/kb.sqlite too),
+    so a temporary directory under $HOME (TMPDIR=~/tmp, as in a sandbox) would find the person's home store
+    ~/kb.  /tmp is used instead, unless --basetemp says where."""
+    import tempfile
+    if config.option.basetemp or not Path(tempfile.gettempdir()).resolve().is_relative_to(Path.home().resolve()):
+        return
+    if os.access("/tmp", os.W_OK):
+        config.option.basetemp = f"/tmp/wckb-tests-{os.getuid()}"      # pytest empties it at each run
 
 
 def git(root: Path, *args) -> str:

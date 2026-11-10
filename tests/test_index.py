@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import subprocess
 import sqlite3
 
 import pytest
@@ -141,6 +142,30 @@ def test_large_content_goes_to_the_content_dataset(kb, tmp_path):
     assert rec2.rendition("original")["locations"][0]["source"] == src.id
     r = CliRunner().invoke(main, ["-C", str(kb.root), "status"])
     assert f"content   {root}" in r.stdout
+
+
+@needs_datalad
+def test_content_dataset_keeps_what_a_person_ignores(kb, tmp_path, monkeypatch):
+    # a person's global ignore rules ("*.html" in ~/.config/git/ignore) made datalad save skip a page
+    excludes = tmp_path / "ignore"
+    excludes.write_text("*.html\n")
+    (tmp_path / "gitconfig").write_text(f"[core]\n\texcludesfile = {excludes}\n")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    page = tmp_path / "page.html"
+    page.write_text("<p>" + "x" * (kb.cfg.max_inline_bytes + 1) + "</p>")
+    rec = authoring.add(kb, "document", [str(page)], {"title": "Page", "summary": "A big page.",
+                                                       "doctype": "report", "creators": ["A"], "date": "2026"})
+    (loc,) = rec.rendition("original")["locations"]
+    assert loc["type"] == "datalad" and loc["path"].endswith("/page.html")
+    root = content.content_dataset(Store.open(kb.root))[1]
+    assert "!*" in (root / ".gitignore").read_text().splitlines()
+    git = lambda *a: subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True).stdout  # noqa: E731
+    assert git("ls-files", ".gitignore").strip() == ".gitignore" and not git("status", "--porcelain").strip()
+
+    # elsewhere, an ignored file is a clear error, not a silent skip
+    (root / ".gitignore").write_text("*.html\n")
+    assert datasets.ignored(root, "sha256/x/page.html").endswith(":*.html")
+    assert datasets.ignored(root, loc["path"]) is None             # tracked files are never ignored
 
 
 @needs_datalad

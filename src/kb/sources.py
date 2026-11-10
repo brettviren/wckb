@@ -161,6 +161,10 @@ class DataladType(SourceType):
         from . import content, datasets
         datasets.need()
         import datalad.api as dl
+        why = datasets.ignored(root, rel)
+        if why:       # datalad save would skip it without a word
+            raise KBError(f"{rel} is ignored by git in {root} ({why}); un-ignore it there (a '!' pattern in the "
+                          "dataset's .gitignore) and try again")
         res = dl.save(dataset=str(root), path=[str(root / rel)], message=message, result_renderer="disabled",
                       on_failure="ignore", return_type="list")
         bad = [r for r in res if r.get("status") in ("error", "impossible")]
