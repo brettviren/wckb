@@ -1,7 +1,10 @@
 """Transforms: one rendition in, a derived rendition out.
 
 Built-in transforms cover what the group meets most (PDF, PPTX, office and
-markup formats through pandoc, ROOT files).  Others are declared in the store setting "transforms"
+markup formats through pandoc, ROOT files).  Most extract text for search;
+a *page* transform (monolith) instead makes a web page self-contained, its
+styles, scripts, images and fonts inlined, so it still shows when they are
+gone (the rendition ``page``).  Others are declared in the store setting "transforms"
 as command transforms, so a better converter can be adopted without a kb
 release.  Every output records the transform's name and version and the
 SHA-256 of its input, which is how staleness is detected.
@@ -10,6 +13,7 @@ SHA-256 of its input, which is how staleness is detected.
 import copy
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -44,6 +48,8 @@ class Transform:
     fidelity: str = "extracted"
     priority: int = 50          # lower wins when several accept a media type
     description: str = ""
+    #: "text": extracts text for search (chosen by media type); "page": a self-contained copy of a web page
+    purpose: str = "text"
     config: dict = field(default_factory=dict)
 
     def available(self) -> bool:
@@ -54,7 +60,8 @@ class Transform:
 
     def run(self, src: Path, dst: Path, media_type: str) -> dict | None:
         """Write DST from SRC; optionally say more: {"fidelity": ..., "options": {...}} (OCR was used ...).
-        Text of several pages separates them with form feeds (\\f), so search can name the page."""
+        Text of several pages separates them with form feeds (\\f), so search can name the page.
+        A page transform is also given ``base``: the URL the page was read from, if any."""
         raise NotImplementedError
 
 
@@ -177,6 +184,37 @@ class Pandoc(Transform):
         return info
 
 
+_MISSED = re.compile(r"^\S+ \(.+\)$")
+
+
+class Monolith(Transform):
+    """A web page as one HTML file: what it loads (styles, scripts, images, fonts) inlined as data URLs.
+
+    Relative references resolve against BASE (the page's URL) when there is one, else against the file.
+    The copy is cut off from the network (-I), so it shows what was kept, and carries no time of
+    making (-M), so making it twice gives the same file when what the page loads is unchanged.
+    What can't be fetched is left out (-e) and said in the options."""
+
+    def available(self):
+        return shutil.which("monolith") is not None
+
+    def version(self):
+        return _cmd_version(["monolith", "--version"]).replace("monolith ", "")
+
+    def run(self, src, dst, media_type, base=None):
+        argv = ["monolith", str(src), "-o", str(dst), "-I", "-M", "-e",
+                "-t", str(self.config.get("timeout", 60))]
+        if base:
+            argv += ["-b", base]
+        out = _run(argv, timeout=int(self.config.get("timeout", 60)) * 20)
+        options = {"base": base} if base and not base.startswith("file:") else {}    # no local paths
+        # monolith names each resource it reads on stderr, with "(why)" after those it could not get
+        missed = [m.group(0) for m in map(_MISSED.match, out.stderr.splitlines()) if m]
+        if missed:
+            options["missing"] = missed[:20]
+        return {"options": options} if options else None
+
+
 class Pptx(Transform):
     """Slide titles, text, tables and speaker notes; pictures become placeholders."""
 
@@ -269,9 +307,9 @@ class Command(Transform):
         vc = self.config.get("version_command")
         return _cmd_version(vc) if vc else ""
 
-    def run(self, src, dst, media_type):
+    def run(self, src, dst, media_type, base=None):
         with tempfile.TemporaryDirectory() as outdir:
-            subst = {"input": str(src), "output": str(dst), "outdir": outdir, "stem": src.stem}
+            subst = {"input": str(src), "output": str(dst), "outdir": outdir, "stem": src.stem, "base": base or ""}
             argv = [a.format(**subst) for a in self.config["command"]]
             _run(argv, timeout=self.config.get("timeout", 3600))
             produced = Path(self.config.get("output", "{output}").format(**subst))
@@ -290,6 +328,8 @@ def builtin() -> list[Transform]:
         Ocr("ocr", IMAGE_TYPES, "text/plain", ".txt", fidelity="ocr", priority=50,
             description="OCR (tesseract, or an engine in [ocr.engines])"),
         Pandoc("pandoc", tuple(_PANDOC_FROM), priority=50, description="pandoc to GitHub markdown"),
+        Monolith("monolith", content.MARKUP, "text/html", ".html", fidelity="lossless", purpose="page",
+                 description="monolith: a web page made self-contained (rendition 'page')"),
         Pptx("pptx", (PPTX,), priority=50, description="python-pptx: titles, text, tables, notes (extra: pptx)"),
         RootDescribe("root-describe", ("application/x-root",), "application/json", ".json", priority=50,
                      description="uproot: trees, branches, histograms as JSON (extra: root)"),
@@ -301,6 +341,8 @@ def registry(kb: Store) -> list[Transform]:
     for t in out:
         if isinstance(t, (PyMuPDF, Ocr)):
             t.config = kb.cfg.raw.get("ocr", {}) or {}
+        elif isinstance(t, Monolith):
+            t.config = kb.cfg.raw.get("page", {}) or {}
     for name, conf in kb.cfg.transforms.items():
         if "command" not in conf:
             raise KBError(f"transform {name} (setting transforms.{name}) needs a command")
@@ -312,11 +354,13 @@ def registry(kb: Store) -> list[Transform]:
             fidelity=conf.get("fidelity", "extracted"),
             priority=int(conf.get("priority", 20)),  # configured ones win over built-ins
             description=conf.get("description", " ".join(conf["command"])),
+            purpose=conf.get("purpose", "text"),
             config=conf))
     return out
 
 
-def choose(kb: Store, media_type: str, name: str | None = None) -> Transform:
+def choose(kb: Store, media_type: str, name: str | None = None, purpose: str = "text") -> Transform:
+    """Transform NAME, else the best available one for MEDIA_TYPE with that PURPOSE (text, page)."""
     candidates = registry(kb)
     if name:
         for t in candidates:
@@ -325,16 +369,19 @@ def choose(kb: Store, media_type: str, name: str | None = None) -> Transform:
                     raise KBError(f"transform {name} is not available on this machine")
                 return t
         raise KBError(f"no transform {name!r}; see kb rendition transforms")
-    usable = sorted((t for t in candidates if media_type in t.media_types and t.available()),
-                    key=lambda t: t.priority)
+    usable = sorted((t for t in candidates if media_type in t.media_types and t.purpose == purpose
+                     and t.available()), key=lambda t: t.priority)
     if not usable:
-        raise KBError(f"no available transform for {media_type}; see kb rendition transforms")
+        what = "transform" if purpose == "text" else f"{purpose} transform"
+        raise KBError(f"no available {what} for {media_type}; see kb rendition transforms")
     return usable[0]
 
 
 def extract(kb: Store, rec: Item, source: str | None = None, transform: str | None = None,
-            name: str = "text", force: bool = False) -> dict:
-    """Derive rendition *name* from *source* (default: the first original)."""
+            name: str | None = None, force: bool = False, base: str | None = None) -> dict:
+    """Derive rendition *name* from *source* (default: the first original).  NAME defaults to ``text``,
+    or for a page transform to ``page`` (page_name).  BASE: where a web page's relative
+    references resolve (default: the source's URL, if it has one, else the file kb holds)."""
     rec = kb.get(rec.id)          # the stored version, whatever the caller holds
     if source is None:
         originals = [r for r in rec.renditions if r["role"] in ("original", "content")]
@@ -342,11 +389,13 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
             raise KBError(f"{rec.id} has no original rendition to extract from")
         source = originals[0]["name"]
     src_r = rec.rendition(source)
+    t = choose(kb, src_r["media_type"], transform)
+    if name is None:
+        name = page_name(source) if t.purpose == "page" else "text"
     if rec.has_rendition(name) and not force:
         existing = rec.rendition(name)
         if existing.get("source_sha256") == src_r.get("sha256"):
             raise KBError(f"{rec.id}#{name} exists and is up to date (use --force to redo)")
-    t = choose(kb, src_r["media_type"], transform)
     try:
         src = content.resolve(kb, rec, src_r)
     except content.FetchError as exc:
@@ -362,8 +411,12 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
     kb.cfg.kbdir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=kb.cfg.kbdir) as tmp:
         out = Path(tmp) / filename
+        extra = {}
+        if t.purpose == "page":        # relative references resolve against where the page was read
+            extra["base"] = base or next((loc["url"] for loc in src_r.get("locations", [])
+                                          if loc["type"] == "url"), None)
         try:
-            info = t.run(src, out, src_r["media_type"]) or {}
+            info = t.run(src, out, src_r["media_type"], **extra) or {}
         except KBError:
             raise
         except Exception as exc:          # a library's own error (a damaged or mislabelled file)
@@ -396,11 +449,22 @@ def text_name(source: str) -> str:
     return "text" if source == "original" else f"{source}-text"
 
 
+def page_name(source: str) -> str:
+    """The name of the self-contained copy of web page SOURCE: ``page`` for the original, else SOURCE-page."""
+    return "page" if source == "original" else f"{source}-page"
+
+
+def _page_makers(kb: Store) -> set[str]:
+    return {t.name for t in registry(kb) if t.purpose == "page"}
+
+
 def unextracted(kb: Store, rec: Item) -> list[tuple[str, Transform]]:
     """The renditions of REC that are not text and have no text extracted yet, with the transform that
     would extract it here (renditions no available transform handles are left out)."""
     from .content import needs_text
-    have = {r.get("derived_from") for r in rec.renditions if r["role"] == "derived"}
+    makers = _page_makers(kb)
+    have = {r.get("derived_from") for r in rec.renditions
+            if r["role"] == "derived" and r.get("transform", {}).get("name") not in makers}
     out = []
     for r in rec.renditions:
         if r["role"] not in ("original", "content") or not needs_text(r["media_type"]) or r["name"] in have:
@@ -418,6 +482,33 @@ def extract_missing(kb: Store, rec: Item) -> tuple[list[dict], list[str]]:
     for source, t in unextracted(kb, rec):
         try:
             made.append(extract(kb, rec, source, t.name, text_name(source)))
+        except KBError as exc:
+            failed.append(f"{rec.id}#{source}: {exc}")
+    return made, failed
+
+
+def unpaged(kb: Store, rec: Item) -> list[str]:
+    """The web pages (original or content renditions) of REC with no self-contained copy yet."""
+    from .content import MARKUP
+    makers = _page_makers(kb)
+    have = {r.get("derived_from") for r in rec.renditions
+            if r["role"] == "derived" and r.get("transform", {}).get("name") in makers}
+    return [r["name"] for r in rec.renditions
+            if r["role"] in ("original", "content") and r["media_type"] in MARKUP and r["name"] not in have]
+
+
+def page_missing(kb: Store, rec: Item, bases: dict[str, str] | None = None) -> tuple[list[dict], list[str]]:
+    """Make a self-contained copy of every web page of REC that has none (unpaged), when a page
+    transform is available here: (what was made, what failed).  BASES: per rendition name, where its
+    relative references resolve (the file kb add was given: kb holds a copy without its neighbours)."""
+    made, failed = [], []
+    for source in unpaged(kb, rec):
+        try:
+            t = choose(kb, rec.rendition(source)["media_type"], purpose="page")
+        except KBError:
+            break                       # none here: not a failure
+        try:
+            made.append(extract(kb, rec, source, t.name, page_name(source), base=(bases or {}).get(source)))
         except KBError as exc:
             failed.append(f"{rec.id}#{source}: {exc}")
     return made, failed

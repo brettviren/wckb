@@ -199,6 +199,8 @@ Options:
   --supersedes TEXT               This is a new version of that item.
   --extract / --no-extract        Extract text from a PDF, slides and the like (when a transform is
                                   available), for search.  [default: extract]
+  --page / --no-page              Keep a web page also as one self-contained file, what it loads
+                                  inlined (rendition 'page'; needs monolith).  [default: page]
   --force                         Add even if an identifier is already in this store.
   --target PATH                   Copy the file(s) here (a directory: one that exists, or a path
                                   ending in /; else the new file's path). In a source (a DataLad
@@ -624,8 +626,8 @@ Usage: kb item link [OPTIONS] REF {supports|contradicts|refines|alternative-to|c
 
   Link REF to OTHER by RELATION (what REF is to OTHER); OTHER shows it under the inverse name.
 
-      Relations:
-        supports        gives evidence or an argument for it (seen from the other: supported by)
+  Relations:
+    supports        gives evidence or an argument for it (seen from the other: supported by)
     contradicts     disagrees with it (seen from the other: contradicted by)
     refines         adds detail to it, or narrows it (seen from the other: refined by)
     alternative-to  can be used instead of it (seen from the other: alternative to)
@@ -635,10 +637,9 @@ Usage: kb item link [OPTIONS] REF {supports|contradicts|refines|alternative-to|c
     cites           refers to it (seen from the other: cited by)
     same-as         is the same thing, described twice (seen from the other: same as)
 
-        kb item link obs-a supports obs-b
-        kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
-        kb item links obs-b            # its links, both ways
-      
+    kb item link obs-a supports obs-b
+    kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
+    kb item links obs-b            # its links, both ways
 
 Options:
   --note TEXT  Why, in a few words.
@@ -888,10 +889,13 @@ Usage: kb rendition extract [OPTIONS] [REF]
 
   Derive a text (or summary) rendition from REF's original.
 
+    kb rendition extract doc-123                       # text, for search
+    kb rendition extract doc-123 --transform monolith  # a web page made self-contained: #page
+
 Options:
   --from TEXT       Source rendition (default: the first original).
   --transform TEXT  Transform name (see kb rendition transforms).
-  --name TEXT       Name of the derived rendition.  [default: text]
+  --name TEXT       Name of the derived rendition (default: text; page for a page transform).
   --force           Redo even if up to date.
   --stale           Redo every stale derived rendition.
   -h, --help        Show this message and exit.

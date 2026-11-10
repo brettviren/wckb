@@ -385,6 +385,9 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.option("--supersedes", "supersedes", help="This is a new version of that item.")
 @click.option("--extract/--no-extract", default=True, show_default=True,
               help="Extract text from a PDF, slides and the like (when a transform is available), for search.")
+@click.option("--page/--no-page", default=True, show_default=True,
+              help="Keep a web page also as one self-contained file, what it loads inlined (rendition 'page'; "
+                   "needs monolith).")
 @click.option("--force", is_flag=True, help="Add even if an identifier is already in this store.")
 @click.option("--target", type=click.Path(),
               help="Copy the file(s) here (a directory: one that exists, or a path ending in /; else the new file's path). In a source (a DataLad dataset, a "
@@ -392,8 +395,8 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
 @click.option("--no-guess", is_flag=True, help="Don't look for metadata in the files or at arXiv.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
-def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, force, target, no_guess,
-            json_out, via, **kw):
+def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, page, force, target,
+            no_guess, json_out, via, **kw):
     """Add files or URLs as a new primary item (default kind: document).
 
     Metadata is looked for in what is added, and given options override
@@ -432,6 +435,18 @@ def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersed
             ui.info(f"extracted {rec.id}#{r['name']} from #{r['derived_from']} with {r['transform']['name']}")
         for why in failed:
             ui.info(f"warning: text not extracted: {why} (kb doctor unextracted retries)")
+        rec = kb.get(rec.id)
+    if page:
+        # a local page's styles and images are found next to the file given, not next to kb's copy
+        bases = {r["name"]: Path(src).expanduser().resolve().as_uri()
+                 for src, r in zip(sources, rec.renditions) if "://" not in src}
+        made, failed = transforms.page_missing(kb, rec, bases)
+        for r in made:
+            ui.info(f"made {rec.id}#{r['name']} from #{r['derived_from']} with {r['transform']['name']}"
+                    + (f" ({len(r['transform']['options']['missing'])} resource(s) missing)"
+                       if r["transform"].get("options", {}).get("missing") else ""))
+        for why in failed:
+            ui.info(f"warning: no self-contained page made: {why} (kb rendition extract ID --transform monolith retries)")
         rec = kb.get(rec.id)
     _done(kb, rec, json_out)
 
@@ -836,12 +851,17 @@ def rendition_locate_cmd(c, ref, cas_name, url, file):
 @click.argument("ref", required=False)
 @click.option("--from", "source", help="Source rendition (default: the first original).")
 @click.option("--transform", help="Transform name (see kb rendition transforms).")
-@click.option("--name", default="text", show_default=True, help="Name of the derived rendition.")
+@click.option("--name", help="Name of the derived rendition (default: text; page for a page transform).")
 @click.option("--force", is_flag=True, help="Redo even if up to date.")
 @click.option("--stale", "all_stale", is_flag=True, help="Redo every stale derived rendition.")
 @pass_ctx
 def extract_cmd(c, ref, source, transform, name, force, all_stale):
-    """Derive a text (or summary) rendition from REF's original."""
+    """Derive a text (or summary) rendition from REF's original.
+
+    \b
+      kb rendition extract doc-123                       # text, for search
+      kb rendition extract doc-123 --transform monolith  # a web page made self-contained: #page
+    """
     from . import graph, transforms
     kb = c.kb
     if all_stale:
@@ -864,8 +884,9 @@ def extract_cmd(c, ref, source, transform, name, force, all_stale):
 def transforms_cmd(c, json_out):
     """List transforms and whether they are available here."""
     from .transforms import registry
-    rows = [{"name": t.name, "available": t.available(), "fidelity": t.fidelity, "output": t.output_type,
-             "media_types": list(t.media_types), "description": t.description} for t in registry(c.kb)]
+    rows = [{"name": t.name, "available": t.available(), "purpose": t.purpose, "fidelity": t.fidelity,
+             "output": t.output_type, "media_types": list(t.media_types), "description": t.description}
+            for t in registry(c.kb)]
     if json_out:
         return ui.emit_json(rows)
     for r in rows:

@@ -218,6 +218,13 @@ to be right; please fix the other place.
 : A tool that makes one rendition from another (pdftotext, pandoc,
   python-pptx, uproot ...). *Code:* `kb.transforms`, `kb rendition extract`.
 
+**page** (rendition)
+: A self-contained copy of a web page: what it loads (styles, scripts,
+  images, fonts) inlined, cut off from the network. A derived rendition
+  made by a *page transform* (monolith), not text for search; `kb add`
+  makes it when it can (`--no-page`), and `kb open` prefers it. *Code:*
+  `transforms.Monolith`, `transforms.page_missing`, purpose `page`.
+
 **content**
 : The bytes of a rendition. *Code:* `kb.content` (placing, hashing,
   fetching, verifying content).

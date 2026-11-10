@@ -17,6 +17,14 @@ What the extras add:
     so Indico sites can be held as DataLad datasets. Leave it out if you
     don\'t use Indico.
 
+Tools `kb`{.verbatim} uses when it finds them on `$PATH`{.verbatim}
+(`kb rendition transforms`{.verbatim} says which it found):
+`pdftotext`{.verbatim} (poppler), `pandoc`{.verbatim} (text from HTML,
+DOCX, LaTeX \...), `tesseract`{.verbatim} (OCR) and
+[monolith](https://github.com/Y2Z/monolith) (a self-contained copy of
+each web page added, the rendition `page`{.verbatim}; install it with
+`cargo install monolith`{.verbatim} or your package manager).
+
 `git-annex`{.verbatim} and `git-annex-remote-indico`{.verbatim} are
 named explicitly so their commands are found in `$PATH`{.verbatim}. The
 latter is needed to use an Indico site as a source for knowledge

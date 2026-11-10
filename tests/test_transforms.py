@@ -117,3 +117,81 @@ def test_no_transform(kb, tmp_path):
     rec = authoring.add(kb, "document", [str(f)], DOC)
     with pytest.raises(KBError, match="no available transform"):
         transforms.extract(kb, rec)
+
+
+needs_monolith = pytest.mark.skipif(not shutil.which("monolith"), reason="needs monolith")
+
+
+@needs_monolith
+def test_page_of_local_file(kb, tmp_path):
+    (tmp_path / "s.css").write_text("body{color:red}")
+    f = tmp_path / "page.html"
+    f.write_text('<html><head><link rel="stylesheet" href="s.css"></head>'
+                 '<body><p>Hello page.</p><img src="gone.png"></body></html>')
+    rec = authoring.add(kb, "document", [str(f)], DOC)
+    assert transforms.choose(kb, "text/html").name == "pandoc"      # a page transform is never chosen for text
+    # kb holds a copy of the page without s.css beside it: the file given says where to look
+    made, failed = transforms.page_missing(kb, rec, {"original": f.resolve().as_uri()})
+    assert not failed and [r["name"] for r in made] == ["page"]
+    page = made[0]
+    assert page["derived_from"] == "original" and page["transform"]["name"] == "monolith"
+    options = page["transform"]["options"]
+    assert "base" not in options and len(options["missing"]) == 1 and "gone.png" in options["missing"][0]
+    html = kb.get(rec.id).text("page")
+    assert "data:text/css" in html and "color:red" in html
+    # a page does not count as text extracted: the page is still extracted for search, once
+    assert [s for s, _ in transforms.unextracted(kb, kb.get(rec.id))] == ["original"]
+    transforms.extract_missing(kb, kb.get(rec.id))
+    assert "Hello page." in kb.get(rec.id).text("text")
+    assert transforms.unpaged(kb, kb.get(rec.id)) == []
+    assert transforms.page_missing(kb, kb.get(rec.id)) == ([], [])
+
+
+@needs_monolith
+def test_add_url_keeps_page(root, tmp_path):
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from click.testing import CliRunner
+    from kb.cli import main
+    from kb.items import Store
+
+    files = {"/report/index.html": (b'<html><head><link rel="stylesheet" href="style.css"></head>'
+                                    b'<body><h1>Report</h1></body></html>', "text/html"),
+             "/report/style.css": (b"h1{color:blue}", "text/css")}
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            body, kind = files.get(self.path, (b"", None))
+            self.send_response(200 if kind else 404)
+            self.send_header("Content-Type", kind or "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/report/index.html"
+    try:
+        args = ["-C", str(root), "add", url, "--title", "Report", "--summary", "A report.",
+                "--creators", "A", "--set", "doctype=report"]
+        r = CliRunner().invoke(main, args, catch_exceptions=False)
+        assert r.exit_code == 0, r.output
+        assert "made " in r.stderr
+        kb = Store.open(root)
+        rec = kb.get(r.stdout.split()[0])
+        page = rec.rendition("page")
+        assert page["transform"]["options"]["base"] == url      # style.css found next to the page's URL
+        assert "h1{color:blue}" in rec.text("page") and "# Report" in rec.text("text")
+        r = CliRunner().invoke(main, ["-C", str(root), "open", rec.id, "--print"], catch_exceptions=False)
+        assert r.exit_code == 0 and r.stdout.strip().endswith(".html")
+        from kb import opener
+        assert opener.choose(rec)["name"] == "page"
+
+        r = CliRunner().invoke(main, args + ["--no-page", "--force"], catch_exceptions=False)
+        assert r.exit_code == 0, r.output
+        assert not Store.open(root).get(r.stdout.split()[0]).has_rendition("page")
+    finally:
+        server.shutdown()

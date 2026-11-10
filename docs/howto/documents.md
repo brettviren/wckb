@@ -113,6 +113,7 @@ Built-in transforms:
 | `pptx` | PowerPoint | titles, text, tables, speaker notes |
 | `pandoc` | DOCX, ODT, HTML, LaTeX, org, RST | |
 | `root-describe` | ROOT files | |
+| `monolith` | HTML | not text: a self-contained copy of a web page (below) |
 
 To add a better converter for everyone using the store (docling, marker,
 markitdown), declare it in the store's settings:
@@ -124,6 +125,27 @@ kb config set transforms.docling '{"command": ["docling", "--to", "md", "--outpu
 
 Configured transforms take precedence over built-in ones for their media
 types.
+
+## Web pages: a self-contained copy
+
+A web page loads styles, scripts, images, fonts and data from elsewhere,
+which can change or vanish. When [monolith](https://github.com/Y2Z/monolith)
+is installed, `kb add` of a web page (a URL, or a local `.html` file) also
+keeps a copy with all of that inlined as one file, the derived rendition
+`page`. The copy is cut off from the network, so it shows what was kept.
+
+```
+kb add https://example.org/report/          # #original as served, #text for search, #page to view
+kb add report.html --url https://...        # a local page: what it loads is found next to the file
+kb open doc-3vq8r2m1kd                      # opens #page (a page in a source's tree opens in place)
+kb rendition extract doc-3vq8r2m1kd --transform monolith    # make #page later (--force: again)
+```
+
+Relative references resolve against the page's URL, or for a local file,
+against where the file is. What monolith could not get is listed in the
+rendition's `transform.options.missing`. `--no-page` skips the copy. The
+original stays as it was received, so `kb rendition verify` still compares
+the URL against it.
 
 ## Slides lose their plots
 

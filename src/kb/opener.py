@@ -1,7 +1,8 @@
 """Opening an item's file with the application the desktop associates with its type (``kb open``).
 
 Which file: an item's original by default (for a search hit in extracted
-text, the file the text came from), its text with ``text`` (the original
+text, the file the text came from; for a web page, its self-contained copy
+``page`` when it has one and is not in a source's tree), its text with ``text`` (the original
 itself when that is text, else the text extracted from it), or a rendition
 named ``ID#NAME``.  Content not here is fetched or got first (a URL
 downloaded, ``datalad get`` in a dataset).
@@ -46,6 +47,8 @@ def choose(rec: Item, name: str | None = None, text: bool = False) -> dict:
         r = order[0]
         if r["role"] == "derived" and r.get("derived_from") and rec.has_rendition(r["derived_from"]):
             r = rec.rendition(r["derived_from"])
+        if not text:
+            r = _page_of(rec, r)
     if not text or content.is_text(r["media_type"]):
         return r
     derived = [d for d in rec.renditions if d["role"] == "derived" and d.get("derived_from") == r["name"]
@@ -53,6 +56,17 @@ def choose(rec: Item, name: str | None = None, text: bool = False) -> dict:
     if not derived:
         raise KBError(f"{rec.id}#{r['name']} has no text extracted from it (kb rendition extract {rec.id})")
     return next((d for d in derived if d["name"] in ("text", f"{r['name']}-text")), derived[0])
+
+
+def _page_of(rec: Item, r: dict) -> dict:
+    """The self-contained copy of web page R (a page transform: transforms.Monolith), when it has one and R is not
+    in a source's tree, where the page finds what it loads by relative paths and is current."""
+    if r["media_type"] not in content.MARKUP or any(loc["type"] in ("datalad", "source")
+                                                    for loc in r.get("locations", [])):
+        return r
+    pages = [d for d in rec.renditions if d["role"] == "derived" and d.get("derived_from") == r["name"]
+             and d["media_type"] in content.MARKUP]
+    return pages[0] if pages else r
 
 
 def filename(rec: Item, r: dict) -> str:
