@@ -84,7 +84,7 @@ are:
 ```
 $ kb search workflows feedback
 doc-wyy1zah3qt   document    -          Amdahl's law: ant colony vs marching army (slide 6)
-                 in #text (from #original)
+                 in #text (text/plain), from #original (image/png)
                  …approaches vs rewriting algorithms avoid separate [workflows], ensure [feedback] between the two
 ```
 

@@ -140,7 +140,8 @@ def _rendition_view(r: dict, store_kb=None) -> dict:
                           "datalad": f"DataLad dataset ({loc.get('source')}): {loc.get('path')}",
                           "source": f"source {loc.get('source')}: {loc.get('path')}"}.get(loc["type"], loc["type"]))
     return {"name": r["name"], "label": label, "type": TYPE_LABEL.get(r["media_type"], r["media_type"]),
-            "size": size(r.get("size")), "where": where, "links": locations.links(r)}
+            "media_type": r["media_type"], "size": size(r.get("size")), "where": where,
+            "links": locations.links(r)}
 
 
 def _links(d: dict, settings: dict | None = None) -> list[tuple[str, str]]:
@@ -396,7 +397,9 @@ def item_text(v: dict, md: bool = False, width: int = 88) -> str:
     if v["renditions"]:
         out.append("")
         for r in v["renditions"]:
-            line = f"{r['label']}: {r['type']}" + (f", {r['size']}" if r["size"] else "") + \
+            mt = r.get("media_type")
+            line = f"{r['label']}: {r['type']}" + (f" ({mt})" if mt and mt != r["type"] else "") + \
+                   (f", {r['size']}" if r["size"] else "") + \
                    (f", {'; '.join(r['where'])}" if r["where"] else "")
             out.append(f"- {line}" if md else f"  · {line}")
     if v["links"]:

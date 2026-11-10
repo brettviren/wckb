@@ -41,7 +41,7 @@ def test_text_extracted_on_add_is_searched(root, tmp_path):
     # words of the title and of the text match together, though they are in different columns
     assert search.search(kb, "purity lifetime")[0]["id"] == hit["id"]
     out = CliRunner().invoke(main, ["-C", str(root), "search", "lifetime"]).stdout
-    assert "in #text (from #original)" in out
+    assert "in #text (text/plain), from #original (application/pdf)" in out
 
 
 @needs_pdf
@@ -191,7 +191,7 @@ def test_pdf_pages(kb, tmp_path):
     (hit,) = search.search(kb, "cathode")
     assert (hit["rendition"], hit["page"]) == ("text", 2)
     out = CliRunner().invoke(main, ["-C", str(kb.root), "search", "cathode"]).stdout
-    assert "in #text, page 2 (from #original)" in out
+    assert "in #text (text/plain), page 2, from #original (application/pdf)" in out
 
 
 @pytest.fixture

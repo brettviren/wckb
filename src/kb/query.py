@@ -117,11 +117,16 @@ def _fts(kb: Store, q: str, limit: int, include_old: bool) -> list[dict]:
 
 
 def _via(kb: Store, ident: str, rendition: str) -> dict:
-    """Where a hit is: the rendition, and the one it was derived from (the original of extracted text)."""
+    """Where a hit is: the rendition, and the one it was derived from (the original of extracted text),
+    with their media types."""
     rec = kb.items.get(ident)
     if not rendition or rec is None or not rec.has_rendition(rendition):
         return {"rendition": rendition or None, "from": None}
-    return {"rendition": rendition, "from": rec.rendition(rendition).get("derived_from")}
+    r = rec.rendition(rendition)
+    out = {"rendition": rendition, "media_type": r.get("media_type"), "from": r.get("derived_from")}
+    if out["from"] and rec.has_rendition(out["from"]):
+        out["from_media_type"] = rec.rendition(out["from"]).get("media_type")
+    return out
 
 
 def tags(kb: Store) -> dict[str, int]:

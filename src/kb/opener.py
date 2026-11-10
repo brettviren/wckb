@@ -12,9 +12,14 @@ where it is in that tree, so a web page finds its scripts, styles and data
 by their relative paths (an HTML artifact: decisions/0004); for a web page in
 a DataLad dataset, its whole directory is got first.  Files kept by hash (a
 content store, the download cache) have no name; the application is given a
-link with the file's own name, so it can tell the type.  The application is ``open.command`` (a list; ``{path}`` is replaced,
-else the path is appended), else ``xdg-open`` (Linux), ``open`` (macOS) or
-the Windows association.
+link with the file's own name, so it can tell the type.  The application is that of the first of ``open.rules`` whose environment
+matches (``env``: variables that must be set, ``unless``: ones that must
+not; an SSH session through kitty, say), else ``open.command`` (a list;
+``{path}`` is replaced, else the path is appended), else ``xdg-open``
+(Linux), ``open`` (macOS) or the Windows association.  An opener with
+``terminal = true`` runs attached to this terminal and kb waits for it
+(kitty-open talks to kitty through the terminal); others run in the
+background.
 """
 
 import logging
@@ -23,6 +28,7 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -145,30 +151,85 @@ def _get(root: Path, directory: Path) -> None:
         log.warning("datalad get %s: %s", directory, exc)
 
 
-def command(kb: Store, file: Path) -> list[str] | None:
-    """The command that opens FILE (None on Windows, where the association is used directly)."""
-    conf = (kb.cfg.raw.get("open") or {}).get("command")
-    if conf:
-        argv = [str(a) for a in ([conf] if isinstance(conf, str) else conf)]
-        return ([a.replace("{path}", str(file)) for a in argv] if any("{path}" in a for a in argv)
-                else argv + [str(file)])
+@dataclass
+class Opener:
+    """How to open a file: COMMAND (``{path}`` marks where the path goes, else it comes last), whether it runs
+    in this TERMINAL (attached to it, kb waiting) or in the background, and WHY it was chosen."""
+    command: list[str] | None          # None: the Windows association
+    terminal: bool = False
+    why: str = ""
+
+    def argv(self, file: Path) -> list[str] | None:
+        if self.command is None:
+            return None
+        if any("{path}" in a for a in self.command):
+            return [a.replace("{path}", str(file)) for a in self.command]
+        return [*self.command, str(file)]
+
+
+def _argv(conf) -> list[str]:
+    return [str(a) for a in ([conf] if isinstance(conf, str) else conf)]
+
+
+def _mismatch(rule: dict, env) -> str:
+    """Why RULE does not apply here ("" if it does): a variable of its ``env`` not set (or empty), or one of
+    its ``unless`` set."""
+    need = rule.get("env", [])
+    avoid = rule.get("unless", [])
+    need = [need] if isinstance(need, str) else need
+    avoid = [avoid] if isinstance(avoid, str) else avoid
+    unset = [v for v in need if not env.get(v)]
+    present = [v for v in avoid if env.get(v)]
+    return "; ".join(([f"{', '.join(unset)} not set"] if unset else []) +
+                     ([f"{', '.join(present)} set"] if present else []))
+
+
+def choose_opener(kb: Store, env=None) -> Opener:
+    """The opener here: the first of open.rules whose environment matches (an SSH session through kitty ...),
+    else open.command, else the desktop's (open on macOS, the Windows association, xdg-open)."""
+    env = os.environ if env is None else env
+    conf = kb.cfg.raw.get("open") or {}
+    skipped = []
+    for i, rule in enumerate(conf.get("rules") or []):
+        if not rule.get("command"):
+            raise KBError(f"open.rules[{i}] needs a command")
+        label = f"open.rules[{i}]" + (f" ({rule['name']})" if rule.get("name") else "")
+        why_not = _mismatch(rule, env)
+        if not why_not:
+            return Opener(_argv(rule["command"]), bool(rule.get("terminal", False)), label)
+        skipped.append(f"{label} skipped: {why_not}")
+    tail = "".join(f"; {s}" for s in skipped)        # say why no rule applied: they are about this session
+    if conf.get("command"):
+        return Opener(_argv(conf["command"]), bool(conf.get("terminal", False)), "open.command" + tail)
     if sys.platform == "darwin":
-        return ["open", str(file)]
+        return Opener(["open"], why="macOS" + tail)
     if sys.platform.startswith("win"):
-        return None
+        return Opener(None, why="Windows" + tail)
     if shutil.which("xdg-open"):
-        return ["xdg-open", str(file)]
+        return Opener(["xdg-open"], why="the default" + tail)
     raise KBError("no way to open files here: install xdg-utils (xdg-open), or set open.command in your config")
 
 
-def launch(kb: Store, file: Path) -> None:
-    """Open FILE with its application, in the background (kb does not wait for it)."""
-    argv = command(kb, file)
+def command(kb: Store, file: Path) -> list[str] | None:
+    """The command that opens FILE (None on Windows, where the association is used directly)."""
+    return choose_opener(kb).argv(file)
+
+
+def launch(kb: Store, file: Path, opener: Opener | None = None) -> None:
+    """Open FILE with its application: in the background (kb does not wait), or for an opener that talks to
+    this terminal (kitty-open: kitten transfer), attached to it, waiting for it to finish."""
+    opener = opener or choose_opener(kb)
+    argv = opener.argv(file)
     if argv is None:
         os.startfile(file)            # type: ignore[attr-defined]  # Windows only
         return
-    log.debug("open: %s", " ".join(argv))
+    log.debug("open (%s%s): %s", opener.why, ", in the terminal" if opener.terminal else "", " ".join(argv))
     try:
+        if opener.terminal:
+            done = subprocess.run(argv)
+            if done.returncode != 0:
+                raise KBError(f"{argv[0]} failed ({done.returncode}) opening {file}")
+            return
         subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True)
     except OSError as exc:

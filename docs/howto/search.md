@@ -53,7 +53,7 @@ the `original`. Text of a PDF is kept page by page, so a hit names the page:
 
 ```
 doc-1q80e6th8z   document    -          Purity talk
-                 in #text, page 2 (from #original)
+                 in #text (text/plain), page 2, from #original (application/pdf)
                  The purity monitor saw [electron] lifetime drop.
 ```
 
@@ -130,13 +130,41 @@ its type (`xdg-open`; `open` on macOS). It opens the original, even when the
 words matched in text extracted from it; `--text` opens that text instead,
 and `ID#NAME` names a rendition. A file not on this machine is fetched first
 (a download, or `datalad get` in its dataset). The path is printed, and
-`--print` prints it without opening anything. Another opener:
+`--print` prints it without opening anything; kb also says the file's media
+type and which opener it used. Another opener:
 
 ```toml
 # ~/.config/kb/config.toml
 [open]
 command = ["gio", "open"]      # {path} marks where the path goes; else it comes last
 ```
+
+Openers can depend on where you are. `open.rules` are tried in order; the
+first whose `env` variables are all set (and none of its `unless` ones) is
+used, else `open.command`, else the desktop's. An opener that has to talk to
+your terminal gets `terminal = true`: it runs attached to the terminal and
+kb waits for it, where other openers run in the background. For example,
+[kitty-open](https://sw.kovidgoyal.net/kitty/kittens/transfer/)-style
+scripts, which push the file over SSH to the machine you sit at with
+`kitten transfer` and open it there:
+
+```toml
+[[open.rules]]
+name = "kitty over ssh"
+env = ["SSH_CONNECTION", "KITTY_LISTEN_ON"]   # an SSH session from kitty, remote control forwarded
+command = ["kitty-open"]
+terminal = true                               # kitten transfer talks to kitty through the terminal
+
+[[open.rules]]
+name = "plain ssh"
+env = "SSH_CONNECTION"
+unless = "DISPLAY"                            # no X forwarding: just print the path
+command = ["true"]
+```
+
+Put rules in your user config (`~/.config/kb/config.toml`) when they are
+about your terminal and machines; with a home directory shared between
+machines, the same file serves all of them, and the rules pick per session.
 
 ## Reading one item
 

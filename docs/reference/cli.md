@@ -295,8 +295,9 @@ Usage: kb open [OPTIONS] REF
 
   REF is an item (its original: for a hit in extracted text, the file the text came from) or ID#NAME
   (that rendition). Content not on this machine is fetched first (a download, or datalad get). The
-  path is printed. open.command in your config names another opener (default: xdg-open, or open on
-  macOS).
+  path is printed. The opener is the first of open.rules in your config whose environment matches
+  (an SSH session, say), else open.command, else xdg-open (open on macOS); one with terminal = true
+  runs in this terminal.
 
     kb open doc-wyy1zah3qt            # the image, in your image viewer
     kb open doc-wyy1zah3qt --text     # the text read from it

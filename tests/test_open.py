@@ -2,6 +2,7 @@
 
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -100,3 +101,43 @@ def test_open_gets_dataset_content(kb, tmp_path):
         opener.path(kb, rec.id, fetch=False)
     _, _, p = opener.path(kb, rec.id)                          # datalad get, then open
     assert (clone / "talk.pdf").exists() and p.read_bytes() == b"%PDF-1.4 a talk" and p.name == "talk.pdf"
+
+
+def test_opener_rules_by_environment(kb):
+    kb.set_setting("open", {"command": ["gio", "open"], "rules": [
+        {"name": "kitty over ssh", "env": ["SSH_CONNECTION", "KITTY_LISTEN_ON"], "command": "kitty-open",
+         "terminal": True},
+        {"env": "SSH_CONNECTION", "unless": "DISPLAY", "command": ["less", "{path}"], "terminal": True}]})
+    kb = Store.open(kb.root)
+    o = opener.choose_opener(kb, {"SSH_CONNECTION": "a b", "KITTY_LISTEN_ON": "unix:/tmp/k"})
+    assert o.command == ["kitty-open"] and o.terminal and o.why == "open.rules[0] (kitty over ssh)"
+    assert o.argv(Path("/x/a.pdf")) == ["kitty-open", "/x/a.pdf"]
+    o = opener.choose_opener(kb, {"SSH_CONNECTION": "a b"})
+    assert o.argv(Path("/x/a.pdf")) == ["less", "/x/a.pdf"] and o.why == "open.rules[1]"
+    o = opener.choose_opener(kb, {"SSH_CONNECTION": "a b", "DISPLAY": ":0"})      # unless: falls through
+    assert o.command == ["gio", "open"] and not o.terminal
+    assert o.why == ("open.command; open.rules[0] (kitty over ssh) skipped: KITTY_LISTEN_ON not set; "
+                     "open.rules[1] skipped: DISPLAY set")
+    kb.set_setting("open", {"rules": [{"env": "X"}]})
+    with pytest.raises(KBError, match=r"open.rules\[0\] needs a command"):
+        opener.choose_opener(Store.open(kb.root), {})
+
+
+def test_terminal_opener_runs_attached(kb, tmp_path):
+    f = tmp_path / "talk.pdf"
+    f.write_bytes(b"%PDF-1.4 not really")
+    rec = authoring.add(kb, "document", [str(f)], dict(DOC), guess=False)
+    log = tmp_path / "ran.txt"
+    script = tmp_path / "term-open"
+    script.write_text(f'#!/bin/sh\n[ "$1" = --flag ] && echo "$2" > {log}\n')
+    script.chmod(0o755)
+    kb.set_setting("open", {"rules": [{"env": "KB_TEST_OPEN", "command": [str(script), "--flag"],
+                                       "terminal": True}]})
+    out = CliRunner(env={"KB_TEST_OPEN": "1"}).invoke(main, ["-C", str(kb.root), "open", rec.id],
+                                                       catch_exceptions=False)
+    assert out.exit_code == 0, out.output
+    assert log.read_text().strip().endswith("talk.pdf")          # done when kb returns: no waiting needed
+    assert "(application/pdf) with " in out.stderr and "open.rules[0]" in out.stderr
+    script.write_text("#!/bin/sh\nexit 3\n")
+    out = CliRunner(env={"KB_TEST_OPEN": "1"}).invoke(main, ["-C", str(kb.root), "open", rec.id])
+    assert out.exit_code != 0 and "failed (3)" in out.output

@@ -941,8 +941,9 @@ def open_cmd(c, ref, text, print_only, no_fetch):
     REF is an item (its original: for a hit in extracted text, the file the
     text came from) or ID#NAME (that rendition). Content not on this machine
     is fetched first (a download, or datalad get). The path is printed.
-    open.command in your config names another opener (default: xdg-open,
-    or open on macOS).
+    The opener is the first of open.rules in your config whose environment
+    matches (an SSH session, say), else open.command, else xdg-open (open
+    on macOS); one with terminal = true runs in this terminal.
 
     \b
       kb open doc-wyy1zah3qt            # the image, in your image viewer
@@ -954,7 +955,10 @@ def open_cmd(c, ref, text, print_only, no_fetch):
     _served(c.kb, [f"{rec.id}#{r['name']}"], "open")
     click.echo(str(path))
     if not print_only:
-        opener.launch(c.kb, path)
+        how = opener.choose_opener(c.kb)
+        ui.info(f"opening {rec.id}#{r['name']} ({r['media_type']}) with {' '.join(how.command or ['the association'])}"
+                f" ({how.why})")
+        opener.launch(c.kb, path, how)
 
 
 @command(main, "ls")
@@ -1034,8 +1038,10 @@ def search_cmd(c, words, mode, include_old, limit, reach, only, json_out):
         click.echo(ui.item_line(r, store=r["store"] if (reach or only) else None))
         pad = "" .ljust(29 if (reach or only) else 16)
         if r.get("rendition"):
-            click.echo(f"{pad} in #{r['rendition']}" + (f", page {r['page']}" if r.get("page") else "")
-                       + (f" (from #{r['from']})" if r.get("from") else ""))
+            mt = f" ({r['media_type']})" if r.get("media_type") else ""
+            src = (f", from #{r['from']}" + (f" ({r['from_media_type']})" if r.get("from_media_type") else "")
+                   if r.get("from") else "")
+            click.echo(f"{pad} in #{r['rendition']}{mt}" + (f", page {r['page']}" if r.get("page") else "") + src)
         if r.get("snip"):
             click.echo(f"{pad} {' '.join(r['snip'].split())}")
 
