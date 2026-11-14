@@ -435,6 +435,48 @@ def run(m, prompt: str, system: str, tools: list, chain_limit: int, options=None
         raise KBError(f"{exc} (or kb llm --password-name NAME, or llm.key_from in your config)") from None
     except llm.ModelError as exc:
         raise KBError(f"the model failed: {exc}") from None
+    except Exception as exc:
+        if type(exc).__module__.split(".")[0] not in API_MODULES:
+            raise
+        log.debug("the model's API failed", exc_info=True)
+        raise KBError(api_error(exc, m)) from None
+
+
+#: Where the errors of the APIs llm's models use come from (the clients and their HTTP libraries).
+API_MODULES = {"openai", "anthropic", "httpx", "httpcore"}
+
+
+def _cause(exc: BaseException) -> str:
+    """The innermost reason behind EXC (a DNS failure, a refused connection, a certificate problem ...)."""
+    seen, reason = set(), ""
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        text = " ".join(str(exc).split())
+        if text and text not in ("Connection error.", "Request timed out."):
+            reason = text
+        exc = exc.__cause__ or exc.__context__
+    return reason
+
+
+def api_error(exc: Exception, m) -> str:
+    """A one-line account of an API failure, with what to check."""
+    url = getattr(m, "api_base", None) or getattr(m, "base_url", None) or "the provider's API"
+    name, status = type(exc).__name__, getattr(exc, "status_code", None)
+    if status is None:
+        reason = _cause(exc)
+        hint = ("check the base URL (kb llm settings), the network (VPN, proxy variables such as HTTPS_PROXY)"
+                + ("; for a certificate problem, kb llm --env SSL_CERT_FILE=PATH names the CA bundle"
+                   if "certificat" in reason.lower() or "ssl" in reason.lower() else ""))
+        return f"could not reach {url} for model {m.model_id} ({name}{': ' + reason if reason else ''}); {hint}"
+    body = getattr(exc, "body", None)
+    detail = body.get("message") if isinstance(body, dict) and body.get("message") else (
+        (body.get("error") or {}).get("message") if isinstance(body, dict) and isinstance(body.get("error"), dict)
+        else " ".join(str(getattr(exc, "message", exc)).split()))
+    hint = {401: "check the API key (kb llm settings --check)", 403: "the key may not allow this model",
+            404: "check the model name and the base URL", 429: "too many requests; wait and try again"}.get(status, "")
+    if status == 400 and "tool" in str(detail).lower():
+        hint = "the server may not take tool calls: try kb llm --tool-calls no (or llm.tool_calls = false)"
+    return f"{url} answered {status} for model {m.model_id}: {detail}" + (f"; {hint}" if hint else "")
 
 
 # -- kb llm ask --------------------------------------------------------------------

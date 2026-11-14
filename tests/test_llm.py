@@ -260,3 +260,40 @@ def test_do_needs_tools(root, scripted, monkeypatch):
     monkeypatch.setattr(Scripted, "supports_tools", False)
     r = run(root, "llm", "-m", "kb-scripted", "do", "anything")
     assert r.exit_code == 1 and "needs a model that can call tools" in r.output
+
+
+def test_api_failures_are_one_line(root, monkeypatch):
+    """A server that can't be reached, or answers an error, is a one-line KBError (no traceback)."""
+    import http.server
+    import socket
+    import threading
+
+    with socket.socket() as sock:                   # a port nothing listens on
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    r = run(root, "llm", "-m", "local-x", "--base-url", f"http://127.0.0.1:{port}/v1", "ask", "--no-tools", "hi")
+    assert r.exit_code == 1 and "Traceback" not in r.output
+    assert f"could not reach http://127.0.0.1:{port}/v1 for model local-x (APIConnectionError" in r.output
+
+    class Refuse(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.dumps({"error": {"message": "tool calls are not enabled on this server"}}).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Refuse)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/v1"
+        r = run(root, "llm", "-m", "local-x", "--base-url", url, "ask", "hi")
+    finally:
+        server.shutdown()
+    assert r.exit_code == 1 and "Traceback" not in r.output
+    assert f"{url} answered 400 for model local-x: tool calls are not enabled" in r.output
+    assert "--tool-calls no" in r.output
