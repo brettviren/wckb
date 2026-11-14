@@ -3,3 +3,4 @@ kb.sqlite-shm
 kb.sqlite-wal
 .kb
 
+uv.lock

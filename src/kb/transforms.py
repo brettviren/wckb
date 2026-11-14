@@ -210,6 +210,8 @@ class Monolith(Transform):
                 "-t", str(self.config.get("timeout", 60))]
         if base:
             argv += ["-b", base]
+        if content.INSECURE:                       # kb add --no-check-certificate
+            argv.append("-k")
         fonts = bool(self.config.get("fonts", False))
         if not fonts:
             argv.append("-F")
@@ -387,10 +389,14 @@ def choose(kb: Store, media_type: str, name: str | None = None, purpose: str = "
 
 
 def extract(kb: Store, rec: Item, source: str | None = None, transform: str | None = None,
-            name: str | None = None, force: bool = False, base: str | None = None) -> dict:
+            name: str | None = None, force: bool = False, base: str | None = None,
+            post=None, target: Path | None = None) -> dict:
     """Derive rendition *name* from *source* (default: the first original).  NAME defaults to ``text``,
     or for a page transform to ``page`` (page_name).  BASE: where a web page's relative
-    references resolve (default: the source's URL, if it has one, else the file kb holds)."""
+    references resolve (default: the source's URL, if it has one, else the file kb holds).
+    POST(path) changes the output in place before it is kept, and may return options to record
+    (kb.spider: links between the pages of a web document made local).  TARGET: the output's path in
+    a tree (a source takes it in, as kb add --target does), instead of where kb puts content."""
     rec = kb.get(rec.id)          # the stored version, whatever the caller holds
     if source is None:
         originals = [r for r in rec.renditions if r["role"] in ("original", "content")]
@@ -432,9 +438,17 @@ def extract(kb: Store, rec: Item, source: str | None = None, transform: str | No
             raise KBError(f"transform {t.name} failed on {rec.id}#{source}: {exc}") from None
         if not out.is_file():
             raise KBError(f"transform {t.name} produced nothing")
+        if post is not None:
+            more = post(out)
+            if more:
+                info["options"] = {**info.get("options", {}), **more}
         with kb.tx():
-            locs, sha, size = content.place(kb, out, filename)
-            if locs and locs[0]["type"] == "local":
+            if target is not None:
+                from .authoring import _copy, _place_copy
+                locs, sha, size = _place_copy(kb, _copy(out, target, filename, several=False), filename, "auto", None)
+            else:
+                locs, sha, size = content.place(kb, out, filename)
+            if locs and locs[0]["type"] == "local" and target is None:
                 raise KBError(f"{filename} is too large for the database, and there is no content store or "
                               "content dataset here (git-annex is needed for one)")
             derived = {

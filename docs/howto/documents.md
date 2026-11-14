@@ -155,6 +155,92 @@ rendition's `transform.options.missing`. `--no-page` skips the copy. The
 original stays as it was received, so `kb rendition verify` still compares
 the URL against it.
 
+## Web documents: many pages
+
+A user guide, a design document or a manual is often published as many web
+pages under one URL. `kb add URL --spider` reads the page at URL and every
+page it links to, and theirs, within the *scope*: the same scheme and host
+and a path under the URL's directory (`--scope URL` to give another). Paths
+are compared whole, so `https://h/phlex/` never reaches
+`https://h/phlex-design/`. Spidering happens only with `--spider`.
+
+```
+kb add https://example.org/guide/ --spider --target ~/data/docs/guide/ \
+   --set doctype=manual --creators "The Team" --set version=2.1.0 \
+   --title "Example user guide" --summary "..." --subject software/example \
+   --exclude search.html --exclude genindex.html
+```
+
+It makes one document for the whole, identified by the scope's URL, and one
+document per page, each `part-of` the whole and sharing its doctype,
+creators, version, date, subject and tags. A page gets its own title (its
+`h1`), summary (its description, else its first paragraph), URL, text,
+self-contained copy (`page`) and sections (`sections`). The whole has the
+metadata rendition `pages`: each page's path, URL, title and item, and the
+links not taken and why (`kb item content ID pages`).
+
+| option | |
+|---|---|
+| `--mirror` | keep pages as served and each file they load, beside them (below) |
+| `--target DIR` | lay out the self-contained copies in DIR as the site is (`guide/x.html`), with their links to each other made relative so the copy can be browsed offline; in a DataLad dataset each is saved |
+| `--scope URL` | take pages under this URL instead |
+| `--exclude PATTERN` | shell pattern of paths not to read (repeatable) |
+| `--max-pages N` | read at most N pages (200) |
+| `--delay S` | seconds between requests (0.2) |
+
+**A server whose certificate doesn't verify.** Some servers send an
+incomplete certificate chain (typically one leaving out the intermediate CA
+certificate). Browsers cope, since they ship or fetch the missing
+intermediates; Python, curl and wget don't, and fail with
+`CERTIFICATE_VERIFY_FAILED ... unable to get local issuer certificate`.
+`kb add --no-check-certificate` (with or without `--spider`) then fetches
+without verifying certificates, as does monolith (`-k`) for the
+self-contained copies. What was fetched is still hashed; what is lost is
+the assurance that it came from that server. Check the chain with
+`openssl s_client -connect HOST:443 -servername HOST -showcerts`.
+
+**A mirror: each file as served.** With `--mirror` (and `--target`), the
+pages are kept as served and so is each file they load (style sheets, what
+those import and load, scripts, images, fonts), laid out as the site is, as
+`wget -r -p` does, and taken into the dataset (or git repository) at once,
+by one `datalad save`. Query strings are left out of file names
+(`_static/x.css?v=1` is `_static/x.css`), which is what a browser looks for
+in a local copy. A page's original is then its file there (and its URL);
+no self-contained copies are made. Only pages are items; the files they load
+are listed, with their URL, media type and hash, in the whole's `pages`
+(`files`), and what was out of scope (a CDN) in `files_skipped`: it stays
+at its URL, so the copy needs the network for it.
+
+```
+kb add https://example.org/guide/ --spider --mirror --target ~/data/docs/guide/ \
+   --set doctype=manual --creators "The Team" --exclude search.html
+```
+
+Links are left as served: a site whose pages link each other relatively
+(Sphinx, MkDocs) browses as it is; absolute links lead back to the site.
+
+**A new version.** `--supersedes ID` (the whole of the earlier version)
+makes each page supersede the earlier version's page of the same URL; a
+mirror replaces the files in place (the dataset keeps the history).
+
+Only web pages are followed (links in `a` elements); styles and images go
+into each page's copy, or with `--mirror` beside it. A page served under two URLs (`guide/` and
+`guide/index.html`) is kept once. Doctype and creators must be given, and
+the fields are checked before anything is read. Adding the same scope again
+is refused (`--force`, or `--supersedes ID` for a new version).
+
+**Citing a whole, a page or a section.** A reference can name a section of
+a page by its anchor (the `id` of its heading or of the section it opens):
+`ID@anchor`. Every page lists its sections, and kb refuses a reference to
+an anchor a page doesn't have.
+
+```
+kb item content doc-W pages                  # the pages of web document doc-W
+kb item content doc-P sections               # the sections of page doc-P
+kb item content doc-P@limitations            # the text of one section (and its subsections)
+kb new observation ... --evidence doc-P@limitations --link refines=doc-W
+```
+
 ## Slides lose their plots
 
 Text extraction keeps titles and bullets, but the results in a physics talk

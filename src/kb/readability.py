@@ -5,8 +5,9 @@ footers, sidebars, forms, scripts.  :func:`main_content` keeps the content:
 
 1. the page is parsed into a tree (leniently, as browsers do);
 2. what is never content is dropped: ``script``, ``style``, ``nav``,
-   ``header``, ``footer``, ``aside``, ``form`` and the like, and elements whose
-   ARIA role says navigation, banner, footer or search, or that are hidden;
+   ``header``, ``footer``, ``aside``, ``form`` and the like, elements whose
+   ARIA role says navigation, banner, footer or search, or that are hidden,
+   and the links to itself beside each heading (Sphinx's ``¶``);
 3. the content is the ``article`` with the most text (a README, a post),
    else ``main`` (or role ``main``), else the whole ``body``; one that holds
    too little of the page's text is passed over for the next.
@@ -61,7 +62,8 @@ class _Tree(HTMLParser):
     def handle_starttag(self, tag, attrs):
         a = {k: v for k, v in attrs}
         dropped = (tag in NEVER or (a.get("role") or "") in NOT_CONTENT_ROLES or "hidden" in a
-                   or a.get("aria-hidden") == "true")
+                   or a.get("aria-hidden") == "true"
+                   or (tag == "a" and "headerlink" in (a.get("class") or "").split()))  # Sphinx's ¶ by each heading
         if self.skip or dropped:
             if tag not in VOID:
                 self.skip += 1

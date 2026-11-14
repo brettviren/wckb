@@ -167,9 +167,17 @@ to be right; please fix the other place.
   *Code:* `kb.ids`.
 
 **reference** (ref)
-: An ID, optionally with a rendition name: `doc-3vq8r2m1kd#text`.
+: An ID, optionally with a rendition name: `doc-3vq8r2m1kd#text`, and
+  optionally with an *anchor* naming a section: `doc-3vq8r2m1kd@limitations`.
   References are store-independent: the item named need not be in the
-  same store. *Code:* `kb.ids.parse_ref`.
+  same store. *Code:* `kb.ids.parse_ref`, `kb.ids.parse_anchor`.
+
+**anchor** (section)
+: A section of an item's material, named in a reference after `@`: the
+  `id` of a heading in a web page, or of the section it opens. A page lists
+  its sections in the metadata rendition `sections`; a reference to an
+  anchor the item does not list is refused, and `kb item content ID@anchor`
+  prints the section's text. *Code:* `kb.sections`.
 
 **dangling reference**
 : A reference to an item not in this store. It is reported as a warning
@@ -224,6 +232,21 @@ to be right; please fix the other place.
   made by a *page transform* (monolith), not text for search; `kb add`
   makes it when it can (`--no-page`), and `kb open` prefers it. *Code:*
   `transforms.Monolith`, `transforms.page_missing`, purpose `page`.
+
+**web document**
+: A document published as many web pages under one URL (a user guide, a
+  design document). `kb add URL --spider` makes a document for the whole
+  (its `pages` rendition lists the pages) and one per page, `part-of` it.
+  With `--mirror`, the pages and each file they load are kept as served,
+  laid out as the site is (a *mirror*), and saved at once; only pages are
+  items, the files are listed in `pages`. *Code:* `kb.spider`,
+  `spider.mirror`, `SourceType.put_many`.
+
+**scope** (of a web document)
+: The URLs a spider may read: the same scheme and host, and a path under
+  the scope's path, compared whole (`/phlex/` does not hold
+  `/phlex-design/`). By default the directory of the URL given.
+  *Code:* `spider.Scope`.
 
 **content**
 : The bytes of a rendition. *Code:* `kb.content` (placing, hashing,

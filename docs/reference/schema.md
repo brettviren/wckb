@@ -1,6 +1,6 @@
 # Item schema reference
 
-Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.11) by
+Generated from the JSON Schemas in `src/kb/schemas/v1/` (revision 1.12) by
 `kb item schema --markdown`; a test keeps this file in sync. `kb item schema KIND` prints
 the schema itself, which is authoritative.
 

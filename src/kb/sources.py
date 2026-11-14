@@ -78,6 +78,10 @@ class SourceType:
         the location that names it."""
         return {"type": "source", "source": rec.id, "path": rel}
 
+    def put_many(self, kb: Store, rec: Item, root: Path, rels: list[str], message: str) -> list[dict]:
+        """Take the files at RELS into the source at once (one datalad save, one commit): their locations."""
+        return [self.put(kb, rec, root, rel, message) for rel in rels]
+
     def locate(self, kb: Store, rec: Item) -> Path | None:
         """Where the source is on this machine, if it is."""
         return None
@@ -171,6 +175,21 @@ class DataladType(SourceType):
         if bad:
             raise KBError(f"datalad save {rel} in {root}: {bad[0].get('message')}")
         return content.dataset_location(kb, root, rel)
+
+    def put_many(self, kb, rec, root, rels, message):
+        from . import content, datasets
+        datasets.need()
+        import datalad.api as dl
+        why = [f"{rel} ({w})" for rel in rels for w in [datasets.ignored(root, rel)] if w]
+        if why:
+            raise KBError(f"ignored by git in {root}: {', '.join(why[:5])}; un-ignore them there (a '!' pattern in "
+                          "the dataset's .gitignore) and try again")
+        res = dl.save(dataset=str(root), path=[str(root / r) for r in rels], message=message,
+                      result_renderer="disabled", on_failure="ignore", return_type="list")
+        bad = [r for r in res if r.get("status") in ("error", "impossible")]
+        if bad:
+            raise KBError(f"datalad save in {root}: {bad[0].get('message')}")
+        return [content.dataset_location(kb, root, rel) for rel in rels]
 
     def share(self, path, how, unshare=False):
         from . import sharing
@@ -291,6 +310,14 @@ class GitType(DataladType):
         if _git(root, "diff", "--cached", "--quiet", "--", rel, check=False).returncode:
             _git(root, "commit", "-q", "-m", message, "--", rel)
         return SourceType.put(self, kb, rec, root, rel, message)      # a file in the tree, not a dataset
+
+    def put_many(self, kb, rec, root, rels, message):
+        from .datasets import _git
+        for i in range(0, len(rels), 200):
+            _git(root, "add", "--", *rels[i:i + 200])
+        if _git(root, "diff", "--cached", "--quiet", check=False).returncode:      # something to commit
+            _git(root, "commit", "-q", "-m", message, "--", *rels)
+        return [SourceType.put(self, kb, rec, root, rel, message) for rel in rels]
 
 
 class FilesystemType(SourceType):

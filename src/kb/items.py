@@ -337,12 +337,19 @@ class Store:
             raise KBError(f"no item {ident}") from None
 
     def exists(self, ref: str) -> bool:
+        """Is REF here: the item, its rendition if named, and its section if named and it lists sections."""
+        from .ids import parse_anchor
         try:
-            ident, rendition = parse_ref(ref)
+            ident, rendition, anchor = parse_anchor(ref)
         except KBError:
             return False
         rec = self.items.get(ident)
-        return rec is not None and (rendition is None or rec.has_rendition(rendition))
+        if rec is None or (rendition is not None and not rec.has_rendition(rendition)):
+            return False
+        if anchor is not None:
+            from .sections import has
+            return has(rec, anchor) is not False
+        return True
 
     @cached_property
     def superseded_by(self) -> dict[str, list[str]]:

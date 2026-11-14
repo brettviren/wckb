@@ -626,6 +626,18 @@ Status:
   what pages load (a font, a script library) instead of inlining it in
   each, e.g. a page kept as a skeleton plus blobs by sha256 and rebuilt
   when opened; git-annex deduplicates only whole files.
+- Web documents of many pages (2026-11-10): `kb add URL --spider` reads the
+  pages within a scope, a document per page `part-of` one for the whole;
+  `--target` lays out the copies as the site is, linked to each other.
+  References may name a section (`ID@anchor`). `--mirror` keeps the pages
+  as served and each file they load as files, as `wget -r -p`, saved at
+  once; the files are listed on the whole, not items. A new version
+  (`--supersedes`) supersedes each page by URL. Open: pages unchanged by
+  hash could be kept instead of superseded; converting links as `wget -k`
+  does (absolute in-scope links, `dir/` links) for sites that need it;
+  loaded files out of scope (CDNs) kept too (`wget -H`); an asset for the whole so its
+  versions are tracked, sections of PDFs (pages) by the same syntax, and
+  pages built by JavaScript (sitemaps would list them).
 - Dates are qualified (`dates`: created, published, modified, accessed,
   captured) and correctable; `date` means published and is given only
   when known.

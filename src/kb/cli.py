@@ -393,10 +393,28 @@ def new_cmd(c, kind, text, text_file, slug, from_json, json_out, via, **kw):
               help="Copy the file(s) here (a directory: one that exists, or a path ending in /; else the new file's path). In a source (a DataLad dataset, a "
                    "git repository or filesystem tree described here) the source takes it in: datalad save, git commit.")
 @click.option("--no-guess", is_flag=True, help="Don't look for metadata in the files or at arXiv.")
+@click.option("--spider", is_flag=True,
+              help="URL is a web document of many pages (a user guide, a manual): read it and the pages it links to "
+                   "within its scope, each a document part-of one for the whole; --target lays out their "
+                   "self-contained copies as the site is, linked to each other.")
+@click.option("--scope", metavar="URL", help="With --spider: the URL under which pages are taken (default: the "
+                                              "directory of the URL given).")
+@click.option("--exclude", multiple=True, metavar="PATTERN",
+              help="With --spider: a shell pattern of paths within the scope not to read (repeatable), "
+                   "e.g. 'search.html', '_sources/*'.")
+@click.option("--mirror", "mirror_files", is_flag=True,
+              help="With --spider and --target: keep the pages as served and each file they load (styles, scripts, "
+                   "images, fonts) as files laid out as the site is, as wget -r -p does, saved at once (one "
+                   "datalad save); no self-contained copies.")
+@click.option("--max-pages", default=200, show_default=True, help="With --spider: read at most this many pages.")
+@click.option("--delay", default=0.2, show_default=True, help="With --spider: seconds between requests.")
+@click.option("--no-check-certificate", "insecure", is_flag=True,
+              help="Don't verify HTTPS certificates when fetching (as wget --no-check-certificate), e.g. for a "
+                   "server that leaves its intermediate certificate out of its chain. Content is still hashed.")
 @click.option("--json", "json_out", is_flag=True)
 @pass_ctx
 def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, page, force, target,
-            no_guess, json_out, via, **kw):
+            no_guess, spider, scope, exclude, mirror_files, max_pages, delay, insecure, json_out, via, **kw):
     """Add files or URLs as a new primary item (default kind: document).
 
     Metadata is looked for in what is added, and given options override
@@ -412,12 +430,29 @@ def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersed
          --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
       kb add slides.pdf --target ~/data/talks/          # copied into a dataset there, and datalad saved
       kb add noise.csv make_noise.py --kind dataset --set format=csv --title ... --runs 1200-1300
+      kb add https://example.org/guide/ --spider --target ~/data/docs/guide/ \
+         --set doctype=manual --creators "The Team" --set version=1.2 --exclude search.html
     """
+    from . import content
+    with content.no_check_certificate(insecure):
+        _add(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, page, force, target,
+             no_guess, spider, scope, exclude, mirror_files, max_pages, delay, json_out, via, **kw)
+
+
+def _add(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersedes, extract, page, force, target,
+         no_guess, spider, scope, exclude, mirror_files, max_pages, delay, json_out, via, **kw):
     from . import authoring, transforms
     kb = c.kb
     fields = _fields(kw)
     if supersedes:
         fields["supersedes"] = [kb.get(supersedes).id]
+    if spider:
+        return _add_spider(kb, sources, kind, note_text, url, no_fetch, fields, scope=scope, exclude=exclude,
+                           max_pages=max_pages, delay=delay, target=target, page=page, extract=extract,
+                           mirror_files=mirror_files,
+                           mode=mode, cas_name=cas_name, force=force, via=via, json_out=json_out)
+    if scope or exclude or mirror_files:
+        raise KBError("--scope, --exclude and --mirror go with --spider")
     if note_text is not None:
         if sources:
             raise KBError("give --note or files/URLs, not both")
@@ -449,6 +484,22 @@ def add_cmd(c, sources, kind, note_text, mode, cas_name, url, no_fetch, supersed
             ui.info(f"warning: no self-contained page made: {why} (kb rendition extract ID --transform monolith retries)")
         rec = kb.get(rec.id)
     _done(kb, rec, json_out)
+
+
+def _add_spider(kb, sources, kind, note_text, url, no_fetch, fields, *, json_out, **kw):
+    from . import spider
+    if len(sources) != 1 or "://" not in sources[0] or note_text is not None:
+        raise KBError("--spider takes one URL: the web document's first page")
+    if kind != "document" or url or no_fetch:
+        raise KBError("--spider makes documents from what it reads: drop --kind, --url and --no-fetch")
+    got = spider.add(kb, sources[0], fields, **kw)
+    for why in got.failed:
+        ui.info(f"warning: {why}")
+    ui.info(f"{got.whole.id}: {len(got.pages)} page(s), each part-of it"
+            + (f"; {len(got.crawl.files)} file(s) they load kept beside them" if got.crawl.files else "")
+            + (f"; {len(got.crawl.skipped)} link(s) not taken (kb item content {got.whole.id} pages)"
+               if got.crawl.skipped else ""))
+    _done(kb, got.whole, json_out)
 
 
 @command(item_grp, "supersede", no_args_is_help=True)
@@ -1791,10 +1842,20 @@ def snapshot_cmd(c, dest):
 @click.option("--file", "file", type=click.Path(dir_okay=False, allow_dash=True), help="Replace the content with this file (- for stdin).")
 @pass_ctx
 def content_cmd(c, ref, name, file):
-    """Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts)."""
+    """Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts).
+
+    For REF with an @anchor (doc-…@limitations), only that section of a web page's text."""
     from .edit import content_name, set_content
+    from .ids import parse_anchor
     kb = c.kb
     rec = kb.get(ref)
+    anchor = parse_anchor(ref)[2]
+    if anchor is not None:
+        if file is not None:
+            raise KBError("a section can't be replaced: give the item without @anchor")
+        from .sections import text
+        _served(kb, [rec.id], "content")
+        return click.echo(text(kb, rec, anchor, name or "text"), nl=False)
     name = name or content_name(rec)
     if file is None:
         t = rec.text(name)

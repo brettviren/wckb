@@ -4,10 +4,12 @@ Where bytes live is the business of data sources (``kb.sources``); this
 module decides where *new* content goes and offers the common helpers.
 """
 
+import contextlib
 import hashlib
 import mimetypes
 import os
 import shutil
+import ssl
 import tempfile
 import urllib.error
 import urllib.request
@@ -147,6 +149,30 @@ class Fetched:
     #: What the server said: its Content-Type (without parameters) and Last-Modified, when it said.
     media_type: str | None = None
     last_modified: str | None = None
+    #: Where the content came from in the end, after any redirects.
+    url: str | None = None
+
+
+#: When true, HTTPS certificates are not verified (kb add --no-check-certificate), here and in what
+#: kb runs to fetch (monolith -k).  For servers whose chain is broken, e.g. one missing its intermediate.
+INSECURE = False
+
+
+@contextlib.contextmanager
+def no_check_certificate(on: bool = True):
+    """Within this, URLs are fetched without verifying HTTPS certificates (if ON)."""
+    global INSECURE
+    was, INSECURE = INSECURE, INSECURE or on
+    try:
+        yield
+    finally:
+        INSECURE = was
+
+
+def urlopen(url, timeout: float = 60):
+    """urllib.request.urlopen, verifying HTTPS certificates unless INSECURE."""
+    ctx = ssl._create_unverified_context() if INSECURE else None
+    return urllib.request.urlopen(url, timeout=timeout, context=ctx)
 
 
 def fetch_info(kb, url: str, timeout: float = 60) -> Fetched:
@@ -156,11 +182,12 @@ def fetch_info(kb, url: str, timeout: float = 60) -> Fetched:
     tmpdir = source_dir(kb.cfg.raw, "url")
     tmpdir.mkdir(parents=True, exist_ok=True)
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp, \
+        with urlopen(url, timeout=timeout) as resp, \
                 tempfile.NamedTemporaryFile(dir=tmpdir, delete=False) as tmp:
             shutil.copyfileobj(resp, tmp)
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower() or None
             modified = resp.headers.get("Last-Modified")
+            final = resp.geturl()
     except urllib.error.HTTPError as exc:      # urlopen raises it, so there is no temporary file yet
         raise FetchError(url, exc.code, str(exc.reason)) from None
     except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -176,7 +203,7 @@ def fetch_info(kb, url: str, timeout: float = 60) -> Fetched:
         modified = parsedate_to_datetime(modified).date().isoformat() if modified else None
     except (TypeError, ValueError):
         modified = None
-    return Fetched(dest, sha, size, ctype if ctype != "application/octet-stream" else None, modified)
+    return Fetched(dest, sha, size, ctype if ctype != "application/octet-stream" else None, modified, final)
 
 
 def fetch(kb, url: str, timeout: float = 60) -> tuple[Path, str, int]:

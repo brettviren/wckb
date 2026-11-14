@@ -151,6 +151,7 @@ Usage: kb add [OPTIONS] [SOURCES]...
        --title "TPC noise update" --summary "..." --creators "A. Person" --date 2026-10-28
     kb add slides.pdf --target ~/data/talks/          # copied into a dataset there, and datalad saved
     kb add noise.csv make_noise.py --kind dataset --set format=csv --title ... --runs 1200-1300
+    kb add https://example.org/guide/ --spider --target ~/data/docs/guide/          --set doctype=manual --creators "The Team" --set version=1.2 --exclude search.html
 
 Options:
   --kind [document|dataset|config|snapshot|software|observation]
@@ -207,6 +208,23 @@ Options:
                                   dataset, a git repository or filesystem tree described here) the
                                   source takes it in: datalad save, git commit.
   --no-guess                      Don't look for metadata in the files or at arXiv.
+  --spider                        URL is a web document of many pages (a user guide, a manual): read
+                                  it and the pages it links to within its scope, each a document
+                                  part-of one for the whole; --target lays out their self-contained
+                                  copies as the site is, linked to each other.
+  --scope URL                     With --spider: the URL under which pages are taken (default: the
+                                  directory of the URL given).
+  --exclude PATTERN               With --spider: a shell pattern of paths within the scope not to
+                                  read (repeatable), e.g. 'search.html', '_sources/*'.
+  --mirror                        With --spider and --target: keep the pages as served and each file
+                                  they load (styles, scripts, images, fonts) as files laid out as
+                                  the site is, as wget -r -p does, saved at once (one datalad save);
+                                  no self-contained copies.
+  --max-pages INTEGER             With --spider: read at most this many pages.  [default: 200]
+  --delay FLOAT                   With --spider: seconds between requests.  [default: 0.2]
+  --no-check-certificate          Don't verify HTTPS certificates when fetching (as wget --no-check-
+                                  certificate), e.g. for a server that leaves its intermediate
+                                  certificate out of its chain. Content is still hashed.
   --json
   -h, --help                      Show this message and exit.
 
@@ -740,6 +758,8 @@ Options:
 Usage: kb item content [OPTIONS] REF [NAME]
 
   Print an item's text content, or replace it (--file) on an editable item (topics, views, drafts).
+
+  For REF with an @anchor (doc-…@limitations), only that section of a web page's text.
 
 Options:
   --file FILE  Replace the content with this file (- for stdin).

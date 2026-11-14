@@ -9,9 +9,9 @@
       "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as|src)-[a-z0-9][a-z0-9-]{1,62}$"
     },
     "ref": {
-      "description": "Reference to an item, optionally to one of its renditions: ID or ID#rendition.",
+      "description": "Reference to an item, optionally to one of its renditions, and optionally to a section (an anchor, such as an id in a web page): ID, ID#rendition, ID@anchor or ID#rendition@anchor.",
       "type": "string",
-      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as|src)-[a-z0-9][a-z0-9-]{1,62}(#[A-Za-z0-9_.-]+)?$"
+      "pattern": "^(obs|doc|dat|cfg|snp|sw|top|view|per|pol|ks|as|src)-[a-z0-9][a-z0-9-]{1,62}(#[A-Za-z0-9_.-]+)?(@[A-Za-z0-9_][A-Za-z0-9_.:-]*)?$"
     },
     "url": {
       "type": "string",

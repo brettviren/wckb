@@ -218,13 +218,14 @@ _DOCUMENT_ONLY = ("doctype", "venue", "version", "event")
 def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "auto",
         cas_name: str | None = None, url: str | None = None, fetch: bool = True,
         force: bool = False, via: str | None = None, target: str | Path | None = None,
-        guess: bool = True) -> Item:
+        guess: bool = True, prefetched: dict | None = None) -> Item:
     """A primary item whose originals are *sources* (paths or URLs).
 
     TARGET: copy each file there (a directory, or the file's new path when there is one source).  If it
     lands in a source (a DataLad dataset, a git repository or filesystem tree described here), the
     source's type takes it in (datalad save, git commit) and the rendition names the source.
-    GUESS: fill in metadata found in the files and at arXiv (kb.metadata); FIELDS always win."""
+    GUESS: fill in metadata found in the files and at arXiv (kb.metadata); FIELDS always win.
+    PREFETCHED: URL -> content.Fetched, for URLs read already (by kb.spider), so they are not read again."""
     from . import metadata
     if not sources:
         raise KBError("nothing to add: give one or more files or URLs")
@@ -259,7 +260,7 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
             path, said, modified, failure = None, None, None, None
             if is_url and fetch:
                 try:
-                    f = content.fetch_info(kb, src)
+                    f = (prefetched or {}).get(src) or content.fetch_info(kb, src)
                     path, said, modified = f.path, f.media_type, f.last_modified
                 except content.FetchError as exc:
                     if exc.status in content.GONE:
@@ -304,8 +305,9 @@ def add(kb: Store, kind: str, sources: list[str], fields: dict, *, mode: str = "
                 locs, sha, size = content.place(kb, path, filename, m, cas_name)
                 r.update(sha256=sha, size=size)
                 r["locations"] += locs
-            if url and not is_url:
-                r["locations"].append(content.url_location(url, retrieved=False))
+            if url and not is_url:     # read from the URL already (PREFETCHED), with these bytes: retrieved
+                f = (prefetched or {}).get(url)
+                r["locations"].append(content.url_location(url, retrieved=f is not None and f.sha256 == r.get("sha256")))
             if not r["locations"]:
                 raise KBError(f"{src}: store mode 'none' needs a URL (--url) to say where it lives")
             renditions.append(r)
