@@ -201,3 +201,28 @@ def test_cli_search_stems():
     assert [stem(w) for w in ("embeddings", "embed", "added", "pulled", "notes", "queries", "status")] == \
         ["embed", "embed", "add", "pull", "note", "query", "status"]
     assert quality("stale", "staleness") > quality("delete", "retract") > quality("stale", "push") == 0
+
+
+def test_cli_tree():
+    def tree(*args):
+        r = CliRunner().invoke(main, ["cli", "tree", *args])
+        return r
+    whole = tree().output
+    assert whole.startswith("kb\n") and "├── item\n" in whole and "│   ├── set REF [ASSIGNMENTS...]" in whole
+    assert "── hook\n" not in whole and "--json" not in whole                    # hidden left out; options on request
+    assert tree("forge", "pr").output == tree("forge.pr").output == tree("kb", "forge", "pr").output
+    pr = tree("forge.pr").output
+    assert pr.startswith("kb forge pr\n") and "└── comment --body BODY NUMBER" in pr and "item" not in pr
+    assert "--state open|closed|all" in tree("forge.pr", "-o").output
+    assert "Forge name" not in tree("forge.pr", "-o").output
+    assert "--forge FORGE_NAME  Forge name" in tree("forge.pr", "-O").output   # option help implies options
+    one = tree("item", "set", "-d").output
+    assert one.startswith("kb item set REF [ASSIGNMENTS...]\n") and "the rest needs kb item supersede" in one
+    assert "git-pre-push" in tree("hook").output                             # a hidden family, when named
+    r = tree("item", "nope")
+    assert r.exit_code == 1 and "kb item has no command 'nope'" in r.output and "supersede" in r.output
+    assert "is a command, not a family" in tree("item.set.x").output
+    node = json.loads(tree("cli", "--json").output)
+    assert [c["name"] for c in node["commands"]] == ["search", "tree"]
+    assert node["commands"][1]["options"][0] == {"option": "-o, --options", "help": "Show each command's options.",
+                                                 "required": False}

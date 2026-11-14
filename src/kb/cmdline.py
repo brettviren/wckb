@@ -1,4 +1,8 @@
-"""The command tree: find the commands whose names, help texts and options fit some words.
+"""The command tree: show it (``kb cli tree``), and find the commands whose names, help texts and options fit some words.
+
+``kb cli tree [PATH]`` describes the tree, or the branch at PATH, as nested
+nodes: each command with its arguments and, for those who want them, its
+help and its options.
 
 ``kb cli search WORDS`` ranks the runnable commands of the tree (families
 themselves are not runnable) and suggests a command line for each: its
@@ -15,6 +19,8 @@ words ranks above one that has some.
 import math
 import re
 from dataclasses import dataclass, field
+
+from .errors import KBError
 
 STOPWORDS = frozenset("""
 a an and are as at be by can do does for from has have how i in into is it its me my of on or our so
@@ -105,6 +111,7 @@ class Param:
     fields: list[tuple[float, set[str]]]
     required: bool
     option: bool
+    names: str = ""               # every spelling of an option: -l, --log-level LOG_LEVEL
 
 
 @dataclass
@@ -152,7 +159,9 @@ def _param(p) -> Param | None:
     fields = [(W_OPT_NAME, set(words(" ".join(p.opts + p.secondary_opts).replace("-", " "))) | set(words(mv)))]
     choices = [str(c) for c in p.type.choices] if isinstance(p.type, click.Choice) else []
     fields.append((W_OPT_HELP, set(words(help_text + " " + " ".join(choices)))))
-    return Param(f"{name} {mv}".strip(), " ".join(help_text.split()), fields, p.required, True)
+    names = ", ".join(sorted(p.opts, key=len)) + "".join(f" / {o}" for o in p.secondary_opts)
+    return Param(f"{name} {mv}".strip(), " ".join(help_text.split()), fields, p.required, True,
+                 f"{names} {mv}".strip())
 
 
 def entries(root) -> list[Entry]:
@@ -241,3 +250,58 @@ def search(root, query: str, limit: int = 8, prog: str = "kb") -> list[dict]:
         })
     rows.sort(key=lambda r: (-r["score"], len(r["command"].split()), r["command"]))
     return rows[:limit]
+
+
+def _doc(cmd) -> str:
+    """A command's whole help text as written (click's \\b markers left out)."""
+    import inspect
+    text = inspect.cleandoc((cmd.help or "").split("\f")[0])
+    return "\n".join(line for line in text.splitlines() if line.strip() != "\b")
+
+
+def resolve(root, path: str) -> tuple[list[str], object]:
+    """The command at PATH (words separated by spaces or dots, a leading "kb" allowed) and its path's names."""
+    names = path.replace(".", " ").split()
+    if names[:1] == ["kb"]:
+        names = names[1:]
+    cmd, here = root, []
+    for name in names:
+        subs = getattr(cmd, "commands", None)
+        where = " ".join(["kb", *here])
+        if subs is None:
+            raise KBError(f"{where} is a command, not a family: it has no {name!r}")
+        if name not in subs:
+            listed = ", ".join(n for n in cmd.list_commands(None) if n in subs and not subs[n].hidden)
+            raise KBError(f"{where} has no command {name!r} (it has {listed})")
+        cmd = subs[name]
+        here.append(name)
+    return here, cmd
+
+
+def tree(root, path: str = "", prog: str = "kb") -> dict:
+    """The command tree under ROOT, or its branch at PATH, as nested nodes.
+
+    A node: name, command (its whole command line), usage (its required options
+    and its arguments), summary (its help's first sentence), help (all of it),
+    options (option: every spelling and its value, help, required) and, for a
+    family, commands (its subcommands, in the order its help lists them; hidden
+    ones left out unless PATH names one).
+    """
+    names, cmd = resolve(root, path) if path.strip() else ([], root)
+
+    def node(cmd, names):
+        params = [x for x in map(_param, cmd.params) if x]
+        out = {"name": names[-1] if names else prog,
+               "command": " ".join([prog, *names]),
+               "usage": " ".join([p.shown for p in params if p.option and p.required]
+                                 + [p.shown for p in params if not p.option]),
+               "summary": cmd.get_short_help_str(200),
+               "help": _doc(cmd),
+               "options": [{"option": p.names, "help": p.help, "required": p.required} for p in params if p.option]}
+        subs = getattr(cmd, "commands", None)
+        if subs is not None:
+            out["commands"] = [node(subs[n], names + [n]) for n in cmd.list_commands(None)
+                               if n in subs and not subs[n].hidden]
+        return out
+
+    return node(cmd, names)

@@ -80,6 +80,55 @@ def command_hits(rows: list[dict]) -> None:
             click.echo(f"    {o['option']:<{width}}  {_first_sentence(o['help'])}".rstrip())
 
 
+def command_tree(node: dict, options: bool = False, doc: bool = False, option_doc: bool = False) -> None:
+    """kb cli tree: commands as a tree, each with its arguments; DOC adds help texts, OPTIONS the options
+    (OPTION_DOC with their help)."""
+    import shutil
+    import textwrap
+    width = min(shutil.get_terminal_size((100, 24)).columns, 120)
+
+    def details(n, pre):
+        lines = []
+        if doc and n["help"]:
+            lines += n["help"].splitlines()
+        if (options or option_doc) and n["options"]:
+            if lines:
+                lines.append("")
+            w = min(max(len(o["option"]) for o in n["options"]), 28)
+            for o in n["options"]:
+                name = o["option"] + (" (required)" if o["required"] and not option_doc else "")
+                if not option_doc or not o["help"]:
+                    lines.append(name)
+                    continue
+                room = max(width - len(pre) - w - 2, 30)
+                text = textwrap.wrap(o["help"] + (" (required)" if o["required"] else ""), room)
+                if len(o["option"]) > w:
+                    lines += [name] + [" " * (w + 2) + t for t in text]
+                else:
+                    lines += [f"{name:<{w}}  {text[0]}"] + [" " * (w + 2) + t for t in text[1:]]
+        for line in lines:
+            click.echo((pre + line).rstrip())
+        if lines and (doc or option_doc):
+            click.echo(pre.rstrip())
+
+    def label(n, name):
+        return click.style(name, bold=True) + (f" {n['usage']}" if n["usage"] else "")
+
+    def walk(n, prefix, last):
+        click.echo(prefix + ("└── " if last else "├── ") + label(n, n["name"]))
+        below = prefix + ("    " if last else "│   ")
+        kids = n.get("commands", [])
+        details(n, below + ("│   " if kids else "    "))
+        for i, k in enumerate(kids):
+            walk(k, below, i == len(kids) - 1)
+
+    click.echo(label(node, node["command"]))
+    kids = node.get("commands", [])
+    details(node, "│   " if kids else "    ")
+    for i, k in enumerate(kids):
+        walk(k, "", i == len(kids) - 1)
+
+
 def _first_sentence(text: str, most: int = 100) -> str:
     """TEXT up to the end of its first sentence, and at most MOST characters."""
     end = text.find(". ")

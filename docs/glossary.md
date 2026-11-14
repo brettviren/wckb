@@ -761,7 +761,9 @@ to be right; please fix the other place.
   against the names, help texts and options of every command in the tree
   (light stemming, word beginnings, a few synonyms), and each suggestion is
   a command with its required arguments and the options that matched. The
-  `kb cli` family is about the command line itself. *Code:* `kb.cmdline`.
+  `kb cli` family is about the command line itself; `kb cli tree [PATH]`
+  shows the *command tree* (or its branch at PATH, as `forge pr` or
+  `forge.pr`), with options and help texts on request. *Code:* `kb.cmdline`.
 
 **describe / export** (data)
 : Describe data for use outside kb, in a community standard

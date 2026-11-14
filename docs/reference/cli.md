@@ -90,7 +90,7 @@ Integration:
   secret     Secrets (tokens) from pass-like commands, 0600 files, or the environment.
 
 Finding the right command:
-  cli        The command line itself: find the commands for a task.
+  cli        The command line itself: find the commands for a task, show the command tree.
 ```
 
 ## kb init
@@ -2507,7 +2507,7 @@ Options:
 ```
 Usage: kb cli [OPTIONS] COMMAND [ARGS]...
 
-  The command line itself: find the commands for a task.
+  The command line itself: find the commands for a task, show the command tree.
 
 Options:
   -h, --help  Show this message and exit.
@@ -2515,6 +2515,7 @@ Options:
 Commands:
   search  Suggest command lines for a task, from the words of every command's name, help and
           options.
+  tree    The command tree: every command with its arguments, or the branch at PATH.
 ```
 
 ## kb cli search
@@ -2533,6 +2534,24 @@ Options:
   --limit INTEGER  Suggest at most this many commands.  [default: 8]
   --json
   -h, --help       Show this message and exit.
+```
+
+## kb cli tree
+
+```
+Usage: kb cli tree [OPTIONS] [PATH]...
+
+  The command tree: every command with its arguments, or the branch at PATH.
+
+  PATH names a family or a command, its words separated by spaces or dots: kb cli tree item, kb cli
+  tree forge pr, kb cli tree forge.pr.merge. Hidden commands are left out unless PATH names one.
+
+Options:
+  -o, --options     Show each command's options.
+  -d, --doc         Show each command's whole help text.
+  -O, --option-doc  Show each command's options with their help (implies --options).
+  --json            The tree as nested JSON objects, with all of the above.
+  -h, --help        Show this message and exit.
 ```
 
 ## kb hook

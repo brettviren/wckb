@@ -218,7 +218,8 @@ exchange_hooks_grp = group("hooks", "Install or remove kb's checks in a reposito
 forge_grp = group("forge", "GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.")
 pr_grp = group("pr", "Pull requests on a forge repository.", forge_grp)
 secret_grp = group("secret", "Secrets (tokens) from pass-like commands, 0600 files, or the environment.")
-cli_grp = group("cli", "The command line itself: find the commands for a task.")
+cli_grp = group("cli", "The command line itself: find the commands for a task, show the command tree.",
+                order=["search", "tree"])
 hook_grp = group("hook", "Entry points for Claude Code and git hooks (they read the event on stdin).", hidden=True)
 
 
@@ -2907,6 +2908,26 @@ def cli_search_cmd(words, limit, json_out):
     if not rows:
         return ui.info("no command matches those words (kb --help lists them all)")
     ui.command_hits(rows)
+
+
+@command(cli_grp, "tree")
+@click.argument("path", nargs=-1)
+@click.option("-o", "--options", is_flag=True, help="Show each command's options.")
+@click.option("-d", "--doc", is_flag=True, help="Show each command's whole help text.")
+@click.option("-O", "--option-doc", is_flag=True, help="Show each command's options with their help (implies --options).")
+@click.option("--json", "json_out", is_flag=True, help="The tree as nested JSON objects, with all of the above.")
+def cli_tree_cmd(path, options, doc, option_doc, json_out):
+    """The command tree: every command with its arguments, or the branch at PATH.
+
+    PATH names a family or a command, its words separated by spaces or dots:
+    kb cli tree item, kb cli tree forge pr, kb cli tree forge.pr.merge.
+    Hidden commands are left out unless PATH names one.
+    """
+    from .cmdline import tree
+    node = tree(main, " ".join(path))
+    if json_out:
+        return ui.emit_json(node)
+    ui.command_tree(node, options=options, doc=doc, option_doc=option_doc)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ in scope.
   (metadata found in what `kb add` adds: arXiv, PDF, EXIF), `ocr` (OCR engines), `opener`
   (`kb open`: an item's file in the desktop's application), `readability` (a web page's main content), `spider` (web documents: pages within a scope), `sections` (sections of a web page; `ID@anchor`),
   `artifacts` (documents made here to present knowledge; workspaces, harvest), `journal` (what happened
-  while artifacts were made) and `cmdline` (the command tree: `kb cli search` finds commands for a task). `config` also says which store a command uses (store contexts).
+  while artifacts were made) and `cmdline` (the command tree: `kb cli tree` shows it, `kb cli search` finds commands for a task). `config` also says which store a command uses (store contexts).
 - Schemas: hand-written JSON Schema in `src/kb/schemas/v<N>/`. After
   changing them, run `uv run kb item schema --markdown > docs/reference/schema.md`
   (a test checks this). Additive changes bump `schema.REVISION`. Breaking
