@@ -99,6 +99,7 @@ SECTIONS = [
     ("Commands by thing (kb THING --help)", ["item", "rendition", "artifact", "asset", "source", "kset", "edge", "bundle",
                                              "inbox", "view", "data", "policy", "store"]),
     ("Integration", ["exchange", "forge", "secret"]),
+    ("Finding the right command", ["cli"]),
 ]
 
 
@@ -168,7 +169,8 @@ def main(ctx, root, context_name, config_file, no_init_file, log_level, log_sink
     Correct:  kb item set ID key=value, kb item supersede ID ...
     Share:    kb push --to NEIGHBOR ..., kb inbox list
 
-    Every command has --help.  Words: docs/glossary.md.  How-tos: docs/howto/.
+    Every command has --help; kb cli search WORDS suggests commands for a
+    task.  Words: docs/glossary.md.  How-tos: docs/howto/.
 
     The store is the store context's (--context): by default that of the
     git working tree here; see docs/howto/contexts.md.
@@ -216,6 +218,7 @@ exchange_hooks_grp = group("hooks", "Install or remove kb's checks in a reposito
 forge_grp = group("forge", "GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.")
 pr_grp = group("pr", "Pull requests on a forge repository.", forge_grp)
 secret_grp = group("secret", "Secrets (tokens) from pass-like commands, 0600 files, or the environment.")
+cli_grp = group("cli", "The command line itself: find the commands for a task.")
 hook_grp = group("hook", "Entry points for Claude Code and git hooks (they read the event on stdin).", hidden=True)
 
 
@@ -2882,6 +2885,28 @@ def policy_autonomy_cmd(c, assignments):
         click.echo(f"{'push.' + n:<16} {kb.cfg.autonomy_for('push', n):<6} {AUTONOMY_MEANING['push']}")
     if assignments:
         click.echo("now run kb policy enact so CLAUDE.md shows the change")
+
+
+@command(cli_grp, "search", no_args_is_help=True)
+@click.argument("words", nargs=-1, required=True)
+@click.option("--limit", default=8, show_default=True, help="Suggest at most this many commands.")
+@click.option("--json", "json_out", is_flag=True)
+def cli_search_cmd(words, limit, json_out):
+    """Suggest command lines for a task, from the words of every command's name, help and options.
+
+    Words match the names, help texts and options of all of kb's commands
+    (plurals and -ing/-ed forms too, the beginnings of longer words, and a
+    few synonyms: delete finds retract, find finds search). Each suggestion
+    is the command with its required arguments and the options that matched;
+    kb COMMAND --help says the rest.
+    """
+    from .cmdline import search
+    rows = search(main, " ".join(words), limit)
+    if json_out:
+        return ui.emit_json(rows)
+    if not rows:
+        return ui.info("no command matches those words (kb --help lists them all)")
+    ui.command_hits(rows)
 
 
 if __name__ == "__main__":

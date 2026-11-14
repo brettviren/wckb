@@ -70,6 +70,23 @@ def stderr(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def command_hits(rows: list[dict]) -> None:
+    """kb cli search: each suggested command line, what the command does, and the options that matched."""
+    for r in rows:
+        click.echo(click.style(r["line"], bold=True))
+        click.echo(f"    {r['summary']}")
+        width = max((len(o["option"]) for o in r["options"]), default=0)
+        for o in r["options"]:
+            click.echo(f"    {o['option']:<{width}}  {_first_sentence(o['help'])}".rstrip())
+
+
+def _first_sentence(text: str, most: int = 100) -> str:
+    """TEXT up to the end of its first sentence, and at most MOST characters."""
+    end = text.find(". ")
+    text = text if end < 0 else text[:end + 1]
+    return text if len(text) <= most else text[:most - 1].rstrip() + "…"
+
+
 MODE_COLOR = {"auto": "green", "ask": "yellow", "manual": "cyan"}
 
 

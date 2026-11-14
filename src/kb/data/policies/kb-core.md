@@ -6,8 +6,8 @@ have now, so write for them.
 
 A store is one SQLite file (`kb.sqlite`) holding knowledge items: JSON
 objects validated by JSON Schema (`kb item schema KIND`). Everything goes through
-the `kb` command (`kb --help`, `kb COMMAND --help`). Never open the
-database directly.
+the `kb` command (`kb --help`, `kb COMMAND --help`; `kb cli search WORDS`
+suggests commands for a task). Never open the database directly.
 
 - Kinds of item:
   - `observation`: an assertion, such as "run 1234 was noisy";

@@ -174,3 +174,30 @@ def test_data_describe_files_and_sources(root, tmp_path):
 def test_pull_without_a_neighbor_needs_items(root):
     r = CliRunner().invoke(main, ["-C", str(root), "pull", "--deep"])
     assert r.exit_code != 0 and "--dangling" in r.output
+
+
+def test_cli_search_suggests_commands():
+    def hits(*words):
+        r = CliRunner().invoke(main, ["cli", "search", "--json", *words])
+        assert r.exit_code == 0, r.output
+        return json.loads(r.output)
+    assert hits("embeddings")[0]["command"] == "kb store embed"            # plural and -ing forms
+    assert "kb item retract" in [h["command"] for h in hits("delete", "item")]   # a synonym
+    top = hits("semantic", "search")[0]
+    assert top["line"].startswith("kb search WORDS...") and "--semantic" in top["line"]
+    assert top["options"][0]["option"] == "--semantic" and top["options"][0]["help"]
+    glob = [h for h in hits("log", "level") if h["command"] == "kb"][0]       # options given before any command
+    assert "--log-level" in glob["line"] and glob["line"].endswith("COMMAND ...")
+    assert "kb hook" not in str(hits("hook", "session"))                     # hidden commands stay hidden
+    r = CliRunner().invoke(main, ["cli", "search", "zzyzx"])
+    assert r.exit_code == 0 and "no command matches" in r.output
+    r = CliRunner().invoke(main, ["cli", "search", "pull", "request"])
+    assert r.output.startswith("kb forge pr ")
+    assert "Usage:" in CliRunner().invoke(main, ["cli", "search"]).output
+
+
+def test_cli_search_stems():
+    from kb.cmdline import quality, stem
+    assert [stem(w) for w in ("embeddings", "embed", "added", "pulled", "notes", "queries", "status")] == \
+        ["embed", "embed", "add", "pull", "note", "query", "status"]
+    assert quality("stale", "staleness") > quality("delete", "retract") > quality("stale", "push") == 0

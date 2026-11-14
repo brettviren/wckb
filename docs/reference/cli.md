@@ -14,7 +14,8 @@ Usage: kb [OPTIONS] COMMAND [ARGS]...
   Correct:  kb item set ID key=value, kb item supersede ID ...
   Share:    kb push --to NEIGHBOR ..., kb inbox list
 
-  Every command has --help.  Words: docs/glossary.md.  How-tos: docs/howto/.
+  Every command has --help; kb cli search WORDS suggests commands for a task.  Words:
+  docs/glossary.md.  How-tos: docs/howto/.
 
   The store is the store context's (--context): by default that of the git working tree here; see
   docs/howto/contexts.md.
@@ -87,6 +88,9 @@ Integration:
   exchange   Exchange repositories: git repositories of bundles, for transport and review.
   forge      GitHub / Gitea / Forgejo / Gogs: authentication and pull requests.
   secret     Secrets (tokens) from pass-like commands, 0600 files, or the environment.
+
+Finding the right command:
+  cli        The command line itself: find the commands for a task.
 ```
 
 ## kb init
@@ -645,8 +649,8 @@ Usage: kb item link [OPTIONS] REF {supports|contradicts|refines|alternative-to|c
 
   Link REF to OTHER by RELATION (what REF is to OTHER); OTHER shows it under the inverse name.
 
-  Relations:
-    supports        gives evidence or an argument for it (seen from the other: supported by)
+      Relations:
+        supports        gives evidence or an argument for it (seen from the other: supported by)
     contradicts     disagrees with it (seen from the other: contradicted by)
     refines         adds detail to it, or narrows it (seen from the other: refined by)
     alternative-to  can be used instead of it (seen from the other: alternative to)
@@ -656,9 +660,10 @@ Usage: kb item link [OPTIONS] REF {supports|contradicts|refines|alternative-to|c
     cites           refers to it (seen from the other: cited by)
     same-as         is the same thing, described twice (seen from the other: same as)
 
-    kb item link obs-a supports obs-b
-    kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
-    kb item links obs-b            # its links, both ways
+        kb item link obs-a supports obs-b
+        kb item link obs-lancedb alternative-to obs-sqlite-vec --note "embedded, own storage"
+        kb item links obs-b            # its links, both ways
+      
 
 Options:
   --note TEXT  Why, in a few words.
@@ -2495,6 +2500,39 @@ Usage: kb secret test [OPTIONS] SPEC
 
 Options:
   -h, --help  Show this message and exit.
+```
+
+## kb cli
+
+```
+Usage: kb cli [OPTIONS] COMMAND [ARGS]...
+
+  The command line itself: find the commands for a task.
+
+Options:
+  -h, --help  Show this message and exit.
+
+Commands:
+  search  Suggest command lines for a task, from the words of every command's name, help and
+          options.
+```
+
+## kb cli search
+
+```
+Usage: kb cli search [OPTIONS] WORDS...
+
+  Suggest command lines for a task, from the words of every command's name, help and options.
+
+  Words match the names, help texts and options of all of kb's commands (plurals and -ing/-ed forms
+  too, the beginnings of longer words, and a few synonyms: delete finds retract, find finds search).
+  Each suggestion is the command with its required arguments and the options that matched; kb
+  COMMAND --help says the rest.
+
+Options:
+  --limit INTEGER  Suggest at most this many commands.  [default: 8]
+  --json
+  -h, --help       Show this message and exit.
 ```
 
 ## kb hook

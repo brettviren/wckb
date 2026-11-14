@@ -750,10 +750,18 @@ to be right; please fix the other place.
   command family per *thing*, named by a noun from this glossary: `kb item`,
   `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge`,
   `kb bundle`, `kb inbox`, `kb view`, `kb data`, `kb policy`, `kb store`,
-  plus `kb exchange`, `kb forge` and `kb secret` for integration. A family
+  plus `kb exchange`, `kb forge` and `kb secret` for integration, and
+  `kb cli` for the command line itself. A family
   run without a subcommand lists its commands. A new command joins the
   family of the thing it acts on, and is named for what it does rather
   than for the format or tool that does it.
+
+**command search** (`kb cli search`)
+: Suggests command lines for a task from some words: they are matched
+  against the names, help texts and options of every command in the tree
+  (light stemming, word beginnings, a few synonyms), and each suggestion is
+  a command with its required arguments and the options that matched. The
+  `kb cli` family is about the command line itself. *Code:* `kb.cmdline`.
 
 **describe / export** (data)
 : Describe data for use outside kb, in a community standard
