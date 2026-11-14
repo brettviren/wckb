@@ -5,7 +5,7 @@ runtime support with:
 ``` example
 $ uv tool install \
     --with-executables-from git-annex,git-annex-remote-indico \
-    'git+https://github.com/brettviren/wckb[pdf,pptx,root,indico]'
+    'git+https://github.com/brettviren/wckb[pdf,pptx,root,indico,llm]'
 ```
 
 What the extras add:
@@ -16,6 +16,9 @@ What the extras add:
     [git-annex-remote-indico](https://github.com/brettviren/git-annex-remote-indico),
     so Indico sites can be held as DataLad datasets. Leave it out if you
     don\'t use Indico.
+-   `llm`{.verbatim}: simonw\'s [llm](https://llm.datasette.io) and
+    llm-anthropic, for `kb llm ask`{.verbatim} and `kb llm do`{.verbatim}
+    (see [llm](llm.md)). Leave it out if you don\'t want kb to call an LLM.
 
 Tools `kb`{.verbatim} uses when it finds them on `$PATH`{.verbatim}
 (`kb rendition transforms`{.verbatim} says which it found):
@@ -66,5 +69,5 @@ Or, install an editable version
 ``` example
 $ uv tool install  --force -e \
     --with-executables-from git-annex,git-annex-remote-indico \
-    '.[pdf,pptx,root,indico]'
+    '.[pdf,pptx,root,indico,llm]'
 ```

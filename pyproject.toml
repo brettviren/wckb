@@ -30,6 +30,8 @@ pdf = ["pymupdf>=1.24"]
 pptx = ["python-pptx>=1.0"]
 root = ["uproot>=5"]
 indico = ["git-annex-remote-indico @ git+https://github.com/brettviren/git-annex-remote-indico"]
+# kb llm: ask questions of the store and plan changes with an LLM (simonw's llm; Claude by llm-anthropic).
+llm = ["llm>=0.26", "llm-anthropic>=0.17"]
 
 [build-system]
 requires = ["setuptools>=77.0.3"]
@@ -49,7 +51,7 @@ kb = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "wckb[pdf,pptx,root,indico]",
+    "wckb[pdf,pptx,root,indico,llm]",
 ]
 
 [tool.pytest.ini_options]

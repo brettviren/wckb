@@ -42,6 +42,14 @@ class Ctx:
         return self._kb
 
 
+    def readonly_kb(self):
+        """The store, opened read-only (SQLite mode=ro): for commands that promise not to write."""
+        from .config import store_context
+        from .items import Store
+        self.context = store_context(root=self.root)
+        return Store.open(self.context.location, readonly=True)
+
+
 pass_ctx = click.make_pass_decorator(Ctx)
 
 
@@ -100,6 +108,7 @@ SECTIONS = [
                                              "inbox", "view", "data", "policy", "store"]),
     ("Integration", ["exchange", "forge", "secret"]),
     ("Finding the right command", ["cli"]),
+    ("With an LLM (optional: wckb[llm])", ["llm"]),
 ]
 
 
@@ -220,6 +229,157 @@ pr_grp = group("pr", "Pull requests on a forge repository.", forge_grp)
 secret_grp = group("secret", "Secrets (tokens) from pass-like commands, 0600 files, or the environment.")
 cli_grp = group("cli", "The command line itself: find the commands for a task, show the command tree.",
                 order=["search", "tree"])
+
+
+@main.group("llm", cls=Group, no_args_is_help=True)
+@click.option("-m", "--model", help="The llm model (llm models lists them). Default: llm.model, $KB_LLM_MODEL, "
+                                     "$LLM_MODEL, else llm's default model.")
+@click.option("--provider", type=click.Choice(["openai", "anthropic"]),
+              help="The API of a model llm doesn't know, behind --base-url (default: openai, i.e. compatible).")
+@click.option("--base-url", metavar="URL", help="The API's base URL (an OpenAI-compatible server, a proxy).")
+@click.option("--key-from", metavar="SPEC", help="Where the API key comes from: cmd:pass show NAME, file:PATH, "
+                                                 "env:VAR (see kb secret test).")
+@click.option("--password-command", metavar="CMD",
+              help="A pass-like command that prints the API key (default with --password-name: pass show).")
+@click.option("--password-name", metavar="NAME", help="The name the password command is given, e.g. kb/llm/anthropic.")
+@click.option("--env", "envs", multiple=True, metavar="NAME=VALUE",
+              help="Set an environment variable for llm and its plugins (repeatable), e.g. LLM_USER_PATH=DIR.")
+@click.option("-o", "--option", "options", multiple=True, metavar="KEY=VALUE",
+              help="A model option (repeatable), e.g. temperature=0.2 (llm models --options lists them).")
+@click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
+              help="The most restricted access level of items the model may see (default: llm.access, else all).")
+@pass_ctx
+def llm_grp(c, model, provider, base_url, key_from, password_command, password_name, envs, options, access):
+    """Ask the knowledge base questions, and plan changes to it, with an LLM (simonw's llm package).
+
+    The model reads the store through a few read-only functions; it never
+    runs kb and never writes. Settings come from the [llm] table of your
+    config, then the environment (KB_LLM_*, OPENAI_API_KEY, ANTHROPIC_API_KEY
+    ...), then these options, the last winning. kb llm settings shows them.
+    """
+    from .assistant import parse_assignments
+    c.llm_given = {"model": model, "provider": provider, "base_url": base_url, "key_from": key_from,
+                   "password_command": password_command, "password_name": password_name, "access": access,
+                   "env": parse_assignments(envs, "--env"), "options": parse_assignments(options, "--option")}
+
+
+llm_grp.order = ["ask", "do", "settings"]
+
+
+def _llm_session(c, reach=0, only=()):
+    """The read-only store, the settings, the model and a reader of the store (and those it reaches)."""
+    from . import assistant
+    from .federated import stores
+    kb = c.readonly_kb()
+    s = assistant.settings(kb.cfg.raw, getattr(c, "llm_given", {}))
+    m = assistant.model(s)
+    reader = assistant.Reader(stores(kb, reach, list(only)), s.get("access"))
+    return kb, s, m, reader
+
+
+def _words(words) -> str:
+    text = " ".join(words)
+    return sys.stdin.read().strip() if text == "-" else text
+
+
+def _tool_note(name, args, output):
+    shown = ", ".join(f"{k}={v!r}" for k, v in args.items())
+    ui.info(f"[{name}({shown}): {len(output)} characters]")
+
+
+@command(llm_grp, "ask", no_args_is_help=True)
+@click.argument("question", nargs=-1, required=True)
+@click.option("--no-search", is_flag=True, help="Don't search the store first; leave it to the model's tools.")
+@click.option("--no-tools", is_flag=True, help="Give the model only what the first search found.")
+@click.option("--reach", default=0, help="Also read neighbor stores up to this many hops away.")
+@click.option("--in", "only", multiple=True, help="Also read this neighbor store (repeatable).")
+@click.option("-v", "--verbose", is_flag=True, help="Show each tool call the model makes (on stderr).")
+@click.option("--json", "json_out", is_flag=True, help="The answer, the model and the IDs it cited, as JSON.")
+@pass_ctx
+def llm_ask_cmd(c, question, no_search, no_tools, reach, only, verbose, json_out):
+    """Answer a question from the knowledge base (QUESTION, or - to read it from stdin).
+
+    kb searches the store for the question first and gives the model what it
+    finds; the model may then read on (search, show, read, links, list) by
+    tools, if it can call them. It cites item IDs; IDs it cites that the
+    store doesn't have are pointed out. The store is opened read-only, and
+    nothing is recorded.
+    """
+    from . import assistant
+    kb, s, m, reader = _llm_session(c, reach, only)
+    echo = None if json_out else (lambda t: click.echo(t, nl=False))
+    r = assistant.ask(m, reader, _words(question), kb.cfg, use_tools=not no_tools, presearch=not no_search,
+                      options=s.options, chain_limit=int(s.get("chain_limit") or assistant.ASK_CALLS),
+                      presearch_chars=int(s.get("presearch_chars") or assistant.PRESEARCH_CHARS), echo=echo,
+                      on_tool=_tool_note if verbose else None)
+    if json_out:
+        return ui.emit_json(r)
+    if not r["text"].endswith("\n"):
+        click.echo("")
+    if r["unknown"]:
+        ui.info(f"kb: cited but not in the store: {', '.join(r['unknown'])}")
+
+
+@command(llm_grp, "do", no_args_is_help=True)
+@click.argument("action", nargs=-1, required=True)
+@click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path),
+              help="Write the script to this file (else stdout).")
+@click.option("--no-search", is_flag=True, help="Don't search the store first; leave it to the model's tools.")
+@click.option("--reach", default=0, help="Also read neighbor stores up to this many hops away.")
+@click.option("--in", "only", multiple=True, help="Also read this neighbor store (repeatable).")
+@click.option("-v", "--verbose", is_flag=True, help="Show each tool call the model makes (on stderr).")
+@click.option("--json", "json_out", is_flag=True, help="The proposal as JSON: steps, why, review, rejected.")
+@pass_ctx
+def llm_do_cmd(c, action, output, no_search, reach, only, verbose, json_out):
+    """Propose the kb command lines that carry out an action (ACTION, or - for stdin), as a script.
+
+    Nothing is run: the result is a bash script for you to read and run (or
+    lines to copy). The model reads the store, finds commands and adds steps;
+    kb checks each step as it is added (the command and its options parse,
+    every item ID exists, no shell syntax, nothing interactive, no approvals
+    or relabelling) and tells the model what is wrong. Steps that withdraw,
+    overwrite, decide or send knowledge are written commented out, for you to
+    decide on. A script that changes anything first takes a snapshot of the
+    store (kb store snapshot) and ends with kb check.
+    """
+    from . import assistant, proposals
+    kb, s, m, reader = _llm_session(c, reach, only)
+    p = proposals.do(m, main, reader, _words(action), kb.cfg, options=s.options,
+                     chain_limit=int(s.get("chain_limit") or assistant.DO_CALLS), presearch=not no_search,
+                     presearch_chars=int(s.get("presearch_chars") or assistant.PRESEARCH_CHARS),
+                     on_tool=_tool_note if verbose else None)
+    if json_out:
+        return ui.emit_json(p.as_dict() | {"model": m.model_id})
+    text = proposals.script(p, _words(action) if action != ("-",) else "(from stdin)", m.model_id, kb.cfg.name)
+    if output:
+        output.write_text(text)
+        ui.info(f"wrote {output}: read it, then bash {output}")
+    else:
+        click.echo(text, nl=False)
+    review = sum(1 for x in p.steps if x.review)
+    ui.info(f"{len(p.steps)} step(s) proposed, {review} for your review"
+            + (f"; {len(p.rejected)} rejected along the way (--json shows them)" if p.rejected else ""))
+
+
+@command(llm_grp, "settings")
+@click.option("--check", is_flag=True, help="Also find the model and get its key (shown masked).")
+@pass_ctx
+def llm_settings_cmd(c, check):
+    """The LLM settings in effect and where each comes from (config, environment, command line)."""
+    from . import assistant, secrets
+    kb = c.readonly_kb()
+    s = assistant.settings(kb.cfg.raw, getattr(c, "llm_given", {}))
+    if check:
+        m = assistant.model(s)
+        s.source.setdefault("model", "llm's default")
+        s.values["model"] = m.model_id
+    rows = s.describe()
+    if check:
+        rows.append(("tools", "yes" if m.supports_tools else "no (kb llm do needs them)", m.model_id))
+        rows.append(("key found", secrets.mask(m.key) if m.key else "none given (llm finds its own, if any)", ""))
+    ui.settings_rows(rows)
+
+
 hook_grp = group("hook", "Entry points for Claude Code and git hooks (they read the event on stdin).", hidden=True)
 
 

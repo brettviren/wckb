@@ -40,6 +40,9 @@ def _isolate(monkeypatch, tmp_path_factory):
     monkeypatch.delenv("KB_ROOT", raising=False)
     for v in ("KB_AGENT", "CLAUDECODE", "AI_AGENT"):   # tests may run inside Claude Code
         monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("LLM_USER_PATH", str(home / "llm"))             # kb llm: none of the person's llm keys
+    for v in [v for v in os.environ if v.startswith(("KB_LLM_", "OPENAI_", "ANTHROPIC_"))] + ["LLM_MODEL"]:
+        monkeypatch.delenv(v, raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / "cache"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / "config"))         # no user git ignore rules
     (home / "gitconfig").touch()

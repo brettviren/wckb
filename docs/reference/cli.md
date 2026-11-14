@@ -91,6 +91,10 @@ Integration:
 
 Finding the right command:
   cli        The command line itself: find the commands for a task, show the command tree.
+
+With an LLM (optional: wckb[llm]):
+  llm        Ask the knowledge base questions, and plan changes to it, with an LLM (simonw's llm
+             package).
 ```
 
 ## kb init
@@ -2552,6 +2556,103 @@ Options:
   -O, --option-doc  Show each command's options with their help (implies --options).
   --json            The tree as nested JSON objects, with all of the above.
   -h, --help        Show this message and exit.
+```
+
+## kb llm
+
+```
+Usage: kb llm [OPTIONS] COMMAND [ARGS]...
+
+  Ask the knowledge base questions, and plan changes to it, with an LLM (simonw's llm package).
+
+  The model reads the store through a few read-only functions; it never runs kb and never writes.
+  Settings come from the [llm] table of your config, then the environment (KB_LLM_*, OPENAI_API_KEY,
+  ANTHROPIC_API_KEY ...), then these options, the last winning. kb llm settings shows them.
+
+Options:
+  -m, --model TEXT                The llm model (llm models lists them). Default: llm.model,
+                                  $KB_LLM_MODEL, $LLM_MODEL, else llm's default model.
+  --provider [openai|anthropic]   The API of a model llm doesn't know, behind --base-url (default:
+                                  openai, i.e. compatible).
+  --base-url URL                  The API's base URL (an OpenAI-compatible server, a proxy).
+  --key-from SPEC                 Where the API key comes from: cmd:pass show NAME, file:PATH,
+                                  env:VAR (see kb secret test).
+  --password-command CMD          A pass-like command that prints the API key (default with
+                                  --password-name: pass show).
+  --password-name NAME            The name the password command is given, e.g. kb/llm/anthropic.
+  --env NAME=VALUE                Set an environment variable for llm and its plugins (repeatable),
+                                  e.g. LLM_USER_PATH=DIR.
+  -o, --option KEY=VALUE          A model option (repeatable), e.g. temperature=0.2 (llm models
+                                  --options lists them).
+  --access [public|collaboration|group|private]
+                                  The most restricted access level of items the model may see
+                                  (default: llm.access, else all).
+  -h, --help                      Show this message and exit.
+
+Commands:
+  ask       Answer a question from the knowledge base (QUESTION, or - to read it from stdin).
+  do        Propose the kb command lines that carry out an action (ACTION, or - for stdin), as a
+            script.
+  settings  The LLM settings in effect and where each comes from (config, environment, command
+            line).
+```
+
+## kb llm ask
+
+```
+Usage: kb llm ask [OPTIONS] QUESTION...
+
+  Answer a question from the knowledge base (QUESTION, or - to read it from stdin).
+
+  kb searches the store for the question first and gives the model what it finds; the model may then
+  read on (search, show, read, links, list) by tools, if it can call them. It cites item IDs; IDs it
+  cites that the store doesn't have are pointed out. The store is opened read-only, and nothing is
+  recorded.
+
+Options:
+  --no-search      Don't search the store first; leave it to the model's tools.
+  --no-tools       Give the model only what the first search found.
+  --reach INTEGER  Also read neighbor stores up to this many hops away.
+  --in TEXT        Also read this neighbor store (repeatable).
+  -v, --verbose    Show each tool call the model makes (on stderr).
+  --json           The answer, the model and the IDs it cited, as JSON.
+  -h, --help       Show this message and exit.
+```
+
+## kb llm do
+
+```
+Usage: kb llm do [OPTIONS] ACTION...
+
+  Propose the kb command lines that carry out an action (ACTION, or - for stdin), as a script.
+
+  Nothing is run: the result is a bash script for you to read and run (or lines to copy). The model
+  reads the store, finds commands and adds steps; kb checks each step as it is added (the command
+  and its options parse, every item ID exists, no shell syntax, nothing interactive, no approvals or
+  relabelling) and tells the model what is wrong. Steps that withdraw, overwrite, decide or send
+  knowledge are written commented out, for you to decide on. A script that changes anything first
+  takes a snapshot of the store (kb store snapshot) and ends with kb check.
+
+Options:
+  -o, --output FILE  Write the script to this file (else stdout).
+  --no-search        Don't search the store first; leave it to the model's tools.
+  --reach INTEGER    Also read neighbor stores up to this many hops away.
+  --in TEXT          Also read this neighbor store (repeatable).
+  -v, --verbose      Show each tool call the model makes (on stderr).
+  --json             The proposal as JSON: steps, why, review, rejected.
+  -h, --help         Show this message and exit.
+```
+
+## kb llm settings
+
+```
+Usage: kb llm settings [OPTIONS]
+
+  The LLM settings in effect and where each comes from (config, environment, command line).
+
+Options:
+  --check     Also find the model and get its key (shown masked).
+  -h, --help  Show this message and exit.
 ```
 
 ## kb hook

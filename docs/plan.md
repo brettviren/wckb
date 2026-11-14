@@ -57,6 +57,7 @@ Deliverables:
 | Assets: abstract files/file sets, content-identified versions, bindings (kb, fs, url), scan/register/resolve, the `asset` rendition location | `src/kb/assets.py` | done |
 | Forges: GitHub, Gitea, Forgejo (Gogs: no PR API) pull requests | `src/kb/forge.py` | done |
 | Secrets: command (pass), 0600 file, env, value | `src/kb/secrets.py` | done |
+| `kb llm`: ask the store (presearch + read-only tools) and propose changes as a checked script, by simonw's llm (optional) | `src/kb/assistant.py`, `proposals.py` | done |
 | CLI | `src/kb/cli.py` | done |
 | Tests | `tests/` | done |
 | How-tos; generated schema and CLI references (kept in sync by tests) | `docs/howto/`, `docs/reference/` | done |

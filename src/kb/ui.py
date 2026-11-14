@@ -129,6 +129,13 @@ def command_tree(node: dict, options: bool = False, doc: bool = False, option_do
         walk(k, "", i == len(kids) - 1)
 
 
+def settings_rows(rows) -> None:
+    """kb llm settings: setting, value, where it comes from."""
+    w = max((len(r[0]) for r in rows), default=0)
+    for name, value, source in rows:
+        click.echo(f"{name:<{w}}  {value}" + (f"  ({source})" if source else ""))
+
+
 def _first_sentence(text: str, most: int = 100) -> str:
     """TEXT up to the end of its first sentence, and at most MOST characters."""
     end = text.find(". ")

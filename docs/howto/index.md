@@ -21,6 +21,7 @@ Read these in order if you are new; later on, go straight to the task you need. 
 | [topics](topics.md) | write and maintain synthesis pages |
 | [views](views.md) | build HTML/PDF views with make, snakemake, quarto or pandoc; publish; build the world |
 | [search](search.md) | ls, search, context, show, log, semantic search, Datasette |
+| [llm](llm.md) | ask the store questions and plan changes with an LLM (`kb llm ask`, `kb llm do`); models, keys, guardrails |
 | [stores-and-promotion](stores-and-promotion.md) | scopes and edges; reading across stores; knowledge sets; push, pull, obtain; twins; snapshots |
 | [review](review.md) | reviewing incoming knowledge: bundles, the inbox, rendering, human and LLM review |
 | [datalad](datalad.md) | DataLad datasets: source items, adding files by reference, clones, assets from tags |

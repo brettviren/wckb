@@ -475,6 +475,35 @@ Skills: `kb-consult`, `kb-capture`, `kb-ingest`, `kb-research`, `kb-correct`, `k
 `kb-curate`, `kb-promote`, `kb-review` (inbox) and `kb-review-prs` (bundle
 pull requests).
 
+**kb calling an LLM (`kb llm`).** The other way round: kb sends a
+question or an action to a model through simonw's `llm` package (optional).
+The model never runs kb and never sees more than a few read-only functions
+(the reader) over a store opened `mode=ro`.
+
+- `kb llm ask` is *presearch plus tools*. kb searches the store for the
+  question and puts what it finds (topics with their text, other items with
+  the matched words) before the question, so a model without tools, or one
+  that wouldn't use them, still answers from the KB, in one round trip when
+  that is enough. A model that can call tools may then search with other
+  words, show items, page through their text and follow links. Presearch
+  alone misses what the question's words don't match; tools alone cost
+  round trips and depend on the model deciding to look. Both can be turned
+  off (`--no-search`, `--no-tools`) to compare. The answer cites IDs, and
+  kb points out cited IDs the store doesn't have.
+- `kb llm do` makes a *proposal*: the model adds steps (lists of words)
+  with a tool that checks each one at once and says what is wrong, so the
+  model corrects itself within the chain. kb, not the model, writes the
+  script, quoting every word. Nothing runs: the human reads the script and
+  runs it. Information loss is guarded against by append-only operations
+  in the instructions, steps that withdraw or overwrite commented out for
+  review, a store snapshot before the first change and `kb check` after the
+  last. Approvals (`--approved`) and access relabelling are never proposed.
+- Settings come from `[llm]`, then the environment (`KB_LLM_*` and the
+  provider's usual variables), then the command line. Keys come from
+  secret specs (a `pass`-like command and name, a 0600 file, a variable),
+  never from the store. `llm.access` keeps items above an access level away
+  from a model (a cloud API, say).
+
 ## 11. Workflows
 
 1. **Routine.** In a project with its own store, Claude consults the store

@@ -750,8 +750,8 @@ to be right; please fix the other place.
   command family per *thing*, named by a noun from this glossary: `kb item`,
   `kb rendition`, `kb asset`, `kb source`, `kb kset`, `kb edge`,
   `kb bundle`, `kb inbox`, `kb view`, `kb data`, `kb policy`, `kb store`,
-  plus `kb exchange`, `kb forge` and `kb secret` for integration, and
-  `kb cli` for the command line itself. A family
+  plus `kb exchange`, `kb forge` and `kb secret` for integration,
+  `kb cli` for the command line itself, and `kb llm` for the LLM assistant. A family
   run without a subcommand lists its commands. A new command joins the
   family of the thing it acts on, and is named for what it does rather
   than for the format or tool that does it.
@@ -764,6 +764,28 @@ to be right; please fix the other place.
   `kb cli` family is about the command line itself; `kb cli tree [PATH]`
   shows the *command tree* (or its branch at PATH, as `forge pr` or
   `forge.pr`), with options and help texts on request. *Code:* `kb.cmdline`.
+
+**LLM assistant** (`kb llm`)
+: An LLM that kb itself calls, through simonw's `llm` package (the
+  optional extra `wckb[llm]`), as opposed to an LLM session that runs kb.
+  It reads the store only through a few read-only functions offered as
+  tools (the *reader*: search, show, read, links, list, subjects), over a
+  store opened read-only; it never runs kb. `kb llm ask` answers a
+  question: kb searches first (the *presearch*) and the model may read on.
+  Its *LLM settings* (model, provider, base URL, the key's secret spec or
+  password command and name, access) come from `[llm]` in the
+  configuration, then the environment, then `kb llm` options; `llm.access`
+  keeps items above an access level from the model. *Code:* `kb.assistant`.
+
+**proposal** (`kb llm do`)
+: The command lines an LLM assistant proposes to carry out an action,
+  checked step by step as it adds them and written as a bash script that
+  nothing has run. The checks are the guardrails: words, not shell text;
+  only kb and a few datalad commands; commands and options that parse;
+  item IDs that exist (or `$NAME`, captured from an earlier step); some
+  commands never proposed; steps that withdraw, overwrite, decide or send
+  knowledge commented out *for review*; a store snapshot first and
+  `kb check` last. *Code:* `kb.proposals`.
 
 **describe / export** (data)
 : Describe data for use outside kb, in a community standard

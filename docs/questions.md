@@ -363,6 +363,19 @@ Status:
   configs, ask for topics"), or tied to record status ("auto-push
   verified")?
 
+**D6. kb calling an LLM (`kb llm`): what may it see and do?** *(exploring)*
+- Today: `kb llm ask` answers by presearch plus read-only tools;
+  `kb llm do` only proposes a script, checked step by step, with steps that
+  withdraw, overwrite, decide or send knowledge commented out. Every item
+  is visible to the model unless `llm.access` is set.
+- Open: should `llm.access` default to something below `private` when the
+  model is a cloud API (and to everything for a local server)? Should
+  `kb llm do` ever run steps itself, under `capture` autonomy, for the
+  append-only ones? Should proposals be kept (as a journal, or an item) so
+  a later session sees what was planned? Is the table of commands to refuse
+  or review (`proposals.REFUSED`, `REVIEW`) right, or should it live in
+  policy, per store?
+
 ## E. Items and schema
 
 **E1. Should hearsay become a status?** *(open)*
