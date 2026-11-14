@@ -8,6 +8,7 @@ come from three layers, the last that sets a value winning:
 2. the environment: ``KB_LLM_MODEL`` (or llm's own ``LLM_MODEL``),
    ``KB_LLM_PROVIDER``, ``KB_LLM_BASE_URL``, ``KB_LLM_KEY_FROM``,
    ``KB_LLM_PASSWORD_COMMAND``, ``KB_LLM_PASSWORD_NAME``, ``KB_LLM_ACCESS``,
+   ``KB_LLM_TOOL_CALLS``,
    and the model's provider's usual variables: ``OPENAI_API_KEY`` and
    ``OPENAI_BASE_URL`` (or ``OPENAI_API_BASE``), ``ANTHROPIC_API_KEY`` and
    ``ANTHROPIC_BASE_URL``, or whatever key variable an llm plugin's model
@@ -53,11 +54,11 @@ ASK_CALLS, DO_CALLS = 12, 30   # how many rounds of tool calls a chain may take
 ENV = {"KB_LLM_MODEL": "model", "LLM_MODEL": "model", "KB_LLM_PROVIDER": "provider",
        "KB_LLM_BASE_URL": "base_url", "KB_LLM_KEY_FROM": "key_from",
        "KB_LLM_PASSWORD_COMMAND": "password_command", "KB_LLM_PASSWORD_NAME": "password_name",
-       "KB_LLM_ACCESS": "access"}
+       "KB_LLM_ACCESS": "access", "KB_LLM_TOOL_CALLS": "tool_calls"}
 PROVIDER_ENV = {"openai": {"key": "OPENAI_API_KEY", "base_url": ("OPENAI_BASE_URL", "OPENAI_API_BASE")},
                 "anthropic": {"key": "ANTHROPIC_API_KEY", "base_url": ("ANTHROPIC_BASE_URL",)}}
 FIELDS = ("model", "provider", "base_url", "key_from", "password_command", "password_name", "access",
-          "chain_limit", "presearch_chars")
+          "tool_calls", "chain_limit", "presearch_chars")
 KEY_FIELDS = ("key_from", "password_command", "password_name")
 
 
@@ -127,9 +128,22 @@ def settings(raw: dict, given: dict | None = None) -> Settings:
     s.options.update(given.get("options") or {})
     if s.get("provider") and s.get("provider") not in PROVIDERS:
         raise KBError(f"llm.provider {s.get('provider')!r}: one of {', '.join(PROVIDERS)}")
+    if s.get("tool_calls") is not None:
+        s.values["tool_calls"] = _yes(s.get("tool_calls"), "llm.tool_calls")
     if s.get("access") and s.get("access") not in ACCESS_LEVELS:
         raise KBError(f"llm.access {s.get('access')!r}: one of {', '.join(ACCESS_LEVELS)}")
     return s
+
+
+def _yes(value, what: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    v = str(value).strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    raise KBError(f"{what} {value!r}: yes or no")
 
 
 def parse_assignments(pairs, what: str) -> dict:
@@ -188,6 +202,8 @@ def model(s: Settings):
         s.set("key_from", f"env:{key_var}", f"env:{key_var}", 1)
     if s.get("base_url"):
         _set_base_url(m, provider, s.get("base_url"))
+    if s.get("tool_calls") is not None:          # what llm's model list says is not always right
+        m.supports_tools = s.get("tool_calls")
     spec = s.key_spec()
     key = secrets.resolve(spec) if spec else None
     if key:

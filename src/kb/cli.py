@@ -248,8 +248,11 @@ cli_grp = group("cli", "The command line itself: find the commands for a task, s
               help="A model option (repeatable), e.g. temperature=0.2 (llm models --options lists them).")
 @click.option("--access", type=click.Choice(["public", "collaboration", "group", "private"]),
               help="The most restricted access level of items the model may see (default: llm.access, else all).")
+@click.option("--tool-calls", type=click.Choice(["yes", "no"]),
+              help="Whether the model can call tools, whatever llm's model list says (llm.tool_calls).")
 @pass_ctx
-def llm_grp(c, model, provider, base_url, key_from, password_command, password_name, envs, options, access):
+def llm_grp(c, model, provider, base_url, key_from, password_command, password_name, envs, options, access,
+            tool_calls):
     """Ask the knowledge base questions, and plan changes to it, with an LLM (simonw's llm package).
 
     The model reads the store through a few read-only functions; it never
@@ -260,6 +263,7 @@ def llm_grp(c, model, provider, base_url, key_from, password_command, password_n
     from .assistant import parse_assignments
     c.llm_given = {"model": model, "provider": provider, "base_url": base_url, "key_from": key_from,
                    "password_command": password_command, "password_name": password_name, "access": access,
+                   "tool_calls": tool_calls,
                    "env": parse_assignments(envs, "--env"), "options": parse_assignments(options, "--option")}
 
 

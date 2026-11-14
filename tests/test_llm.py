@@ -105,6 +105,14 @@ def test_model_key_and_base_url(monkeypatch):
     s = assistant.settings({"llm": {"model": "my-local", "base_url": "http://localhost:8080/v1"}})
     m = assistant.model(s)                                                  # a model llm doesn't know
     assert (m.model_id, m.api_base, m.supports_tools) == ("my-local", "http://localhost:8080/v1", True)
+    m = assistant.model(assistant.settings({"llm": {"model": "my-local", "base_url": "http://x/v1",
+                                                    "tool_calls": False}}))
+    assert m.supports_tools is False
+    monkeypatch.setenv("KB_LLM_TOOL_CALLS", "yes")                          # llm's list is overridden
+    assert assistant.model(assistant.settings({"llm": {"model": "my-local", "base_url": "http://x/v1",
+                                                       "tool_calls": False}})).supports_tools is True
+    with pytest.raises(KBError, match="yes or no"):
+        assistant.settings({}, {"tool_calls": "maybe"})
     with pytest.raises(KBError, match="knows no model"):
         assistant.model(assistant.settings({"llm": {"model": "no-such-model"}}))
 

@@ -32,6 +32,7 @@ password_command = "pass show"            # the default, when password_name is g
 password_name = "kb/llm/anthropic"        # so the key is: pass show kb/llm/anthropic
 # key_from = "file:~/.config/kb/anthropic.key"   # or any secret spec instead (cmd:, file:, env:)
 # access = "group"                        # keep private items away from this model
+# tool_calls = true                       # the model can call tools, whatever llm's model list says
 # chain_limit = 12                        # rounds of tool calls (default: 12 for ask, 30 for do)
 # presearch_chars = 8000                  # how much the first search may give the model
 
@@ -59,6 +60,7 @@ base_url = "http://localhost:8080/v1"
 | key, as a secret spec | `key_from` | `KB_LLM_KEY_FROM`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, a plugin's key variable | `--key-from` |
 | key, by a password command | `password_command`, `password_name` | `KB_LLM_PASSWORD_COMMAND`, `KB_LLM_PASSWORD_NAME` | `--password-command`, `--password-name` |
 | items the model may see | `access` | `KB_LLM_ACCESS` | `--access` |
+| whether the model can call tools | `tool_calls` | `KB_LLM_TOOL_CALLS` | `--tool-calls yes\|no` |
 | other variables | `[llm.env]` | as set | `--env NAME=VALUE` |
 | model options | `[llm.options]` | | `-o KEY=VALUE` |
 
@@ -167,3 +169,7 @@ kb check
   copy), and it ends with `kb check`.
 
 A model that can't call tools can't plan. Use `ask` with it instead.
+llm decides whether a model can call tools, from its own model list. A
+model you defined in llm's `extra-openai-models.yaml` without
+`supports_tools: true` counts as one that can't. Set `tool_calls = true`
+(or `--tool-calls yes`) if the server does support tools.

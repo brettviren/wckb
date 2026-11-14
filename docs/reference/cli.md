@@ -2587,6 +2587,8 @@ Options:
   --access [public|collaboration|group|private]
                                   The most restricted access level of items the model may see
                                   (default: llm.access, else all).
+  --tool-calls [yes|no]           Whether the model can call tools, whatever llm's model list says
+                                  (llm.tool_calls).
   -h, --help                      Show this message and exit.
 
 Commands:
